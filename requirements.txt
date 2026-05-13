@@ -1,0 +1,4 @@
+manim>=0.18.0
+vulkan-python
+glfw
+numpy
