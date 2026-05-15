@@ -7,17 +7,17 @@ class VulkanRender:
         self.dll.Vulkan_Init.argtypes = [ctypes.c_int, ctypes.c_int]
         self.dll.Vulkan_Init(w, h)
 
-        self.dll.DrawRect.argtypes = [
+        self.dll.AddRect.argtypes = [
             ctypes.c_float, ctypes.c_float,
             ctypes.c_float, ctypes.c_float, ctypes.c_float,
             ctypes.c_int, ctypes.c_int, ctypes.c_int
         ]
 
+    def add_rect(self, x, y, hw, hh, rot, r, g, b):
+        self.dll.AddRect(x, y, hw, hh, rot, r, g, b)
+
     def tick(self):
         return self.dll.Vulkan_Tick() != 0
-
-    def draw_rect(self, cx, cy, hw, hh, angle, r, g, b):
-        self.dll.DrawRect(cx, cy, hw, hh, angle, r, g, b)
 
     def close(self):
         self.dll.Vulkan_Shutdown()

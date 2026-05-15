@@ -1,101 +1,120 @@
 #include "platform.h"
 #include <math.h>
+#include <stdlib.h>
 
-static HWND     g_hwnd = NULL;
-static HDC      g_hdc  = NULL;
-static HDC      g_memDC = NULL;
-static HBITMAP  g_memBmp = NULL;
-static int      g_w = 800, g_h = 600;
+static int screenW = 800, screenH = 600;
+static HWND hwnd;
+static HDC hdc;
+static HDC memDC;
+static HBITMAP memBmp;
 
-static float    g_rx = 0, g_ry = 0, g_hw = 0, g_hh = 0, g_ang = 0;
-static int      g_r = 255, g_g = 165, g_b = 0;
+typedef struct {
+    float x, y, hw, hh, rot;
+    int r, g, b;
+} Rect;
 
-LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM w, LPARAM l) {
-    if (msg == WM_CLOSE) PostQuitMessage(0);
-    return DefWindowProcW(hWnd, msg, w, l);
+static Rect* shapes = NULL;
+static int shapeCount = 0;
+static int capacity = 0;
+
+static void resizeIfNeeded() {
+    if (shapeCount < capacity) return;
+    capacity = (capacity == 0) ? 64 : capacity * 2;
+    shapes = realloc(shapes, capacity * sizeof(Rect));
+}
+
+LRESULT CALLBACK WndProc(HWND h, UINT m, WPARAM w, LPARAM l) {
+    if (m == WM_CLOSE) PostQuitMessage(0);
+    return DefWindowProcA(h, m, w, l);
 }
 
 void Vulkan_Init(int w, int h) {
-    g_w = w;
-    g_h = h;
-    HINSTANCE inst = GetModuleHandleW(NULL);
+    screenW = w;
+    screenH = h;
+    HINSTANCE inst = GetModuleHandleA(NULL);
 
-    WNDCLASSEXW wc = {0};
-    wc.cbSize = sizeof(WNDCLASSEXW);
+    WNDCLASSEXA wc = {0};
+    wc.cbSize = sizeof(wc);
     wc.lpfnWndProc = WndProc;
     wc.hInstance = inst;
-    wc.lpszClassName = L"ManimClass";
-    wc.hbrBackground = CreateSolidBrush(RGB(12, 18, 35));
-    RegisterClassExW(&wc);
+    wc.lpszClassName = "ManimVK";
+    wc.hbrBackground = (HBRUSH)(COLOR_BACKGROUND);
+    RegisterClassExA(&wc);
 
-    g_hwnd = CreateWindowExW(0, L"ManimClass", L"Manim Live", WS_OVERLAPPEDWINDOW, 100, 100, w, h, NULL, NULL, inst, NULL);
-    g_hdc = GetDC(g_hwnd);
-
-    g_memDC = CreateCompatibleDC(g_hdc);
-    g_memBmp = CreateCompatibleBitmap(g_hdc, w, h);
-    SelectObject(g_memDC, g_memBmp);
-
-    ShowWindow(g_hwnd, SW_SHOW);
-    UpdateWindow(g_hwnd);
+    hwnd = CreateWindowExA(0, "ManimVK", "Manim Live", WS_OVERLAPPEDWINDOW,
+        100, 100, w, h, NULL, NULL, inst, NULL);
+    hdc = GetDC(hwnd);
+    memDC = CreateCompatibleDC(hdc);
+    memBmp = CreateCompatibleBitmap(hdc, w, h);
+    SelectObject(memDC, memBmp);
+    ShowWindow(hwnd, 1);
 }
 
-void DrawRect(float cx, float cy, float hw, float hh, float ang, int r, int g, int b) {
-    g_rx = cx;
-    g_ry = cy;
-    g_hw = hw;
-    g_hh = hh;
-    g_ang = ang;
-    g_r = r;
-    g_g = g;
-    g_b = b;
+void AddRect(float x, float y, float hw, float hh, float rot, int r, int g, int b) {
+    resizeIfNeeded();
+    shapes[shapeCount].x = x;
+    shapes[shapeCount].y = y;
+    shapes[shapeCount].hw = hw;
+    shapes[shapeCount].hh = hh;
+    shapes[shapeCount].rot = rot;
+    shapes[shapeCount].r = r;
+    shapes[shapeCount].g = g;
+    shapes[shapeCount].b = b;
+    shapeCount++;
 }
 
-int Vulkan_Tick(void) {
+void ClearShapes() {
+    shapeCount = 0;
+}
+
+int Vulkan_Tick() {
     MSG msg;
-    while (PeekMessageW(&msg, NULL, 0, 0, PM_REMOVE)) {
+    while (PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE)) {
         TranslateMessage(&msg);
-        DispatchMessageW(&msg);
-        if (msg.message == WM_QUIT) return 0;
+        DispatchMessageA(&msg);
+    }
+    if (!IsWindow(hwnd)) return 0;
+
+    RECT rc = {0, 0, screenW, screenH};
+    HBRUSH bg = CreateSolidBrush(RGB(12, 18, 35));
+    FillRect(memDC, &rc, bg);
+    DeleteObject(bg);
+
+    for (int i = 0; i < shapeCount; i++) {
+        Rect s = shapes[i];
+        float c = cosf(s.rot);
+        float sr = sinf(s.rot);
+
+        POINT pts[4];
+        pts[0].x = (long)(screenW/2 + (s.x + (-s.hw*c - -s.hh*sr)) * screenW/2);
+        pts[0].y = (long)(screenH/2 + (s.y + (-s.hw*sr + -s.hh*c)) * screenH/2);
+        pts[1].x = (long)(screenW/2 + (s.x + ( s.hw*c - -s.hh*sr)) * screenW/2);
+        pts[1].y = (long)(screenH/2 + (s.y + ( s.hw*sr + -s.hh*c)) * screenH/2);
+        pts[2].x = (long)(screenW/2 + (s.x + ( s.hw*c -  s.hh*sr)) * screenW/2);
+        pts[2].y = (long)(screenH/2 + (s.y + ( s.hw*sr +  s.hh*c)) * screenH/2);
+        pts[3].x = (long)(screenW/2 + (s.x + (-s.hw*c -  s.hh*sr)) * screenW/2);
+        pts[3].y = (long)(screenH/2 + (s.y + (-s.hw*sr +  s.hh*c)) * screenH/2);
+
+        HBRUSH br = CreateSolidBrush(RGB(s.r, s.g, s.b));
+        HPEN pen = CreatePen(PS_SOLID, 2, RGB(255,255,255));
+        HGDIOBJ oldb = SelectObject(memDC, br);
+        HGDIOBJ oldp = SelectObject(memDC, pen);
+        Polygon(memDC, pts, 4);
+        SelectObject(memDC, oldb);
+        SelectObject(memDC, oldp);
+        DeleteObject(pen);
+        DeleteObject(br);
     }
 
-    RECT rc = {0, 0, g_w, g_h};
-    HBRUSH bg_brush = CreateSolidBrush(RGB(12, 18, 35));
-    FillRect(g_memDC, &rc, bg_brush);
-    DeleteObject(bg_brush);
-
-    float c = cosf(g_ang);
-    float s = sinf(g_ang);
-    POINT pts[4];
-
-    pts[0].x = g_w/2 + (int)(((g_rx + (-g_hw*c - -g_hh*s)) * 100.0f));
-    pts[0].y = g_h/2 - (int)(((g_ry + (-g_hw*s + -g_hh*c)) * 100.0f));
-    pts[1].x = g_w/2 + (int)(((g_rx + ( g_hw*c - -g_hh*s)) * 100.0f));
-    pts[1].y = g_h/2 - (int)(((g_ry + ( g_hw*s + -g_hh*c)) * 100.0f));
-    pts[2].x = g_w/2 + (int)(((g_rx + ( g_hw*c -  g_hh*s)) * 100.0f));
-    pts[2].y = g_h/2 - (int)(((g_ry + ( g_hw*s +  g_hh*c)) * 100.0f));
-    pts[3].x = g_w/2 + (int)(((g_rx + (-g_hw*c -  g_hh*s)) * 100.0f));
-    pts[3].y = g_h/2 - (int)(((g_ry + (-g_hw*s +  g_hh*c)) * 100.0f));
-
-    HBRUSH br = CreateSolidBrush(RGB(g_r, g_g, g_b));
-    HPEN pen = CreatePen(PS_SOLID, 2, RGB(255, 255, 255));
-
-    HGDIOBJ old_br = SelectObject(g_memDC, br);
-    HGDIOBJ old_pen = SelectObject(g_memDC, pen);
-
-    Polygon(g_memDC, pts, 4);
-
-    SelectObject(g_memDC, old_br);
-    SelectObject(g_memDC, old_pen);
-    DeleteObject(br);
-    DeleteObject(pen);
-
-    BitBlt(g_hdc, 0, 0, g_w, g_h, g_memDC, 0, 0, SRCCOPY);
+    BitBlt(hdc, 0,0,screenW,screenH, memDC,0,0,SRCCOPY);
+    ClearShapes();
     return 1;
 }
 
-void Vulkan_Shutdown(void) {
-    DeleteDC(g_memDC);
-    DeleteObject(g_memBmp);
-    ReleaseDC(g_hwnd, g_hdc);
-    DestroyWindow(g_hwnd);
+void Vulkan_Shutdown() {
+    if (shapes) free(shapes);
+    DeleteDC(memDC);
+    DeleteObject(memBmp);
+    ReleaseDC(hwnd, hdc);
+    DestroyWindow(hwnd);
 }

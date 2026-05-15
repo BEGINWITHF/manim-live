@@ -10,7 +10,8 @@ extern "C" {
 __declspec(dllexport) void Vulkan_Init(int w, int h);
 __declspec(dllexport) int  Vulkan_Tick(void);
 __declspec(dllexport) void Vulkan_Shutdown(void);
-__declspec(dllexport) void DrawRect(float cx, float cy, float hw, float hh, float ang, int r, int g, int b);
+__declspec(dllexport) void AddRect(float x, float y, float hw, float hh, float rot, int r, int g, int b);
+__declspec(dllexport) void ClearShapes(void);
 
 #ifdef __cplusplus
 }
