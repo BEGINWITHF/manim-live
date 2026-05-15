@@ -1,106 +1,36 @@
-import glfw
-import vulkan as vk
-import sys
 import ctypes
+import os
+import time
 
-def log(msg):
-    print(f"[LOG] {msg}")
-    sys.stdout.flush()
+def main():
+    dll_path = os.path.join(os.path.dirname(__file__), "..", "native", "vulkan_present.dll")
+    lib = ctypes.CDLL(dll_path)
 
-class GLFWWindow:
-    def __init__(self, width=800, height=600, title="Vulkan"):
-        self.width = width
-        self.height = height
-        self.title = title
+    # 函数名完全匹配
+    lib.RenderText.argtypes = [ctypes.c_char_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int]
 
-        self.window = None
-        self.instance = None
-        self.surface = None
-        self.physical_device = None
-        self.device = None
-        self.graphics_queue = None
-        self.graphics_family = -1
+    lib.InitManimWindow()
 
-        try:
-            self.init_glfw()
-            self.init_vulkan()
-            self.main_loop()
-        except Exception as e:
-            log(f"[FATAL] {e}")
-            import traceback
-            traceback.print_exc()
-        finally:
-            self.cleanup()
+    cx, cy = 400, 300
+    radius = 80
+    dx, dy = 2, 1
 
-    def init_glfw(self):
-        glfw.init()
-        glfw.window_hint(glfw.CLIENT_API, glfw.NO_API)
-        self.window = glfw.create_window(self.width, self.height, self.title, None, None)
-        log("✅ GLFW window created")
+    while lib.WindowTick():
+        lib.ClearWindow(255, 255, 255)
 
-    def init_vulkan(self):
-        exts = glfw.get_required_instance_extensions()
-        app_info = vk.VkApplicationInfo(
-            sType=vk.VK_STRUCTURE_TYPE_APPLICATION_INFO,
-            pApplicationName="ManimVulkan",
-            applicationVersion=vk.VK_MAKE_VERSION(1, 0, 0),
-            apiVersion=vk.VK_API_VERSION_1_0
-        )
-        instance_info = vk.VkInstanceCreateInfo(
-            sType=vk.VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-            pApplicationInfo=app_info,
-            enabledExtensionCount=len(exts),
-            ppEnabledExtensionNames=exts
-        )
-        self.instance = vk.vkCreateInstance(instance_info, None)
-        log("✅ Vulkan instance created")
+        lib.DrawLine(100, 100, 700, 500, 255, 0, 0)
+        lib.DrawCircle(cx, cy, radius, 0, 200, 255)
 
-        surface_handle = ctypes.c_uint64(0)
-        glfw.create_window_surface(self.instance, self.window, None, ctypes.byref(surface_handle))
-        self.surface = surface_handle.value
-        log("✅ Surface created")
+        lib.RenderText(b"Hello Manim C+Python", 50, 50, 0, 0, 0, 24)
+        lib.RenderText(b"Ready for Vulkan!", 50, 85, 120, 120, 120, 18)
 
-        physical_devices = vk.vkEnumeratePhysicalDevices(self.instance)
-        self.physical_device = physical_devices[0]
-        props = vk.vkGetPhysicalDeviceProperties(self.physical_device)
-        log(f"✅ Using GPU: {props.deviceName}")
+        cx += dx
+        cy += dy
 
-        families = vk.vkGetPhysicalDeviceQueueFamilyProperties(self.physical_device)
-        for i, family in enumerate(families):
-            if family.queueFlags & vk.VK_QUEUE_GRAPHICS_BIT:
-                self.graphics_family = i
-                break
+        if cx - radius < 0 or cx + radius > 800: dx *= -1
+        if cy - radius < 0 or cy + radius > 600: dy *= -1
 
-        queue_priorities = [1.0]
-        queue_info = vk.VkDeviceQueueCreateInfo(
-            sType=vk.VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-            queueFamilyIndex=self.graphics_family,
-            queueCount=1,
-            pQueuePriorities=queue_priorities
-        )
-        device_exts = [vk.VK_KHR_SWAPCHAIN_EXTENSION_NAME]
-        device_info = vk.VkDeviceCreateInfo(
-            sType=vk.VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-            queueCreateInfoCount=1,
-            pQueueCreateInfos=[queue_info],
-            enabledExtensionCount=len(device_exts),
-            ppEnabledExtensionNames=device_exts
-        )
-        self.device = vk.vkCreateDevice(self.physical_device, device_info, None)
-        self.graphics_queue = vk.vkGetDeviceQueue(self.device, self.graphics_family, 0)
-        log("✅ Logical device created")
+        time.sleep(0.016)
 
-    def main_loop(self):
-        log("✅ Render loop running. Close window to exit.")
-        while not glfw.window_should_close(self.window):
-            glfw.poll_events()
-
-    def cleanup(self):
-        if self.device:
-            vk.vkDestroyDevice(self.device, None)
-        if self.instance:
-            vk.vkDestroyInstance(self.instance, None)
-        if self.window:
-            glfw.destroy_window(self.window)
-        glfw.terminate()
-        log("✅ Cleanup complete")
+if __name__ == "__main__":
+    main()
