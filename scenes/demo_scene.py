@@ -7,23 +7,43 @@ def manim_to_ndc(x, y):
 class VulkanLiveScene(Scene):
     def construct(self):
         render = VulkanRender(800, 600)
+        angle = 0
 
-        squares = []
-        angles = []
+        sq = Square(0.4).shift(LEFT*2)
+        cr = Circle(0.2).shift(RIGHT*2)
+        line = Line(LEFT*3, RIGHT*3)
+        arrow = Arrow(LEFT+DOWN, RIGHT+DOWN)
         
-        for i in range(50):
-            angle = i * 0.1
-            pos = LEFT * (i - 25) * 0.2
-            sq = Square(side_length=0.3).move_to(pos)
-            squares.append(sq)
-            angles.append(angle)
-            self.add(sq)
+        self.add(sq, cr, line, arrow)
 
         while render.tick():
-            for i in range(50):
-                angles[i] += 0.05 + i * 0.001
-                squares[i].set_angle(angles[i])
-                x, y = manim_to_ndc(*squares[i].get_center()[:2])
-                render.add_rect(x, y, 0.3/4, 0.3/4, angles[i], 100+i*3, 200-i*2, 255-i)
+            angle += 0.05
+            sq.set_angle(angle)
+
+            # 正方形
+            cx, cy, _ = sq.get_center()
+            x, y = manim_to_ndc(cx, cy)
+            render.add_rect(x, y, 0.4/4, 0.4/4, angle, 255,120,80)
+
+            # 圆形
+            cx, cy, _ = cr.get_center()
+            x, y = manim_to_ndc(cx, cy)
+            render.add_circle(x, y, 0.2/4, 80,180,255)
+
+            # 直线
+            s, e = line.get_start(), line.get_end()
+            x1,y1 = manim_to_ndc(s[0],s[1])
+            x2,y2 = manim_to_ndc(e[0],e[1])
+            render.add_line(x1,y1,x2,y2,3,200,200,200)
+
+            # 箭头
+            s,e = arrow.get_start(), arrow.get_end()
+            x1,y1 = manim_to_ndc(s[0],s[1])
+            x2,y2 = manim_to_ndc(e[0],e[1])
+            render.add_arrow(x1,y1,x2,y2,3,255,220,80)
+
+            # ✅ 文字渲染测试
+            render.add_text("Manim Vulkan Renderer", 0, 0, 24, 255,255,255)
+            render.add_text("Hello, World!", 0, 1, 18, 100,200,255)
 
         render.close()
