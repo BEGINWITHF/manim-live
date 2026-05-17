@@ -191,7 +191,6 @@ void Render_Init(HWND hwnd, int width, int height)
     inst_info.ppEnabledExtensionNames = exts;
     vkCreateInstance(&inst_info, NULL, &g_inst);
 
-    // 创建窗口表面
     VkWin32SurfaceCreateInfoKHR surf_info = {
         .sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
         .hinstance = GetModuleHandleW(NULL),

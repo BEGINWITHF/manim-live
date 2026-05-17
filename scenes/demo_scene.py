@@ -3,19 +3,27 @@ from core.vulkan_bind import VulkanRender
 
 class VulkanLiveScene(Scene):
     def construct(self):
-        render = VulkanRender(800, 600)
+        square = Square(side_length=1.5).shift(LEFT * 3)
+        square.set_color(BLUE)
+        self.add(square)
 
-        sq = Square().shift(LEFT*2)
-        cr = Circle().shift(RIGHT*2)
-        line = Line(LEFT*3, RIGHT*3)
-        arrow = Arrow(LEFT+DOWN, RIGHT+DOWN)
-        text = Text("ManimVulkanRender").shift(UP*2)
+        circle = Circle(radius=1).shift(RIGHT * 3)
+        circle.set_color(RED)
+        self.add(circle)
 
-        self.add(sq, cr, line, arrow, text)
+        line = Line(UP * 2, DOWN * 2, color=GREEN, stroke_width=3)
+        self.add(line)
 
-        angle = 0.0
+        arrow = Arrow(LEFT * 2, RIGHT * 2, color=YELLOW, stroke_width=4)
+        self.add(arrow)
+
+        text = Text("ALL FUNCTIONS OK!", font_size=24).shift(DOWN * 2)
+        text.set_color(WHITE)
+        self.add(text)
+
+        render = VulkanRender()
+        angle = 0
         while render.tick():
-            angle += 0.05
             render.sync(self, angle)
-
-        render.close()
+            angle += 0.02
+        render.shutdown()
