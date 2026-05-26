@@ -2,18 +2,18 @@
 #define VULKAN_RENDER_H
 
 #include <windows.h>
+#define VK_USE_PLATFORM_WIN32_KHR
+#include <vulkan/vulkan.h>
+#include "shared_types.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+void Render_Init(HWND hwnd, int width, int height, HINSTANCE hinst);
 
-void VK_Init(HWND hwnd, int w, int h);
-void VK_Draw(void);
-void VK_SetClearColor(float r, float g, float b);
-void VK_Cleanup(void);
+int Render_IsReady(void);
 
-#ifdef __cplusplus
-}
-#endif
+void Render_DrawScene(const Rect* rects, int rect_count, 
+                      const Circle* circles, int circle_count, 
+                      const LineObj* lines, int line_count);
 
-#endif
+void Render_Cleanup(void);
+
+#endif // VULKAN_RENDER_H
