@@ -1,4 +1,5 @@
 Set-Location $PSScriptRoot
+
 $vulkanBase = "C:\VulkanSDK"
 
 if (Test-Path $vulkanBase) {
@@ -20,7 +21,11 @@ if (Test-Path $vulkanBase) {
 }
 
 Write-Host "[INFO] Compiling vulkan_core.dll..." -ForegroundColor Cyan
-gcc -shared -m64 -o "../vulkan_core.dll" "platform.c" "vulkan_render.c" `
+
+gcc -shared -m64 -o "../vulkan_core.dll" `
+    "platform.c" `
+    "vulkan_init.c" `
+    "vulkan_draw.c" `
     -I"$env:VULKAN_SDK/Include" `
     -L"$env:VULKAN_SDK/Lib" `
     -lvulkan-1 `

@@ -3,6 +3,7 @@
 #include "shared_types.h"
 #include <stdio.h>
 #include <string.h>
+#include <windows.h>
 
 static HWND g_hwnd = NULL;
 static HINSTANCE g_main_hinst = NULL;
@@ -38,6 +39,8 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 }
 
 __declspec(dllexport) int Vulkan_Init(int w, int h) {
+    SetProcessDPIAware();
+
     printf("[DEBUG] Vulkan_Init enter w=%d h=%d hinst=%p\n", w, h, (void*)g_main_hinst);
     fflush(stdout);
 
@@ -104,7 +107,7 @@ __declspec(dllexport) void AddLine(float x1, float y1, float x2, float y2, int w
 }
 
 __declspec(dllexport) void AddText(const char* text, float x, float y, int size, int r, int g, int b) {
-    // TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
+    // TODO
 }
 
 __declspec(dllexport) void ClearShapes(void) {
@@ -125,7 +128,6 @@ __declspec(dllexport) int Vulkan_Tick(void) {
         printf("[C] Vulkan_Tick: rects=%d circles=%d lines=%d\n",
                g_rect_count, g_circle_count, g_line_count);
         fflush(stdout);
-
         Render_DrawScene(g_rects, g_rect_count,
                          g_circles, g_circle_count,
                          g_lines, g_line_count);

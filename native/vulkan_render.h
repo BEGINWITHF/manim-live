@@ -16,4 +16,4 @@ void Render_DrawScene(const Rect* rects, int rect_count,
 
 void Render_Cleanup(void);
 
-#endif // VULKAN_RENDER_H
+#endif
