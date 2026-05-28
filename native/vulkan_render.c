@@ -521,7 +521,6 @@ void Render_DrawScene(
     uint32_t image_index = 0;
     VkResult acquire_res = vkAcquireNextImageKHR(g_dev, g_swapchain, UINT64_MAX, VK_NULL_HANDLE, g_fence, &image_index);
     if (acquire_res == VK_ERROR_OUT_OF_DATE_KHR || acquire_res == VK_SUBOPTIMAL_KHR) {
-        // TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO 
         return;
     }
     vkWaitForFences(g_dev, 1, &g_fence, VK_TRUE, UINT64_MAX);
