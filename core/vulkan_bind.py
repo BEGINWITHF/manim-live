@@ -16,11 +16,11 @@ class VulkanRender:
         self.win_h = h
 
         base_dir = os.path.dirname(os.path.abspath(__file__))
-        dll_path = os.path.normpath(os.path.join(base_dir, "..", "native", "vulkan_core.dll"))
+        dll_path = os.path.normpath(os.path.join(base_dir, "..", "dist", "release", "vulkan_core.dll"))
         if not os.path.exists(dll_path):
-            dll_path = os.path.normpath(os.path.join(base_dir, "..", "vulkan_core.dll"))
+            dll_path = os.path.normpath(os.path.join(base_dir, "..", "dist", "debug", "vulkan_core.dll"))
         if not os.path.exists(dll_path):
-            raise FileNotFoundError(f"找不到 vulkan_core.dll，已尝试路径:\n  {dll_path}")
+            raise FileNotFoundError(f"找不到 vulkan_core.dll，已尝试路径:\n  {os.path.join(base_dir, '..', 'dist', 'release', 'vulkan_core.dll')}\n  {os.path.join(base_dir, '..', 'dist', 'debug', 'vulkan_core.dll')}")
 
         self.dll = ctypes.CDLL(dll_path)
 
