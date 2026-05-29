@@ -1,0 +1,15 @@
+Traceback (most recent call last):
+  File "/Users/niuyingkai/manim-vulkan/run.py", line 8, in <module>
+    main()
+  File "/Users/niuyingkai/manim-vulkan/run.py", line 5, in main
+    scene.construct()
+  File "/Users/niuyingkai/manim-vulkan/scenes/demo_scene.py", line 6, in construct
+    render = VulkanRender(800, 600)
+             ^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/niuyingkai/manim-vulkan/core/vulkan_bind.py", line 25, in __init__
+    self.dll = ctypes.CDLL(dll_path)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/niuyingkai/.pyenv/versions/3.12.12/lib/python3.12/ctypes/__init__.py", line 379, in __init__
+    self._handle = _dlopen(self._name, mode)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^
+OSError: dlopen(/Users/niuyingkai/manim-vulkan/dist/release/vulkan_core.dll, 0x0006): tried: '/Users/niuyingkai/VulkanSDK/1.4.335.1/macOS/lib/vulkan_core.dll' (no such file), '/vulkan_core.dll' (no such file), '/Users/niuyingkai/manim-vulkan/dist/release/vulkan_core.dll' (slice is not valid mach-o file), '/System/Volumes/Preboot/Cryptexes/OS/Users/niuyingkai/manim-vulkan/dist/release/vulkan_core.dll' (no such file), '/Users/niuyingkai/manim-vulkan/dist/release/vulkan_core.dll' (slice is not valid mach-o file)
