@@ -1,5 +1,6 @@
 import ctypes
 import os
+import platform
 from manim import Mobject, Square, Circle, Line
 
 
@@ -15,14 +16,34 @@ class VulkanRender:
         self.win_w = w
         self.win_h = h
 
+        # Detect platform and set library name
+        system = platform.system()
+        if system == "Windows":
+            lib_name = "vulkan_core.dll"
+            lib_prefix = ""
+        elif system == "Darwin":  # macOS
+            lib_name = "libvulkan_core.dylib"
+            lib_prefix = "lib"
+        else:  # Linux and others
+            lib_name = "libvulkan_core.so"
+            lib_prefix = "lib"
+        
         base_dir = os.path.dirname(os.path.abspath(__file__))
-        dll_path = os.path.normpath(os.path.join(base_dir, "..", "dist", "release", "vulkan_core.dll"))
-        if not os.path.exists(dll_path):
-            dll_path = os.path.normpath(os.path.join(base_dir, "..", "dist", "debug", "vulkan_core.dll"))
-        if not os.path.exists(dll_path):
-            raise FileNotFoundError(f"找不到 vulkan_core.dll，已尝试路径:\n  {os.path.join(base_dir, '..', 'dist', 'release', 'vulkan_core.dll')}\n  {os.path.join(base_dir, '..', 'dist', 'debug', 'vulkan_core.dll')}")
-
-        self.dll = ctypes.CDLL(dll_path)
+        
+        # Try release first, then debug
+        for config in ["release", "debug"]:
+            lib_path = os.path.normpath(os.path.join(base_dir, "..", "dist", config, lib_name))
+            if os.path.exists(lib_path):
+                self.dll = ctypes.CDLL(lib_path)
+                break
+        else:
+            # If no library found, raise error with platform-specific message
+            error_msg = f"找不到 {lib_name}，已尝试路径:\n"
+            for config in ["release", "debug"]:
+                error_msg += f"  {os.path.join(base_dir, '..', 'dist', config, lib_name)}\n"
+            error_msg += f"\n当前系统: {system}\n"
+            error_msg += "请确保已编译对应平台的 Vulkan 库文件"
+            raise FileNotFoundError(error_msg)
 
         self.dll.Vulkan_Init.restype = ctypes.c_int
         self.dll.Vulkan_Init.argtypes = [ctypes.c_int, ctypes.c_int]
