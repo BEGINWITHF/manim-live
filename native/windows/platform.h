@@ -1,12 +1,14 @@
 #ifndef PLATFORM_H
 #define PLATFORM_H
 
+#include "platform_common.h"
 #include <windows.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+// Windows-specific implementations
 __declspec(dllexport) int Vulkan_Init(int w, int h);
 __declspec(dllexport) int Vulkan_Tick(void);
 __declspec(dllexport) void Vulkan_Shutdown(void);

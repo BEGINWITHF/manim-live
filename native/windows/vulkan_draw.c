@@ -25,15 +25,15 @@ static void PushVertex(float px, float py, float r, float g, float b) {
 }
 
 static void BuildVerticesFromShapes(
-    const Rect *rects, int rect_count,
-    const Circle *circles, int circle_count,
-    const LineObj *lines, int line_count)
+    const ShapeRect *rects, int rect_count,
+    const ShapeCircle *circles, int circle_count,
+    const ShapeLine *lines, int line_count)
 {
     g_vertex_count = 0;
 
     for (int i = 0; i < rect_count; i++) {
         if (g_vertex_count + 6 > MAX_VERTICES) break;
-        const Rect *r = &rects[i];
+        const ShapeRect *r = &rects[i];
         float nr = r->r / 255.0f, ng = r->g / 255.0f, nb = r->b / 255.0f;
         float hw = r->hw, hh = r->hh;
         float cos_a = cosf(r->rot), sin_a = sinf(r->rot);
@@ -54,7 +54,7 @@ static void BuildVerticesFromShapes(
     for (int i = 0; i < circle_count; i++) {
         const int segs = 32;
         if (g_vertex_count + segs*3 > MAX_VERTICES) break;
-        const Circle *c = &circles[i];
+        const ShapeCircle *c = &circles[i];
         float nr = c->r/255.0f, ng = c->g/255.0f, nb = c->b/255.0f;
         float step = 2.0f*3.14159265f/(float)segs;
         for (int j = 0; j < segs; j++) {
@@ -67,7 +67,7 @@ static void BuildVerticesFromShapes(
 
     for (int i = 0; i < line_count; i++) {
         if (g_vertex_count + 6 > MAX_VERTICES) break;
-        const LineObj *l = &lines[i];
+        const ShapeLine *l = &lines[i];
         float nr = l->r/255.0f, ng = l->g/255.0f, nb = l->b/255.0f;
         float dx = l->x2-l->x1, dy = l->y2-l->y1;
         float len = sqrtf(dx*dx+dy*dy);
@@ -84,9 +84,9 @@ static void BuildVerticesFromShapes(
 }
 
 void RecordCommandBuffer(VkCommandBuffer cmd_buf, uint32_t img_idx,
-                         const Rect *rects, int rect_count,
-                         const Circle *circles, int circle_count,
-                         const LineObj *lines, int line_count) {
+                         const ShapeRect *rects, int rect_count,
+                         const ShapeCircle *circles, int circle_count,
+                         const ShapeLine *lines, int line_count) {
     VkCommandBufferBeginInfo bi = {0};
     bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     vkBeginCommandBuffer(cmd_buf, &bi);
@@ -137,9 +137,9 @@ void RecreateSwapchain(void) {
     CreateFramebuffers();
 }
 
-void Render_DrawScene(const Rect *rects, int rect_count,
-                      const Circle *circles, int circle_count,
-                      const LineObj *lines, int line_count) {
+void Render_DrawScene(const ShapeRect *rects, int rect_count,
+                      const ShapeCircle *circles, int circle_count,
+                      const ShapeLine *lines, int line_count) {
     printf("[DRAW] called: rects=%d circles=%d lines=%d ready=%d\n", 
            rect_count, circle_count, line_count, g_is_ready);
     if (!g_is_ready) return;
