@@ -27,7 +27,7 @@ PLATFORM=$(uname -s)
 case "$PLATFORM" in
     Darwin*)
         echo "[INFO] Detected macOS platform"
-        cd "$SCRIPT_DIR"
+        cd "$SCRIPT_DIR/macOSX"
         
         # Check if Vulkan SDK is available
         if [ ! -d "/System/Library/Frameworks/Vulkan.framework" ] && [ ! -d "$VULKAN_SDK" ]; then

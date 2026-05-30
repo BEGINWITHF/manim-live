@@ -21,11 +21,20 @@ ifeq ($(wildcard $(VULKAN_INCLUDE)/vulkan/vulkan.h),)
     endif
 endif
 
-# Directories
-BUILD_DIR = ../build
-DIST_DIR = ../dist
+# Directories (this Makefile lives in native/macOSX)
+BUILD_DIR = ../../build
+DIST_DIR = ../../dist
 OBJ_DIR = $(BUILD_DIR)/$(CONFIG)
 OUTPUT_DIR = $(DIST_DIR)/$(CONFIG)
+
+# Shared sources/headers directory (relative to native/macOSX)
+SHARED_DIR = ../shared
+
+# Search path for source files (mock sources live in ../shared)
+VPATH = $(SHARED_DIR)
+
+# Header include path (platform headers are local, shared headers in ../shared)
+INCLUDES = -I. -I$(SHARED_DIR) -I$(VULKAN_INCLUDE)
 
 # Source files
 ifeq ($(wildcard $(VULKAN_INCLUDE)/vulkan/vulkan.h),)
@@ -72,17 +81,17 @@ $(OUTPUT_PATH): $(OBJECTS) | $(OUTPUT_DIR)
 $(OBJ_DIR)/%.o: %.c | $(OBJ_DIR)
 	@echo "[INFO] Compiling $<..."
 	@if [ "$(CONFIG)" = "debug" ]; then \
-		$(CC) $(DEBUG_CFLAGS) -c $< -o $@ -I$(VULKAN_INCLUDE); \
+		$(CC) $(DEBUG_CFLAGS) -c $< -o $@ $(INCLUDES); \
 	else \
-		$(CC) $(CFLAGS) -c $< -o $@ -I$(VULKAN_INCLUDE); \
+		$(CC) $(CFLAGS) -c $< -o $@ $(INCLUDES); \
 	fi
 
 $(OBJ_DIR)/%.o: %.m | $(OBJ_DIR)
 	@echo "[INFO] Compiling Objective-C $<..."
 	@if [ "$(CONFIG)" = "debug" ]; then \
-		$(CC) $(DEBUG_CFLAGS) -c $< -o $@ -I$(VULKAN_INCLUDE); \
+		$(CC) $(DEBUG_CFLAGS) -c $< -o $@ $(INCLUDES); \
 	else \
-		$(CC) $(CFLAGS) -c $< -o $@ -I$(VULKAN_INCLUDE); \
+		$(CC) $(CFLAGS) -c $< -o $@ $(INCLUDES); \
 	fi
 
 $(BUILD_DIR):

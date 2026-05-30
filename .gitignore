@@ -9,6 +9,10 @@ media/
 # Scene-specific cache
 scenes/__pycache__/
 
+# Build artifacts
+build/
+dist/
+
 # Environment
 venv/
 env/
