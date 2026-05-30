@@ -28,7 +28,13 @@ OBJ_DIR = $(BUILD_DIR)/$(CONFIG)
 OUTPUT_DIR = $(DIST_DIR)/$(CONFIG)
 
 # Source files
-C_SOURCES = vulkan_init_mock.c vulkan_draw_mock.c
+ifeq ($(wildcard $(VULKAN_INCLUDE)/vulkan/vulkan.h),)
+    # Mock mode - create minimal implementation
+    C_SOURCES = vulkan_init_mock.c vulkan_draw_mock.c
+else
+    # Real Vulkan implementation (platform-specific)
+    C_SOURCES = vulkan_init_macos.c vulkan_draw_macos.c
+endif
 M_SOURCES = platform_macos.m
 OBJECTS = $(C_SOURCES:%.c=$(OBJ_DIR)/%.o) $(M_SOURCES:%.m=$(OBJ_DIR)/%.o)
 
@@ -37,8 +43,16 @@ CONFIG ?= release
 OUTPUT_NAME = libvulkan_core.dylib
 OUTPUT_PATH = $(OUTPUT_DIR)/$(OUTPUT_NAME)
 
-# Frameworks for macOS (Vulkan removed for mock implementation)
-FRAMEWORKS = -framework Cocoa -framework Foundation -framework AppKit
+# Frameworks for macOS
+ifeq ($(wildcard $(VULKAN_INCLUDE)/vulkan/vulkan.h),)
+    # Mock mode - no Vulkan framework
+    FRAMEWORKS = -framework Cocoa -framework Foundation -framework AppKit
+else
+    # Real Vulkan implementation - use Vulkan Loader only for now
+    FRAMEWORKS = -framework Cocoa -framework Foundation -framework AppKit \
+                 -F/opt/homebrew/Cellar/vulkan-loader/1.4.335.0/loader \
+                 -framework Vulkan
+endif
 
 .PHONY: all clean debug release
 

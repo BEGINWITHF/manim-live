@@ -29,7 +29,41 @@ static pthread_mutex_t g_event_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 @implementation VulkanView
 - (void)drawRect:(NSRect)dirtyRect {
-    // Drawing will be handled by Vulkan
+    [[NSColor colorWithCalibratedRed:0.05 green:0.05 blue:0.05 alpha:1.0] setFill];
+    NSRectFill(dirtyRect);
+
+    pthread_mutex_lock(&g_event_mutex);
+
+    for (int i = 0; i < g_rect_count; i++) {
+        ShapeRect r = g_rects[i];
+        [[NSColor colorWithCalibratedRed:r.r / 255.0 green:r.g / 255.0 blue:r.b / 255.0 alpha:1.0] setFill];
+        NSAffineTransform *transform = [NSAffineTransform transform];
+        [transform translateXBy:r.x yBy:r.y];
+        [transform rotateByRadians:r.rot];
+        [transform concat];
+        NSRectFill(NSMakeRect(-r.hw, -r.hh, r.hw * 2.0, r.hh * 2.0));
+        [transform invert];
+        [transform concat];
+    }
+
+    for (int i = 0; i < g_circle_count; i++) {
+        ShapeCircle c = g_circles[i];
+        [[NSColor colorWithCalibratedRed:c.r / 255.0 green:c.g / 255.0 blue:c.b / 255.0 alpha:1.0] setFill];
+        NSBezierPath *path = [NSBezierPath bezierPathWithOvalInRect:NSMakeRect(c.x - c.radius, c.y - c.radius, c.radius * 2.0, c.radius * 2.0)];
+        [path fill];
+    }
+
+    for (int i = 0; i < g_line_count; i++) {
+        ShapeLine l = g_lines[i];
+        [[NSColor colorWithCalibratedRed:l.r / 255.0 green:l.g / 255.0 blue:l.b / 255.0 alpha:1.0] setStroke];
+        NSBezierPath *path = [NSBezierPath bezierPath];
+        [path setLineWidth:l.width];
+        [path moveToPoint:NSMakePoint(l.x1, l.y1)];
+        [path lineToPoint:NSMakePoint(l.x2, l.y2)];
+        [path stroke];
+    }
+
+    pthread_mutex_unlock(&g_event_mutex);
 }
 @end
 
@@ -161,6 +195,7 @@ PLATFORM_EXPORT int Vulkan_Tick(void) {
         Render_DrawScene(g_rects, g_rect_count,
                         g_circles, g_circle_count,
                         g_lines, g_line_count);
+        [g_view setNeedsDisplay:YES];
         pthread_mutex_unlock(&g_event_mutex);
         return 1;
     }
