@@ -42,15 +42,10 @@ manim-vulkan is a projects which integrates manim to vulkan, enhancing manim ren
 
 - intensely enhancing render speed✅
 - basic elements rendering(square, circle, etc)✅
-
-------
-
-#### the following feature is not supported now
-
-------
-
-- both windows/mac support
+- windows/mac support
 - support window adjustment
+
+---
 
 ##### 1.2 supplementary rendering
 
@@ -58,7 +53,6 @@ manim-vulkan is a projects which integrates manim to vulkan, enhancing manim ren
 - transformation and animation rendering
 - formula rendering(latex, typst supportive)
 - 3d rendering
-- have same code format with the original ManimCE
 
 ##### 1.3 integrated render
 
@@ -66,7 +60,6 @@ manim-vulkan is a projects which integrates manim to vulkan, enhancing manim ren
 - camera shifting rendering
 - live interaction(checkbox, slider, drag, etc.)
 - fit for later iteration of Manim
-- other system( linux etc. support)
 
 ### 2. manteraction
 

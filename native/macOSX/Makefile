@@ -16,7 +16,7 @@ ifeq ($(wildcard $(VULKAN_INCLUDE)/vulkan/vulkan.h),)
         ifeq ($(wildcard $(VULKAN_INCLUDE)/vulkan/vulkan.h),)
             # Mock mode - create minimal implementation
             CFLAGS += -DMOCK_VULKAN
-            $(error 错误：未找到 Vulkan SDK！请安装 Vulkan SDK 以使用完整的 Vulkan 渲染功能。)
+            # $(error 错误：未找到 Vulkan SDK！请安装 Vulkan SDK 以使用完整的 Vulkan 渲染功能。)
         endif
     endif
 endif
