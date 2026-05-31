@@ -53,6 +53,7 @@ manim-vulkan is a projects which integrates manim to vulkan, enhancing manim ren
 - transformation and animation rendering
 - formula rendering(latex, typst supportive)
 - 3d rendering
+- have same code format with the original ManimCE
 
 ##### 1.3 integrated render
 
