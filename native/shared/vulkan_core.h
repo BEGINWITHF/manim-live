@@ -33,8 +33,10 @@ extern VkFence *g_in_flight_fences;
 extern VkBuffer g_vert_buf;
 extern VkDeviceMemory g_vert_buf_mem;
 extern VkDeviceSize g_vert_buf_size;
+#ifdef _WIN32
 extern HWND g_hwnd;
 extern HINSTANCE g_hinst;
+#endif
 extern bool g_is_ready;
 extern uint32_t g_current_frame;
 
@@ -44,9 +46,9 @@ void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
                   VkMemoryPropertyFlags props, VkBuffer *buf, VkDeviceMemory *mem);
 void CopyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size);
 void RecordCommandBuffer(VkCommandBuffer cmd_buf, uint32_t img_idx,
-                         const Rect *rects, int rect_count,
-                         const Circle *circles, int circle_count,
-                         const LineObj *lines, int line_count);
+                         const ShapeRect *rects, int rect_count,
+                         const ShapeCircle *circles, int circle_count,
+                         const ShapeLine *lines, int line_count);
 void RecreateSwapchain(void);
 void CleanupSwapchain(void);
 

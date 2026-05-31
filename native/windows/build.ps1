@@ -2,7 +2,7 @@ Set-Location $PSScriptRoot
 
 $BuildConfig = if ($args.Count -gt 0 -and $args[0] -eq "debug") { "debug" } else { "release" }
 $Version = "1.0.0"
-$ProjectRoot = Split-Path -Parent $PSScriptRoot
+$ProjectRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 
 $BuildDir = Join-Path $ProjectRoot "build"
 $DistDir = Join-Path $ProjectRoot "dist"
@@ -54,6 +54,7 @@ $CompilerFlags = "$CommonFlags $OptimizationFlags"
 $OutputName = "vulkan_core${OutputSuffix}.dll"
 $OutputPath = Join-Path $OutputDir $OutputName
 
+$SharedDir = "..\shared"
 $SourceFiles = @(
     "platform.c",
     "vulkan_init.c",
@@ -64,11 +65,11 @@ Write-Host "[INFO] Compiling source files to object files..." -ForegroundColor C
 $ObjectFiles = @()
 foreach ($src in $SourceFiles) {
     if (Test-Path $src) {
-        $objName = $src -replace '\.c$', '.o'
+        $objName = (Split-Path -Leaf $src) -replace '\.c$', '.o'
         $objPath = Join-Path $ObjDir $objName
         $ObjectFiles += $objPath
         
-        $CompileCmd = "gcc -c $CompilerFlags -o `"$objPath`" `"$src`" -I`"$env:VULKAN_SDK/Include`""
+        $CompileCmd = "gcc -c $CompilerFlags -o `"$objPath`" `"$src`" -I`".`" -I`"$SharedDir`" -I`"$env:VULKAN_SDK/Include`""
         Write-Host "[CMD] $CompileCmd" -ForegroundColor DarkGray
         Invoke-Expression $CompileCmd
         

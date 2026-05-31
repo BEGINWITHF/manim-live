@@ -1,6 +1,5 @@
 #include "platform.h"
 #include "vulkan_render.h"
-#include "shared_types.h"
 #include <stdio.h>
 #include <string.h>
 #include <windows.h>
