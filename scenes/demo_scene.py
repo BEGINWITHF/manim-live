@@ -1,5 +1,4 @@
 from manim import *
-import time
 from core.vulkan_bind import VulkanRender
 
 class VulkanLiveScene(Scene):
@@ -14,11 +13,9 @@ class VulkanLiveScene(Scene):
 
         self.add(sq, cr, line, arrow, text)
 
-        start_time = time.monotonic()
-        rotation_speed = 1.0
+        angle = 0.0
         while render.tick():
-            angle = (time.monotonic() - start_time) * rotation_speed
+            angle += 0.05
             render.sync(self, angle)
-            time.sleep(1.0 / 60.0)
 
         render.close()
