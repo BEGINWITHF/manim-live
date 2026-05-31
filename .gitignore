@@ -29,3 +29,6 @@ Thumbs.db
 *.dylib
 *.dll
 *.exe
+
+# Native media
+native/media/
