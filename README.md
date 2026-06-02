@@ -18,7 +18,7 @@ Besides installation, the actual coding of Manim is notoriously hard for beginne
 
 an Manteraction file is classified with three type: original video-output form, PPT-like form, and website form. When editing, the original video-output form data is automatically stored in a file with suffix .mt, and the PPT-like form data in .mtppt, and website in .mtweb. directly open the file will automatically present the result form, while open these file in Manteraction will enter editing streamline.
 
-### newly added elements
+### 4. newly added elements
 
 In addition of Manim's interaction elements, Manteraction intends to implement two newly elements for better interaction. They can affect other Mobject's appearance.
 
