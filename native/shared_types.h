@@ -13,6 +13,9 @@ typedef struct {
 typedef struct {
     float x, y, radius;
     int r, g, b;
+    int border_r, border_g, border_b;
+    float border_width;
+    float stroke_progress;
 } Circle;
 
 typedef struct {
