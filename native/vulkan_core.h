@@ -52,5 +52,7 @@ void CleanupSwapchain(void);
 
 void CreateSwapchain(void);
 void CreateImageViews(void);
-void CreateFramebuffers(void); 
+void CreateFramebuffers(void);
+void update_vertex_buffer(const void *data, VkDeviceSize size);
+int Render_DrawFrame(uint32_t vertex_count);
 #endif

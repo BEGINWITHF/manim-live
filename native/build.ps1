@@ -57,21 +57,24 @@ $OutputPath = Join-Path $OutputDir $OutputName
 $SourceFiles = @(
     "platform.c",
     "vulkan_init.c",
-    "vulkan_draw.c"
+    "vulkan_draw.c",
+    "draw/draw_rect.c",
+    "draw/draw_circle.c",
+    "draw/draw_line.c"
 )
 
 Write-Host "[INFO] Compiling source files to object files..." -ForegroundColor Cyan
 $ObjectFiles = @()
 foreach ($src in $SourceFiles) {
     if (Test-Path $src) {
-        $objName = $src -replace '\.c$', '.o'
+        $objName = $src -replace '[\\/]', '_' -replace '\.c$', '.o'
         $objPath = Join-Path $ObjDir $objName
         $ObjectFiles += $objPath
-        
+
         $CompileCmd = "gcc -c $CompilerFlags -o `"$objPath`" `"$src`" -I`"$env:VULKAN_SDK/Include`""
         Write-Host "[CMD] $CompileCmd" -ForegroundColor DarkGray
         Invoke-Expression $CompileCmd
-        
+
         if ($LASTEXITCODE -ne 0) {
             Write-Host "[ERROR] Compilation failed for $src" -ForegroundColor Red
             exit 1

@@ -488,3 +488,139 @@ void Render_Init(HWND hwnd, int width, int height, HINSTANCE hinst) {
 int Render_IsReady(void) {
     return g_is_ready ? 1 : 0;
 }
+
+void update_vertex_buffer(const void *data, VkDeviceSize size) {
+    void *mapped_data;
+    vkMapMemory(g_dev, g_vert_buf_mem, 0, size, 0, &mapped_data);
+    memcpy(mapped_data, data, size);
+    vkUnmapMemory(g_dev, g_vert_buf_mem);
+}
+
+void Render_Cleanup(void) {
+    if (!g_is_ready) return;
+
+    vkDeviceWaitIdle(g_dev);
+
+    for (uint32_t i = 0; i < g_swapchain_img_count; i++) {
+        vkDestroySemaphore(g_dev, g_img_avail_sems[i], NULL);
+        vkDestroySemaphore(g_dev, g_render_done_sems[i], NULL);
+        vkDestroyFence(g_dev, g_in_flight_fences[i], NULL);
+    }
+    free(g_img_avail_sems);
+    free(g_render_done_sems);
+    free(g_in_flight_fences);
+
+    vkFreeCommandBuffers(g_dev, g_cmd_pool, g_cmd_buf_count, g_cmd_bufs);
+    free(g_cmd_bufs);
+    vkDestroyCommandPool(g_dev, g_cmd_pool, NULL);
+
+    for (uint32_t i = 0; i < g_swapchain_img_count; i++) {
+        vkDestroyFramebuffer(g_dev, g_framebuffers[i], NULL);
+    }
+    free(g_framebuffers);
+
+    vkDestroyPipeline(g_dev, g_pipeline, NULL);
+    vkDestroyPipelineLayout(g_dev, g_pipeline_layout, NULL);
+    vkDestroyRenderPass(g_dev, g_render_pass, NULL);
+
+    for (uint32_t i = 0; i < g_swapchain_img_count; i++) {
+        vkDestroyImageView(g_dev, g_swapchain_img_views[i], NULL);
+    }
+    free(g_swapchain_img_views);
+    free(g_swapchain_imgs);
+
+    vkDestroySwapchainKHR(g_dev, g_swapchain, NULL);
+    vkDestroySurfaceKHR(g_inst, g_surface, NULL);
+
+    vkDestroyBuffer(g_dev, g_vert_buf, NULL);
+    vkFreeMemory(g_dev, g_vert_buf_mem, NULL);
+
+    vkDestroyDevice(g_dev, NULL);
+    vkDestroyInstance(g_inst, NULL);
+
+    g_is_ready = false;
+}
+
+void RecordCommandBuffer(VkCommandBuffer cmd_buf, uint32_t img_idx,
+                         const Rect *rects, int rect_count,
+                         const Circle *circles, int circle_count,
+                         const LineObj *lines, int line_count) {
+    (void)rects; (void)rect_count;
+    (void)circles; (void)circle_count;
+    (void)lines; (void)line_count;
+
+    VkCommandBufferBeginInfo begin_info = {0};
+    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+
+    vkBeginCommandBuffer(cmd_buf, &begin_info);
+
+    VkClearValue clear_color = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
+    VkRenderPassBeginInfo render_pass_info = {0};
+    render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    render_pass_info.renderPass = g_render_pass;
+    render_pass_info.framebuffer = g_framebuffers[img_idx];
+    render_pass_info.renderArea.offset.x = 0;
+    render_pass_info.renderArea.offset.y = 0;
+    render_pass_info.renderArea.extent = g_swapchain_ext;
+    render_pass_info.clearValueCount = 1;
+    render_pass_info.pClearValues = &clear_color;
+
+    vkCmdBeginRenderPass(cmd_buf, &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
+
+    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, g_pipeline);
+
+    VkBuffer vertex_buffers[] = { g_vert_buf };
+    VkDeviceSize offsets[] = { 0 };
+    vkCmdBindVertexBuffers(cmd_buf, 0, 1, vertex_buffers, offsets);
+
+    vkCmdDraw(cmd_buf, 65536, 1, 0, 0);
+
+    vkCmdEndRenderPass(cmd_buf);
+
+    vkEndCommandBuffer(cmd_buf);
+}
+
+int Render_DrawFrame(uint32_t vertex_count) {
+    if (!g_is_ready) return 0;
+
+    vkWaitForFences(g_dev, 1, &g_in_flight_fences[g_current_frame], VK_TRUE, UINT64_MAX);
+    vkResetFences(g_dev, 1, &g_in_flight_fences[g_current_frame]);
+
+    uint32_t img_idx;
+    vkAcquireNextImageKHR(g_dev, g_swapchain, UINT64_MAX,
+                          g_img_avail_sems[g_current_frame], VK_NULL_HANDLE, &img_idx);
+
+    vkResetCommandBuffer(g_cmd_bufs[g_current_frame], 0);
+    RecordCommandBuffer(g_cmd_bufs[g_current_frame], img_idx, NULL, 0, NULL, 0, NULL, 0);
+
+    VkSubmitInfo submit_info = {0};
+    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+    VkSemaphore wait_sems[] = { g_img_avail_sems[g_current_frame] };
+    VkPipelineStageFlags wait_stages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+    submit_info.waitSemaphoreCount = 1;
+    submit_info.pWaitSemaphores = wait_sems;
+    submit_info.pWaitDstStageMask = wait_stages;
+    submit_info.commandBufferCount = 1;
+    submit_info.pCommandBuffers = &g_cmd_bufs[g_current_frame];
+
+    VkSemaphore signal_sems[] = { g_render_done_sems[g_current_frame] };
+    submit_info.signalSemaphoreCount = 1;
+    submit_info.pSignalSemaphores = signal_sems;
+
+    vkQueueSubmit(g_gfx_queue, 1, &submit_info, g_in_flight_fences[g_current_frame]);
+
+    VkPresentInfoKHR present_info = {0};
+    present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    present_info.waitSemaphoreCount = 1;
+    present_info.pWaitSemaphores = signal_sems;
+    present_info.swapchainCount = 1;
+    present_info.pSwapchains = &g_swapchain;
+    present_info.pImageIndices = &img_idx;
+
+    vkQueuePresentKHR(g_present_queue, &present_info);
+
+    g_current_frame = (g_current_frame + 1) % g_swapchain_img_count;
+
+    return 1;
+}

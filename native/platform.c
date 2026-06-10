@@ -1,11 +1,11 @@
 #include "platform.h"
 #include "vulkan_render.h"
+#include "vulkan_core.h"
 #include "shared_types.h"
 #include <stdio.h>
 #include <string.h>
 #include <windows.h>
 
-static HWND g_hwnd = NULL;
 static HINSTANCE g_main_hinst = NULL;
 
 static Rect g_rects[MAX_SHAPES];
@@ -131,6 +131,7 @@ __declspec(dllexport) int Vulkan_Tick(void) {
         Render_DrawScene(g_rects, g_rect_count,
                          g_circles, g_circle_count,
                          g_lines, g_line_count);
+        Render_DrawFrame(0);
         return 1;
     }
     return 0;
