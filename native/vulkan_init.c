@@ -1,5 +1,12 @@
 #include "vulkan_core.h"
 
+#define VK_CHECK(call) do { \
+    VkResult _result = (call); \
+    if (_result != VK_SUCCESS) { \
+        fprintf(stderr, "[Vulkan ERROR] %s returned %d\n", #call, _result); \
+    } \
+} while(0)
+
 
 
 VkInstance g_inst = VK_NULL_HANDLE;
@@ -59,6 +66,8 @@ HINSTANCE g_hinst = NULL;
 bool g_is_ready = false;
 
 uint32_t g_current_frame = 0;
+
+bool g_framebuffer_resized = false;
 
 
 
@@ -182,7 +191,7 @@ VkShaderModule CreateShaderModule(const uint32_t *code, size_t size) {
 
     VkShaderModule mod;
 
-    vkCreateShaderModule(g_dev, &ci, NULL, &mod);
+    VK_CHECK(vkCreateShaderModule(g_dev, &ci, NULL, &mod));
 
     return mod;
 
@@ -230,7 +239,7 @@ void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
 
     bi.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-    vkCreateBuffer(g_dev, &bi, NULL, buf);
+    VK_CHECK(vkCreateBuffer(g_dev, &bi, NULL, buf));
 
 
 
@@ -248,9 +257,9 @@ void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
 
     ai.memoryTypeIndex = FindMemoryType(mr.memoryTypeBits, props);
 
-    vkAllocateMemory(g_dev, &ai, NULL, mem);
+    VK_CHECK(vkAllocateMemory(g_dev, &ai, NULL, mem));
 
-    vkBindBufferMemory(g_dev, *buf, *mem, 0);
+    VK_CHECK(vkBindBufferMemory(g_dev, *buf, *mem, 0));
 
 }
 
@@ -484,7 +493,7 @@ void CreateSwapchain(void) {
 
 
 
-    vkCreateSwapchainKHR(g_dev, &sci, NULL, &g_swapchain);
+    VK_CHECK(vkCreateSwapchainKHR(g_dev, &sci, NULL, &g_swapchain));
 
     g_swapchain_fmt = VK_FORMAT_B8G8R8A8_SRGB;
 
@@ -644,7 +653,7 @@ static void CreateGraphicsPipeline(void) {
 
     bind_desc.binding = 0;
 
-    bind_desc.stride = sizeof(float) * 5; // x,y,r,g,b
+    bind_desc.stride = sizeof(float) * 5;
 
     bind_desc.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
@@ -994,102 +1003,79 @@ void update_vertex_buffer(const void *data, VkDeviceSize size) {
 
 
 
+void CleanupSwapchain(void) {
+    for (uint32_t i = 0; i < g_swapchain_img_count; i++) {
+        vkDestroyFramebuffer(g_dev, g_framebuffers[i], NULL);
+    }
+    free(g_framebuffers);
+
+    for (uint32_t i = 0; i < g_swapchain_img_count; i++) {
+        vkDestroyImageView(g_dev, g_swapchain_img_views[i], NULL);
+    }
+    free(g_swapchain_img_views);
+    free(g_swapchain_imgs);
+
+    vkDestroySwapchainKHR(g_dev, g_swapchain, NULL);
+}
+
+void RecreateSwapchain(void) {
+    int width = 0, height = 0;
+    RECT rect;
+    if (GetClientRect(g_hwnd, &rect)) {
+        width = rect.right - rect.left;
+        height = rect.bottom - rect.top;
+    }
+    if (width == 0 || height == 0) return;
+
+    vkDeviceWaitIdle(g_dev);
+
+    CleanupSwapchain();
+
+    g_swapchain_ext = (VkExtent2D){(uint32_t)width, (uint32_t)height};
+    CreateSwapchain();
+    CreateImageViews();
+    CreateFramebuffers();
+}
+
+
+
 void Render_Cleanup(void) {
 
     if (!g_is_ready) return;
 
-
-
     vkDeviceWaitIdle(g_dev);
 
-
+    CleanupSwapchain();
 
     for (uint32_t i = 0; i < g_swapchain_img_count; i++) {
-
         vkDestroySemaphore(g_dev, g_img_avail_sems[i], NULL);
-
         vkDestroySemaphore(g_dev, g_render_done_sems[i], NULL);
-
         vkDestroyFence(g_dev, g_in_flight_fences[i], NULL);
-
     }
-
     free(g_img_avail_sems);
-
     free(g_render_done_sems);
-
     free(g_in_flight_fences);
 
-
-
     vkFreeCommandBuffers(g_dev, g_cmd_pool, g_cmd_buf_count, g_cmd_bufs);
-
     free(g_cmd_bufs);
-
     vkDestroyCommandPool(g_dev, g_cmd_pool, NULL);
 
-
-
-    for (uint32_t i = 0; i < g_swapchain_img_count; i++) {
-
-        vkDestroyFramebuffer(g_dev, g_framebuffers[i], NULL);
-
-    }
-
-    free(g_framebuffers);
-
-
-
     vkDestroyPipeline(g_dev, g_pipeline, NULL);
-
     vkDestroyPipelineLayout(g_dev, g_pipeline_layout, NULL);
-
     vkDestroyRenderPass(g_dev, g_render_pass, NULL);
 
-
-
-    for (uint32_t i = 0; i < g_swapchain_img_count; i++) {
-
-        vkDestroyImageView(g_dev, g_swapchain_img_views[i], NULL);
-
-    }
-
-    free(g_swapchain_img_views);
-
-    free(g_swapchain_imgs);
-
-
-
-    vkDestroySwapchainKHR(g_dev, g_swapchain, NULL);
-
-    vkDestroySurfaceKHR(g_inst, g_surface, NULL);
-
-
-
     vkDestroyBuffer(g_dev, g_vert_buf, NULL);
-
     vkFreeMemory(g_dev, g_vert_buf_mem, NULL);
 
-
-
+    vkDestroySurfaceKHR(g_inst, g_surface, NULL);
     vkDestroyDevice(g_dev, NULL);
-
     vkDestroyInstance(g_inst, NULL);
 
-
-
     g_is_ready = false;
-
 }
 
 void RecordCommandBuffer(VkCommandBuffer cmd_buf, uint32_t img_idx,
-                         const Rect *rects, int rect_count,
-                         const Circle *circles, int circle_count,
-                         const LineObj *lines, int line_count) {
-    (void)rects; (void)rect_count;
-    (void)circles; (void)circle_count;
-    (void)lines; (void)line_count;
-
+                         uint32_t vertex_count) {
     VkCommandBufferBeginInfo begin_info = {0};
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
@@ -1114,7 +1100,9 @@ void RecordCommandBuffer(VkCommandBuffer cmd_buf, uint32_t img_idx,
     VkDeviceSize offsets[] = { 0 };
     vkCmdBindVertexBuffers(cmd_buf, 0, 1, vertex_buffers, offsets);
 
-    vkCmdDraw(cmd_buf, 65536, 1, 0, 0);
+    if (vertex_count > 0) {
+        vkCmdDraw(cmd_buf, vertex_count, 1, 0, 0);
+    }
 
     vkCmdEndRenderPass(cmd_buf);
 
@@ -1122,7 +1110,6 @@ void RecordCommandBuffer(VkCommandBuffer cmd_buf, uint32_t img_idx,
 }
 
 int Render_DrawFrame(uint32_t vertex_count) {
-    (void)vertex_count;
     if (!g_is_ready) return 0;
 
     vkWaitForFences(g_dev, 1, &g_in_flight_fences[g_current_frame], VK_TRUE, UINT64_MAX);
@@ -1133,7 +1120,7 @@ int Render_DrawFrame(uint32_t vertex_count) {
                           g_img_avail_sems[g_current_frame], VK_NULL_HANDLE, &img_idx);
 
     vkResetCommandBuffer(g_cmd_bufs[g_current_frame], 0);
-    RecordCommandBuffer(g_cmd_bufs[g_current_frame], img_idx, NULL, 0, NULL, 0, NULL, 0);
+    RecordCommandBuffer(g_cmd_bufs[g_current_frame], img_idx, vertex_count);
 
     VkSubmitInfo submit_info = {0};
     submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;

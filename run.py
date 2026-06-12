@@ -1,7 +1,7 @@
-from scenes.demo_scene import VulkanLiveScene
+from scenes.demo_scene import VulkanShapeShowcase
 
 def main():
-    scene = VulkanLiveScene()
+    scene = VulkanShapeShowcase()
     scene.construct()
 
 if __name__ == "__main__":

@@ -18,7 +18,7 @@ Besides installation, the actual coding of Manim is notoriously hard for beginne
 
 an Manteraction file is classified with three type: original video-output form, PPT-like form, and website form. When editing, the original video-output form data is automatically stored in a file with suffix .mt, and the PPT-like form data in .mtppt, and website in .mtweb. directly open the file will automatically present the result form, while open these file in Manteraction will enter editing streamline.
 
-### 4. newly added elements
+### newly added elements
 
 In addition of Manim's interaction elements, Manteraction intends to implement two newly elements for better interaction. They can affect other Mobject's appearance.
 
@@ -49,13 +49,14 @@ manim-vulkan is a projects which integrates manim to vulkan, enhancing manim ren
 
 ------
 
+- both windows/mac support
 - support window adjustment
-- transformation and animation rendering
 
 ##### 1.2 supplementary rendering
 
-- label rendering(arrow tip, etc.)
-- formula rendering(latex, typst etc. supportive)
+- label rendering(arrow tip,etc.)
+- transformation and animation rendering
+- formula rendering(latex, typst supportive)
 - 3d rendering
 - have same code format with the original ManimCE
 
@@ -65,7 +66,7 @@ manim-vulkan is a projects which integrates manim to vulkan, enhancing manim ren
 - camera shifting rendering
 - live interaction(checkbox, slider, drag, etc.)
 - fit for later iteration of Manim
-- other system( linux mac etc. support)
+- other system( linux etc. support)
 
 ### 2. manteraction
 
