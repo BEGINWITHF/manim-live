@@ -17,7 +17,8 @@ void Render_DrawScene(const Rect* rects, int rect_count,
                       const PolygonObj* polygons, int polygon_count,
                       const DashedLineObj* dashed_lines, int dashed_line_count,
                       const ArcObj* arcs, int arc_count,
-                      const PointObj* points, int point_count);
+                      const PointObj* points, int point_count,
+                      const TextObj* texts, int text_count);
 
 void Render_Cleanup(void);
 

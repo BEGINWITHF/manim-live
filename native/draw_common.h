@@ -12,7 +12,7 @@ extern VkExtent2D g_swapchain_ext;
 
 static inline void ToNDC(float px, float py, float *nx, float *ny) {
     *nx = (px / (float)g_swapchain_ext.width) * 2.0f - 1.0f;
-    *ny = 1.0f - (py / (float)g_swapchain_ext.height) * 2.0f;
+    *ny = (py / (float)g_swapchain_ext.height) * 2.0f - 1.0f;
 }
 
 static inline int PushVertex(float px, float py, float r, float g, float b) {

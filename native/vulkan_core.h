@@ -31,7 +31,6 @@ extern VkSemaphore *g_render_done_sems;
 extern VkFence *g_in_flight_fences;
 extern VkBuffer g_vert_buf;
 extern VkDeviceMemory g_vert_buf_mem;
-extern VkDeviceSize g_vert_buf_size;
 extern HWND g_hwnd;
 extern HINSTANCE g_hinst;
 extern bool g_is_ready;
@@ -44,8 +43,6 @@ uint32_t FindMemoryType(uint32_t type_filter, VkMemoryPropertyFlags props);
 
 void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, 
                   VkMemoryPropertyFlags props, VkBuffer *buf, VkDeviceMemory *mem);
-
-void CopyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size);
 
 void RecordCommandBuffer(VkCommandBuffer cmd_buf, uint32_t img_idx,
                          uint32_t vertex_count);

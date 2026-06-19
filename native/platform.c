@@ -22,10 +22,11 @@ static ArcObj g_arcs[MAX_SHAPES];
 static int g_arc_count = 0;
 static PointObj g_points[MAX_SHAPES];
 static int g_point_count = 0;
+static TextObj g_texts[MAX_SHAPES];
+static int g_text_count = 0;
 
 static double g_aspect_ratio = 16.0 / 9.0;
 static int g_min_width = 320;
-static int g_min_height = 240;
 
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
     (void)lpvReserved;
@@ -180,6 +181,21 @@ __declspec(dllexport) void AddPoint(float x, float y, int r, int g, int b) {
     }
 }
 
+__declspec(dllexport) void AddText(float x, float y, int r, int g, int b, float font_size, const char* text) {
+    if (g_text_count < MAX_SHAPES && text) {
+        TextObj* t = &g_texts[g_text_count++];
+        t->x = x; t->y = y;
+        t->r = r; t->g = g; t->b = b;
+        t->font_size = font_size;
+        int len = 0;
+        while (text[len] && len < MAX_TEXT_LEN - 1) {
+            t->text[len] = text[len];
+            len++;
+        }
+        t->text[len] = '\0';
+    }
+}
+
 __declspec(dllexport) void ClearShapes(void) {
     g_rect_count = 0;
     g_circle_count = 0;
@@ -189,6 +205,7 @@ __declspec(dllexport) void ClearShapes(void) {
     g_dashed_line_count = 0;
     g_arc_count = 0;
     g_point_count = 0;
+    g_text_count = 0;
 }
 
 __declspec(dllexport) int Vulkan_Tick(void) {
@@ -212,7 +229,8 @@ __declspec(dllexport) int Vulkan_Tick(void) {
             g_polygons, g_polygon_count,
             g_dashed_lines, g_dashed_line_count,
             g_arcs, g_arc_count,
-            g_points, g_point_count
+            g_points, g_point_count,
+            g_texts, g_text_count
         );
         extern uint32_t g_vertex_count;
         Render_DrawFrame(g_vertex_count);

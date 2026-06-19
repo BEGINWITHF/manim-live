@@ -2,9 +2,9 @@ import ctypes
 import os
 import math
 from manim import (
-    Mobject, Square, Circle, Line, Rectangle, Polygon,
+    Square, Circle, Line, Rectangle, Polygon,
     Arrow, Dot, DashedLine,
-    Arc, Ellipse, Point
+    Arc, Ellipse, Point, Text
 )
 
 
@@ -93,9 +93,45 @@ class VulkanRender:
             ctypes.c_float, ctypes.c_float,
             ctypes.c_int, ctypes.c_int, ctypes.c_int
         ]
+        self.dll.AddText.restype = None
+        self.dll.AddText.argtypes = [
+            ctypes.c_float, ctypes.c_float,
+            ctypes.c_int, ctypes.c_int, ctypes.c_int,
+            ctypes.c_float, ctypes.c_char_p
+        ]
+        self.dll.Text_LoadFont.restype = ctypes.c_int
+        self.dll.Text_LoadFont.argtypes = [ctypes.c_char_p, ctypes.c_int]
 
         if self.dll.Vulkan_Init(w, h) != 1:
             raise RuntimeError("Vulkan_Init failed")
+
+        self._load_font()
+
+    def _load_font(self):
+        font_paths = []
+        if os.name == 'nt':
+            windir = os.environ.get('WINDIR', r'C:\Windows')
+            font_paths = [
+                os.path.join(windir, 'Fonts', 'arial.ttf'),
+                os.path.join(windir, 'Fonts', 'segoeui.ttf'),
+                os.path.join(windir, 'Fonts', 'tahoma.ttf'),
+            ]
+        else:
+            font_paths = [
+                '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+                '/usr/share/fonts/TTF/DejaVuSans.ttf',
+                '/usr/share/fonts/dejavu/DejaVuSans.ttf',
+                '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
+                '/usr/share/fonts/liberation-sans/LiberationSans-Regular.ttf',
+            ]
+        for fp in font_paths:
+            if os.path.exists(fp):
+                with open(fp, 'rb') as f:
+                    data = f.read()
+                buf = ctypes.create_string_buffer(data)
+                if self.dll.Text_LoadFont(buf, len(data)):
+                    return
+        print("[WARNING] No system font found, text will not render")
 
     def sync(self, scene, angle=0.0):
         self.dll.ClearShapes()
@@ -202,6 +238,20 @@ class VulkanRender:
             sx, sy = manim_to_screen(pos[0], pos[1], w, h)
             r, g, b = self._color(mob)
             self.dll.AddPoint(sx, sy, r, g, b)
+
+        elif isinstance(mob, Text):
+            cx, cy, _ = mob.get_center()
+            sx, sy = manim_to_screen(cx, cy, w, h)
+            try:
+                c = mob.get_color()
+                r, g, b = int(c[0] * 255), int(c[1] * 255), int(c[2] * 255)
+            except Exception:
+                r, g, b = 255, 255, 255
+            if r == 0 and g == 0 and b == 0:
+                r, g, b = 255, 255, 255
+            fs = mob.font_size if hasattr(mob, 'font_size') else 48
+            txt = mob.text if hasattr(mob, 'text') else ""
+            self.dll.AddText(sx, sy, r, g, b, float(fs), txt.encode('utf-8'))
 
     def _send_polygon(self, mob, verts):
         w, h = self.win_w, self.win_h

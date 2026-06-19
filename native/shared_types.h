@@ -60,4 +60,15 @@ typedef struct {
     int r, g, b;
 } PointObj;
 
+#ifndef MAX_TEXT_LEN
+#define MAX_TEXT_LEN 128
+#endif
+
+typedef struct {
+    float x, y;
+    int r, g, b;
+    float font_size;
+    char text[MAX_TEXT_LEN];
+} TextObj;
+
 #endif

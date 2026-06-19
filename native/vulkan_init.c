@@ -55,8 +55,6 @@ VkBuffer g_vert_buf = VK_NULL_HANDLE;
 
 VkDeviceMemory g_vert_buf_mem = VK_NULL_HANDLE;
 
-VkDeviceSize g_vert_buf_size = 0;
-
 HWND g_hwnd = NULL;
 
 HINSTANCE g_hinst = NULL;
@@ -244,58 +242,6 @@ void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
     VK_CHECK(vkAllocateMemory(g_dev, &ai, NULL, mem));
 
     VK_CHECK(vkBindBufferMemory(g_dev, *buf, *mem, 0));
-
-}
-
-void CopyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size) {
-
-    VkCommandBufferAllocateInfo ai = {0};
-
-    ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-
-    ai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-
-    ai.commandPool = g_cmd_pool;
-
-    ai.commandBufferCount = 1;
-
-    VkCommandBuffer cb;
-
-    vkAllocateCommandBuffers(g_dev, &ai, &cb);
-
-    VkCommandBufferBeginInfo bi = {0};
-
-    bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-
-    bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-    vkBeginCommandBuffer(cb, &bi);
-
-    VkBufferCopy region = {0};
-
-    region.srcOffset = 0;
-
-    region.dstOffset = 0;
-
-    region.size = size;
-
-    vkCmdCopyBuffer(cb, src, dst, 1, &region);
-
-    vkEndCommandBuffer(cb);
-
-    VkSubmitInfo si = {0};
-
-    si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-
-    si.commandBufferCount = 1;
-
-    si.pCommandBuffers = &cb;
-
-    vkQueueSubmit(g_gfx_queue, 1, &si, VK_NULL_HANDLE);
-
-    vkQueueWaitIdle(g_gfx_queue);
-
-    vkFreeCommandBuffers(g_dev, g_cmd_pool, 1, &cb);
 
 }
 
@@ -818,9 +764,9 @@ static void CreateSyncObjects(void) {
 
 static void CreateVertexBuffer(void) {
 
-    g_vert_buf_size = sizeof(float) * 5 * MAX_SHAPES * 6;
+    VkDeviceSize buf_size = sizeof(float) * 5 * MAX_SHAPES * 6;
 
-    CreateBuffer(g_vert_buf_size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+    CreateBuffer(buf_size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
 
                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
 

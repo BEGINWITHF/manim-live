@@ -13,6 +13,7 @@ void BuildVerticesFromPolygons(const PolygonObj *polygons, int count);
 void BuildVerticesFromDashedLines(const DashedLineObj *lines, int count);
 void BuildVerticesFromArcs(const ArcObj *arcs, int count);
 void BuildVerticesFromPoints(const PointObj *points, int count);
+void BuildVerticesFromTexts(const TextObj *texts, int count);
 
 void Render_DrawScene(const Rect* rects, int rect_count,
                       const Circle* circles, int circle_count,
@@ -21,7 +22,8 @@ void Render_DrawScene(const Rect* rects, int rect_count,
                       const PolygonObj* polygons, int polygon_count,
                       const DashedLineObj* dashed_lines, int dashed_line_count,
                       const ArcObj* arcs, int arc_count,
-                      const PointObj* points, int point_count) {
+                      const PointObj* points, int point_count,
+                      const TextObj* texts, int text_count) {
 
     g_vertex_count = 0;
 
@@ -48,6 +50,9 @@ void Render_DrawScene(const Rect* rects, int rect_count,
 
     if (points && point_count > 0)
         BuildVerticesFromPoints(points, point_count);
+
+    if (texts && text_count > 0)
+        BuildVerticesFromTexts(texts, text_count);
 
     if (g_vertex_count > 0) {
         update_vertex_buffer(g_vertices, g_vertex_count * 5 * sizeof(float));
