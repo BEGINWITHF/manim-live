@@ -6,19 +6,26 @@
 #include <string.h>
 #include <windows.h>
 
-static HINSTANCE g_main_hinst = NULL;
 static Rect g_rects[MAX_SHAPES];
 static int g_rect_count = 0;
 static Circle g_circles[MAX_SHAPES];
 static int g_circle_count = 0;
 static LineObj g_lines[MAX_SHAPES];
 static int g_line_count = 0;
+static EllipseObj g_ellipses[MAX_SHAPES];
+static int g_ellipse_count = 0;
+static PolygonObj g_polygons[MAX_SHAPES];
+static int g_polygon_count = 0;
+static DashedLineObj g_dashed_lines[MAX_SHAPES];
+static int g_dashed_line_count = 0;
+static ArcObj g_arcs[MAX_SHAPES];
+static int g_arc_count = 0;
+static PointObj g_points[MAX_SHAPES];
+static int g_point_count = 0;
 
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
     (void)lpvReserved;
-    if (fdwReason == DLL_PROCESS_ATTACH) {
-        g_main_hinst = GetModuleHandleW(NULL);
-    }
+    (void)hinstDLL;
     return TRUE;
 }
 
@@ -42,11 +49,10 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 
 __declspec(dllexport) int Vulkan_Init(int w, int h) {
     SetProcessDPIAware();
-    printf("[DEBUG] Vulkan_Init enter w=%d h=%d hinst=%p\n", w, h, (void*)g_main_hinst);
-    fflush(stdout);
+    g_hinst = GetModuleHandleW(NULL);
     WNDCLASSW wc = {
         .lpfnWndProc = WndProc,
-        .hInstance = g_main_hinst,
+        .hInstance = g_hinst,
         .lpszClassName = L"ManimVulkanClass",
         .hCursor = LoadCursor(NULL, IDC_ARROW),
         .hbrBackground = (HBRUSH)(COLOR_WINDOW + 1)
@@ -61,7 +67,7 @@ __declspec(dllexport) int Vulkan_Init(int w, int h) {
         WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT, CW_USEDEFAULT,
         rect.right - rect.left, rect.bottom - rect.top,
-        NULL, NULL, g_main_hinst, NULL
+        NULL, NULL, g_hinst, NULL
     );
 
     if (!g_hwnd) {
@@ -69,9 +75,7 @@ __declspec(dllexport) int Vulkan_Init(int w, int h) {
         return 0;
     }
 
-    printf("[DEBUG] Window created hwnd=%p\n", (void*)g_hwnd);
-    fflush(stdout);
-    Render_Init(g_hwnd, w, h, g_main_hinst);
+    Render_Init(g_hwnd, w, h, g_hinst);
 
     if (!Render_IsReady()) {
         fprintf(stderr, "[ERROR] Vulkan renderer failed to initialize\n");
@@ -80,17 +84,12 @@ __declspec(dllexport) int Vulkan_Init(int w, int h) {
 
     ShowWindow(g_hwnd, SW_SHOW);
     UpdateWindow(g_hwnd);
-    printf("[INFO] Vulkan_Init succeeded (%dx%d)\n", w, h);
-    fflush(stdout);
     return 1;
 }
 
 __declspec(dllexport) void AddRect(float x, float y, float hw, float hh, float rot, int r, int g, int b) {
     if (g_rect_count < MAX_SHAPES) {
         g_rects[g_rect_count++] = (Rect){ x, y, hw, hh, rot, r, g, b };
-        printf("[C] AddRect #%d: pos=(%.2f,%.2f) size=(%.2f,%.2f) rgba=(%d,%d,%d)\n",
-               g_rect_count - 1, x, y, hw, hh, r, g, b);
-        fflush(stdout);
     }
 }
 
@@ -98,24 +97,59 @@ __declspec(dllexport) void AddCircle(float x, float y, float radius, int r, int 
     if (g_circle_count < MAX_SHAPES) {
         g_circles[g_circle_count++] = (Circle){ x, y, radius, r, g, b, border_r, border_g, border_b, border_width, stroke_progress };
     }
-
 }
 
 __declspec(dllexport) void AddLine(float x1, float y1, float x2, float y2, int width, int r, int g, int b) {
     if (g_line_count < MAX_SHAPES) {
         g_lines[g_line_count++] = (LineObj){ x1, y1, x2, y2, width, r, g, b };
     }
-
 }
 
-__declspec(dllexport) void AddText(const char* text, float x, float y, int size, int r, int g, int b) {
+__declspec(dllexport) void AddEllipse(float x, float y, float rx, float ry, int r, int g, int b) {
+    if (g_ellipse_count < MAX_SHAPES) {
+        g_ellipses[g_ellipse_count++] = (EllipseObj){ x, y, rx, ry, r, g, b };
+    }
+}
 
+__declspec(dllexport) void AddPolygon(float x, float y, int r, int g, int b, int border_r, int border_g, int border_b, float border_width, int vert_count, const float* verts) {
+    if (g_polygon_count < MAX_SHAPES && vert_count <= MAX_POLYGON_VERTS) {
+        PolygonObj* p = &g_polygons[g_polygon_count++];
+        p->x = x; p->y = y;
+        p->r = r; p->g = g; p->b = b;
+        p->border_r = border_r; p->border_g = border_g; p->border_b = border_b;
+        p->border_width = border_width;
+        p->vert_count = vert_count;
+        memcpy(p->verts, verts, sizeof(float) * vert_count * 2);
+    }
+}
+
+__declspec(dllexport) void AddDashedLine(float x1, float y1, float x2, float y2, int width, int r, int g, int b, float dash_length, float gap_length) {
+    if (g_dashed_line_count < MAX_SHAPES) {
+        g_dashed_lines[g_dashed_line_count++] = (DashedLineObj){ x1, y1, x2, y2, width, r, g, b, dash_length, gap_length };
+    }
+}
+
+__declspec(dllexport) void AddArc(float x, float y, float radius, float start_angle, float angle, int r, int g, int b, float stroke_width) {
+    if (g_arc_count < MAX_SHAPES) {
+        g_arcs[g_arc_count++] = (ArcObj){ x, y, radius, start_angle, angle, r, g, b, stroke_width };
+    }
+}
+
+__declspec(dllexport) void AddPoint(float x, float y, int r, int g, int b) {
+    if (g_point_count < MAX_SHAPES) {
+        g_points[g_point_count++] = (PointObj){ x, y, r, g, b };
+    }
 }
 
 __declspec(dllexport) void ClearShapes(void) {
     g_rect_count = 0;
     g_circle_count = 0;
     g_line_count = 0;
+    g_ellipse_count = 0;
+    g_polygon_count = 0;
+    g_dashed_line_count = 0;
+    g_arc_count = 0;
+    g_point_count = 0;
 }
 
 __declspec(dllexport) int Vulkan_Tick(void) {
@@ -131,12 +165,16 @@ __declspec(dllexport) int Vulkan_Tick(void) {
             g_framebuffer_resized = false;
             RecreateSwapchain();
         }
-        printf("[C] Vulkan_Tick: rects=%d circles=%d lines=%d\n",
-               g_rect_count, g_circle_count, g_line_count);
-        fflush(stdout);
-        Render_DrawScene(g_rects, g_rect_count,
-                         g_circles, g_circle_count,
-                         g_lines, g_line_count);
+        Render_DrawScene(
+            g_rects, g_rect_count,
+            g_circles, g_circle_count,
+            g_lines, g_line_count,
+            g_ellipses, g_ellipse_count,
+            g_polygons, g_polygon_count,
+            g_dashed_lines, g_dashed_line_count,
+            g_arcs, g_arc_count,
+            g_points, g_point_count
+        );
         extern uint32_t g_vertex_count;
         Render_DrawFrame(g_vertex_count);
         return 1;
@@ -150,5 +188,5 @@ __declspec(dllexport) void Vulkan_Shutdown(void) {
         DestroyWindow(g_hwnd);
         g_hwnd = NULL;
     }
-    UnregisterClassW(L"ManimVulkanClass", g_main_hinst);
+    UnregisterClassW(L"ManimVulkanClass", g_hinst);
 }

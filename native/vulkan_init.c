@@ -7,8 +7,6 @@
     } \
 } while(0)
 
-
-
 VkInstance g_inst = VK_NULL_HANDLE;
 
 VkPhysicalDevice g_phys_dev = VK_NULL_HANDLE;
@@ -68,8 +66,6 @@ bool g_is_ready = false;
 uint32_t g_current_frame = 0;
 
 bool g_framebuffer_resized = false;
-
-
 
 static const uint32_t vert_spv[] = {
 
@@ -139,8 +135,6 @@ static const uint32_t vert_spv[] = {
 
 };
 
-
-
 static const uint32_t frag_spv[] = {
 
     0x07230203,0x00010000,0x0008000b,0x00000013,0x00000000,0x00020011,0x00000001,0x0006000b,
@@ -177,8 +171,6 @@ static const uint32_t frag_spv[] = {
 
 };
 
-
-
 VkShaderModule CreateShaderModule(const uint32_t *code, size_t size) {
 
     VkShaderModuleCreateInfo ci = {0};
@@ -196,8 +188,6 @@ VkShaderModule CreateShaderModule(const uint32_t *code, size_t size) {
     return mod;
 
 }
-
-
 
 uint32_t FindMemoryType(uint32_t type_filter, VkMemoryPropertyFlags props) {
 
@@ -223,8 +213,6 @@ uint32_t FindMemoryType(uint32_t type_filter, VkMemoryPropertyFlags props) {
 
 }
 
-
-
 void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
 
                   VkMemoryPropertyFlags props, VkBuffer *buf, VkDeviceMemory *mem) {
@@ -241,13 +229,9 @@ void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
 
     VK_CHECK(vkCreateBuffer(g_dev, &bi, NULL, buf));
 
-
-
     VkMemoryRequirements mr;
 
     vkGetBufferMemoryRequirements(g_dev, *buf, &mr);
-
-
 
     VkMemoryAllocateInfo ai = {0};
 
@@ -262,8 +246,6 @@ void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
     VK_CHECK(vkBindBufferMemory(g_dev, *buf, *mem, 0));
 
 }
-
-
 
 void CopyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size) {
 
@@ -281,8 +263,6 @@ void CopyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size) {
 
     vkAllocateCommandBuffers(g_dev, &ai, &cb);
 
-
-
     VkCommandBufferBeginInfo bi = {0};
 
     bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -290,8 +270,6 @@ void CopyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size) {
     bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
     vkBeginCommandBuffer(cb, &bi);
-
-
 
     VkBufferCopy region = {0};
 
@@ -304,8 +282,6 @@ void CopyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size) {
     vkCmdCopyBuffer(cb, src, dst, 1, &region);
 
     vkEndCommandBuffer(cb);
-
-
 
     VkSubmitInfo si = {0};
 
@@ -323,8 +299,6 @@ void CopyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size) {
 
 }
 
-
-
 static void CreateInstance(void) {
 
     VkApplicationInfo app_info = {0};
@@ -341,8 +315,6 @@ static void CreateInstance(void) {
 
     app_info.apiVersion = VK_API_VERSION_1_0;
 
-
-
     const char *extensions[] = {
 
         VK_KHR_SURFACE_EXTENSION_NAME,
@@ -350,8 +322,6 @@ static void CreateInstance(void) {
         VK_KHR_WIN32_SURFACE_EXTENSION_NAME
 
     };
-
-
 
     VkInstanceCreateInfo ci = {0};
 
@@ -363,8 +333,6 @@ static void CreateInstance(void) {
 
     ci.ppEnabledExtensionNames = extensions;
 
-
-
     if (vkCreateInstance(&ci, NULL, &g_inst) != VK_SUCCESS) {
 
         fprintf(stderr, "Failed to create Vulkan instance!\n");
@@ -374,8 +342,6 @@ static void CreateInstance(void) {
     }
 
 }
-
-
 
 static void CreateSurface(void) {
 
@@ -397,8 +363,6 @@ static void CreateSurface(void) {
 
 }
 
-
-
 static void PickPhysicalDevice(void) {
 
     uint32_t count = 0;
@@ -417,8 +381,6 @@ static void PickPhysicalDevice(void) {
 
 }
 
-
-
 static void CreateLogicalDevice(void) {
 
     float prio = 1.0f;
@@ -432,8 +394,6 @@ static void CreateLogicalDevice(void) {
     qci.queueCount = 1;
 
     qci.pQueuePriorities = &prio;
-
-
 
     const char *exts[] = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 
@@ -449,8 +409,6 @@ static void CreateLogicalDevice(void) {
 
     dci.ppEnabledExtensionNames = exts;
 
-
-
     vkCreateDevice(g_phys_dev, &dci, NULL, &g_dev);
 
     vkGetDeviceQueue(g_dev, 0, 0, &g_gfx_queue);
@@ -458,8 +416,6 @@ static void CreateLogicalDevice(void) {
     vkGetDeviceQueue(g_dev, 0, 0, &g_present_queue);
 
 }
-
-
 
 void CreateSwapchain(void) {
 
@@ -491,13 +447,9 @@ void CreateSwapchain(void) {
 
     sci.clipped = VK_TRUE;
 
-
-
     VK_CHECK(vkCreateSwapchainKHR(g_dev, &sci, NULL, &g_swapchain));
 
     g_swapchain_fmt = VK_FORMAT_B8G8R8A8_SRGB;
-
-
 
     vkGetSwapchainImagesKHR(g_dev, g_swapchain, &g_swapchain_img_count, NULL);
 
@@ -506,8 +458,6 @@ void CreateSwapchain(void) {
     vkGetSwapchainImagesKHR(g_dev, g_swapchain, &g_swapchain_img_count, g_swapchain_imgs);
 
 }
-
-
 
 void CreateImageViews(void) {
 
@@ -541,8 +491,6 @@ void CreateImageViews(void) {
 
 }
 
-
-
 static void CreateRenderPass(void) {
 
     VkAttachmentDescription att = {0};
@@ -563,15 +511,11 @@ static void CreateRenderPass(void) {
 
     att.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
-
-
     VkAttachmentReference ref = {0};
 
     ref.attachment = 0;
 
     ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-
 
     VkSubpassDescription sub = {0};
 
@@ -580,8 +524,6 @@ static void CreateRenderPass(void) {
     sub.colorAttachmentCount = 1;
 
     sub.pColorAttachments = &ref;
-
-
 
     VkSubpassDependency dep = {0};
 
@@ -594,8 +536,6 @@ static void CreateRenderPass(void) {
     dep.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
     dep.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-
-
 
     VkRenderPassCreateInfo rpci = {0};
 
@@ -613,21 +553,15 @@ static void CreateRenderPass(void) {
 
     rpci.pDependencies = &dep;
 
-
-
     vkCreateRenderPass(g_dev, &rpci, NULL, &g_render_pass);
 
 }
-
-
 
 static void CreateGraphicsPipeline(void) {
 
     VkShaderModule vs = CreateShaderModule(vert_spv, sizeof(vert_spv));
 
     VkShaderModule fs = CreateShaderModule(frag_spv, sizeof(frag_spv));
-
-
 
     VkPipelineShaderStageCreateInfo stages[2] = {{0}};
 
@@ -647,8 +581,6 @@ static void CreateGraphicsPipeline(void) {
 
     stages[1].pName = "main";
 
-
-
     VkVertexInputBindingDescription bind_desc = {0};
 
     bind_desc.binding = 0;
@@ -656,8 +588,6 @@ static void CreateGraphicsPipeline(void) {
     bind_desc.stride = sizeof(float) * 5;
 
     bind_desc.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-
-
 
     VkVertexInputAttributeDescription attr_descs[2] = {{0}};
 
@@ -677,8 +607,6 @@ static void CreateGraphicsPipeline(void) {
 
     attr_descs[1].offset = sizeof(float) * 2;
 
-
-
     VkPipelineVertexInputStateCreateInfo vi = {0};
 
     vi.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -691,15 +619,11 @@ static void CreateGraphicsPipeline(void) {
 
     vi.pVertexAttributeDescriptions = attr_descs;
 
-
-
     VkPipelineInputAssemblyStateCreateInfo ia = {0};
 
     ia.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
 
     ia.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-
-
 
     VkViewport vp = {0, 0, (float)g_swapchain_ext.width, (float)g_swapchain_ext.height, 0, 1};
 
@@ -717,8 +641,6 @@ static void CreateGraphicsPipeline(void) {
 
     vps.pScissors = &sc;
 
-
-
     VkPipelineRasterizationStateCreateInfo rs = {0};
 
     rs.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
@@ -731,15 +653,11 @@ static void CreateGraphicsPipeline(void) {
 
     rs.lineWidth = 1.0f;
 
-
-
     VkPipelineMultisampleStateCreateInfo ms = {0};
 
     ms.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 
     ms.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-
-
 
     VkPipelineColorBlendAttachmentState cba = {0};
 
@@ -761,8 +679,6 @@ static void CreateGraphicsPipeline(void) {
 
     cba.alphaBlendOp = VK_BLEND_OP_ADD;
 
-
-
     VkPipelineColorBlendStateCreateInfo cb = {0};
 
     cb.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
@@ -771,15 +687,11 @@ static void CreateGraphicsPipeline(void) {
 
     cb.pAttachments = &cba;
 
-
-
     VkPipelineLayoutCreateInfo plci = {0};
 
     plci.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 
     vkCreatePipelineLayout(g_dev, &plci, NULL, &g_pipeline_layout);
-
-
 
     VkGraphicsPipelineCreateInfo pci = {0};
 
@@ -805,19 +717,13 @@ static void CreateGraphicsPipeline(void) {
 
     pci.renderPass = g_render_pass;
 
-
-
     vkCreateGraphicsPipelines(g_dev, VK_NULL_HANDLE, 1, &pci, NULL, &g_pipeline);
-
-
 
     vkDestroyShaderModule(g_dev, vs, NULL);
 
     vkDestroyShaderModule(g_dev, fs, NULL);
 
 }
-
-
 
 void CreateFramebuffers(void) {
 
@@ -847,8 +753,6 @@ void CreateFramebuffers(void) {
 
 }
 
-
-
 static void CreateCommandPool(void) {
 
     VkCommandPoolCreateInfo cpci = {0};
@@ -862,8 +766,6 @@ static void CreateCommandPool(void) {
     vkCreateCommandPool(g_dev, &cpci, NULL, &g_cmd_pool);
 
 }
-
-
 
 static void CreateCommandBuffers(void) {
 
@@ -885,8 +787,6 @@ static void CreateCommandBuffers(void) {
 
 }
 
-
-
 static void CreateSyncObjects(void) {
 
     g_img_avail_sems = malloc(sizeof(VkSemaphore) * g_swapchain_img_count);
@@ -894,8 +794,6 @@ static void CreateSyncObjects(void) {
     g_render_done_sems = malloc(sizeof(VkSemaphore) * g_swapchain_img_count);
 
     g_in_flight_fences = malloc(sizeof(VkFence) * g_swapchain_img_count);
-
-
 
     VkSemaphoreCreateInfo sci = {0};
 
@@ -906,8 +804,6 @@ static void CreateSyncObjects(void) {
     fci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 
     fci.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-
-
 
     for (uint32_t i = 0; i < g_swapchain_img_count; i++) {
 
@@ -921,8 +817,6 @@ static void CreateSyncObjects(void) {
 
 }
 
-
-
 static void CreateVertexBuffer(void) {
 
     g_vert_buf_size = sizeof(float) * 5 * MAX_SHAPES * 6;
@@ -935,8 +829,6 @@ static void CreateVertexBuffer(void) {
 
 }
 
-
-
 void Render_Init(HWND hwnd, int width, int height, HINSTANCE hinst) {
 
     g_hwnd = hwnd;
@@ -944,8 +836,6 @@ void Render_Init(HWND hwnd, int width, int height, HINSTANCE hinst) {
     g_hinst = hinst;
 
     g_swapchain_ext = (VkExtent2D){(uint32_t)width, (uint32_t)height};
-
-
 
     CreateInstance();
 
@@ -973,21 +863,15 @@ void Render_Init(HWND hwnd, int width, int height, HINSTANCE hinst) {
 
     CreateVertexBuffer();
 
-
-
     g_is_ready = true;
 
 }
-
-
 
 int Render_IsReady(void) {
 
     return g_is_ready ? 1 : 0;
 
 }
-
-
 
 void update_vertex_buffer(const void *data, VkDeviceSize size) {
 
@@ -1000,8 +884,6 @@ void update_vertex_buffer(const void *data, VkDeviceSize size) {
     vkUnmapMemory(g_dev, g_vert_buf_mem);
 
 }
-
-
 
 void CleanupSwapchain(void) {
     for (uint32_t i = 0; i < g_swapchain_img_count; i++) {
@@ -1037,8 +919,6 @@ void RecreateSwapchain(void) {
     CreateFramebuffers();
 }
 
-
-
 void Render_Cleanup(void) {
 
     if (!g_is_ready) return;
@@ -1072,84 +952,4 @@ void Render_Cleanup(void) {
     vkDestroyInstance(g_inst, NULL);
 
     g_is_ready = false;
-}
-
-void RecordCommandBuffer(VkCommandBuffer cmd_buf, uint32_t img_idx,
-                         uint32_t vertex_count) {
-    VkCommandBufferBeginInfo begin_info = {0};
-    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-
-    vkBeginCommandBuffer(cmd_buf, &begin_info);
-
-    VkClearValue clear_color = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
-    VkRenderPassBeginInfo render_pass_info = {0};
-    render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    render_pass_info.renderPass = g_render_pass;
-    render_pass_info.framebuffer = g_framebuffers[img_idx];
-    render_pass_info.renderArea.offset.x = 0;
-    render_pass_info.renderArea.offset.y = 0;
-    render_pass_info.renderArea.extent = g_swapchain_ext;
-    render_pass_info.clearValueCount = 1;
-    render_pass_info.pClearValues = &clear_color;
-
-    vkCmdBeginRenderPass(cmd_buf, &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
-
-    vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, g_pipeline);
-
-    VkBuffer vertex_buffers[] = { g_vert_buf };
-    VkDeviceSize offsets[] = { 0 };
-    vkCmdBindVertexBuffers(cmd_buf, 0, 1, vertex_buffers, offsets);
-
-    if (vertex_count > 0) {
-        vkCmdDraw(cmd_buf, vertex_count, 1, 0, 0);
-    }
-
-    vkCmdEndRenderPass(cmd_buf);
-
-    vkEndCommandBuffer(cmd_buf);
-}
-
-int Render_DrawFrame(uint32_t vertex_count) {
-    if (!g_is_ready) return 0;
-
-    vkWaitForFences(g_dev, 1, &g_in_flight_fences[g_current_frame], VK_TRUE, UINT64_MAX);
-    vkResetFences(g_dev, 1, &g_in_flight_fences[g_current_frame]);
-
-    uint32_t img_idx;
-    vkAcquireNextImageKHR(g_dev, g_swapchain, UINT64_MAX,
-                          g_img_avail_sems[g_current_frame], VK_NULL_HANDLE, &img_idx);
-
-    vkResetCommandBuffer(g_cmd_bufs[g_current_frame], 0);
-    RecordCommandBuffer(g_cmd_bufs[g_current_frame], img_idx, vertex_count);
-
-    VkSubmitInfo submit_info = {0};
-    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-
-    VkSemaphore wait_sems[] = { g_img_avail_sems[g_current_frame] };
-    VkPipelineStageFlags wait_stages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-    submit_info.waitSemaphoreCount = 1;
-    submit_info.pWaitSemaphores = wait_sems;
-    submit_info.pWaitDstStageMask = wait_stages;
-    submit_info.commandBufferCount = 1;
-    submit_info.pCommandBuffers = &g_cmd_bufs[g_current_frame];
-
-    VkSemaphore signal_sems[] = { g_render_done_sems[g_current_frame] };
-    submit_info.signalSemaphoreCount = 1;
-    submit_info.pSignalSemaphores = signal_sems;
-
-    vkQueueSubmit(g_gfx_queue, 1, &submit_info, g_in_flight_fences[g_current_frame]);
-
-    VkPresentInfoKHR present_info = {0};
-    present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-    present_info.waitSemaphoreCount = 1;
-    present_info.pWaitSemaphores = signal_sems;
-    present_info.swapchainCount = 1;
-    present_info.pSwapchains = &g_swapchain;
-    present_info.pImageIndices = &img_idx;
-
-    vkQueuePresentKHR(g_present_queue, &present_info);
-
-    g_current_frame = (g_current_frame + 1) % g_swapchain_img_count;
-
-    return 1;
 }

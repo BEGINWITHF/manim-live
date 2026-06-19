@@ -60,7 +60,12 @@ $SourceFiles = @(
     "vulkan_draw.c",
     "draw/draw_rect.c",
     "draw/draw_circle.c",
-    "draw/draw_line.c"
+    "draw/draw_line.c",
+    "draw/draw_ellipse.c",
+    "draw/draw_polygon.c",
+    "draw/draw_dashed_line.c",
+    "draw/draw_arc.c",
+    "draw/draw_point.c"
 )
 
 Write-Host "[INFO] Compiling source files to object files..." -ForegroundColor Cyan
