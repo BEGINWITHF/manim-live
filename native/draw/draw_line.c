@@ -14,8 +14,9 @@ void BuildVerticesFromLines(const LineObj *lines, int count) {
         if (len < 0.0001f) continue;
 
         float thick = (float)l->width;
-        float nx = (-dy / len) * (thick * 0.5f);
-        float ny = (dx / len) * (thick * 0.5f);
+        float half_thick = thick * 0.5f + 0.5f;
+        float nx = (-dy / len) * half_thick;
+        float ny = (dx / len) * half_thick;
 
         PushVertex(l->x1 + nx, l->y1 + ny, nr, ng, nb);
         PushVertex(l->x1 - nx, l->y1 - ny, nr, ng, nb);

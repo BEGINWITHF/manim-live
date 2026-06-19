@@ -625,21 +625,13 @@ static void CreateGraphicsPipeline(void) {
 
     ia.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
-    VkViewport vp = {0, 0, (float)g_swapchain_ext.width, (float)g_swapchain_ext.height, 0, 1};
-
-    VkRect2D sc = {{0, 0}, g_swapchain_ext};
-
     VkPipelineViewportStateCreateInfo vps = {0};
 
     vps.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
 
     vps.viewportCount = 1;
 
-    vps.pViewports = &vp;
-
     vps.scissorCount = 1;
-
-    vps.pScissors = &sc;
 
     VkPipelineRasterizationStateCreateInfo rs = {0};
 
@@ -712,6 +704,13 @@ static void CreateGraphicsPipeline(void) {
     pci.pMultisampleState = &ms;
 
     pci.pColorBlendState = &cb;
+
+    VkDynamicState dynamic_states[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
+    VkPipelineDynamicStateCreateInfo ds = {0};
+    ds.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    ds.dynamicStateCount = 2;
+    ds.pDynamicStates = dynamic_states;
+    pci.pDynamicState = &ds;
 
     pci.layout = g_pipeline_layout;
 

@@ -76,6 +76,12 @@ void RecordCommandBuffer(VkCommandBuffer cmd_buf, uint32_t img_idx,
 
     vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, g_pipeline);
 
+    VkViewport vp = {0, 0, (float)g_swapchain_ext.width, (float)g_swapchain_ext.height, 0, 1};
+    vkCmdSetViewport(cmd_buf, 0, 1, &vp);
+
+    VkRect2D sc = {{0, 0}, g_swapchain_ext};
+    vkCmdSetScissor(cmd_buf, 0, 1, &sc);
+
     VkBuffer vertex_buffers[] = { g_vert_buf };
     VkDeviceSize offsets[] = { 0 };
     vkCmdBindVertexBuffers(cmd_buf, 0, 1, vertex_buffers, offsets);

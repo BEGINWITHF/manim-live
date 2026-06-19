@@ -8,9 +8,11 @@ from manim import (
 )
 
 
-def manim_to_screen(x, y, w=800, h=600, scale=200):
+def manim_to_screen(x, y, w=800, h=600):
+    sx = w / 14.0
+    sy = h / 8.0
     cx, cy = w / 2.0, h / 2.0
-    return float(cx + x * scale), float(cy - y * scale)
+    return float(cx + x * sx), float(cy - y * sy)
 
 
 class VulkanRender:
@@ -106,33 +108,37 @@ class VulkanRender:
         if isinstance(mob, Square):
             cx, cy, _ = mob.get_center()
             sx, sy = manim_to_screen(cx, cy, w, h)
-            half = mob.side_length / 2.0 * 200
+            scale_x = w / 14.0
+            half = mob.side_length / 2.0 * scale_x
             r, g, b = self._color(mob)
             self.dll.AddRect(sx, sy, half, half, angle, r, g, b)
 
         elif isinstance(mob, Rectangle):
             cx, cy, _ = mob.get_center()
             sx, sy = manim_to_screen(cx, cy, w, h)
-            hw = mob.width / 2.0 * 200
-            hh = mob.height / 2.0 * 200
+            scale_x = w / 14.0
+            scale_y = h / 8.0
+            hw = mob.width / 2.0 * scale_x
+            hh = mob.height / 2.0 * scale_y
             r, g, b = self._color(mob)
             self.dll.AddRect(sx, sy, hw, hh, angle, r, g, b)
 
         elif isinstance(mob, Circle):
             cx, cy, _ = mob.get_center()
             sx, sy = manim_to_screen(cx, cy, w, h)
-            sr = mob.radius * 200
+            scale_y = h / 8.0
+            sr = mob.radius * scale_y
             fr, fg, fb = self._color(mob)
             br, bg, bb = self._stroke_color(mob)
-            bw = self._stroke_width(mob)
+            bw = self._stroke_width(mob) * (h / 8.0)
             sp = min(1.0, self.frame_count / 72.0)
             self.dll.AddCircle(sx, sy, sr, fr, fg, fb, br, bg, bb, bw, sp)
 
         elif isinstance(mob, Ellipse):
             cx, cy, _ = mob.get_center()
             sx, sy = manim_to_screen(cx, cy, w, h)
-            rx = mob.width / 2.0 * 200
-            ry = mob.height / 2.0 * 200
+            rx = mob.width / 2.0 * (w / 14.0)
+            ry = mob.height / 2.0 * (h / 8.0)
             r, g, b = self._color(mob)
             self.dll.AddEllipse(sx, sy, rx, ry, r, g, b)
 
@@ -142,7 +148,7 @@ class VulkanRender:
             sx1, sy1 = manim_to_screen(s[0], s[1], w, h)
             sx2, sy2 = manim_to_screen(e[0], e[1], w, h)
             r, g, b = self._stroke_color(mob)
-            sw = max(1, int(self._stroke_width(mob)))
+            sw = max(1, round(self._stroke_width(mob) * (w / 14.0)))
             self.dll.AddLine(sx1, sy1, sx2, sy2, sw, r, g, b)
 
         elif isinstance(mob, Arrow):
@@ -151,13 +157,14 @@ class VulkanRender:
             sx1, sy1 = manim_to_screen(s[0], s[1], w, h)
             sx2, sy2 = manim_to_screen(e[0], e[1], w, h)
             r, g, b = self._stroke_color(mob)
-            sw = max(1, int(self._stroke_width(mob)))
+            sw = max(1, round(self._stroke_width(mob) * (w / 14.0)))
             self.dll.AddLine(sx1, sy1, sx2, sy2, sw, r, g, b)
 
         elif isinstance(mob, Dot):
             cx, cy, _ = mob.get_center()
             sx, sy = manim_to_screen(cx, cy, w, h)
-            rad = mob.radius * 200 if hasattr(mob, 'radius') else 6.0
+            scale_y = h / 8.0
+            rad = mob.radius * scale_y if hasattr(mob, 'radius') else 6.0
             r, g, b = self._color(mob)
             self.dll.AddCircle(sx, sy, rad, r, g, b, 0, 0, 0, 0.0, 1.0)
 
@@ -167,21 +174,23 @@ class VulkanRender:
             sx1, sy1 = manim_to_screen(s[0], s[1], w, h)
             sx2, sy2 = manim_to_screen(e[0], e[1], w, h)
             r, g, b = self._stroke_color(mob)
-            sw = max(1, int(self._stroke_width(mob)))
-            dl = getattr(mob, 'dash_length', 0.1)
-            gl = getattr(mob, 'gap_length', 0.05)
-            if dl <= 0: dl = 0.1
-            if gl <= 0: gl = 0.05
+            scale_x = w / 14.0
+            sw = max(1, round(self._stroke_width(mob) * scale_x))
+            dl = getattr(mob, 'dash_length', 0.1) * scale_x
+            gl = getattr(mob, 'gap_length', 0.05) * scale_x
+            if dl <= 0: dl = 0.1 * scale_x
+            if gl <= 0: gl = 0.05 * scale_x
             self.dll.AddDashedLine(sx1, sy1, sx2, sy2, sw, r, g, b, dl, gl)
 
         elif isinstance(mob, Arc):
             cx, cy, _ = mob.get_center()
             sx, sy = manim_to_screen(cx, cy, w, h)
-            rad = mob.radius * 200 if hasattr(mob, 'radius') else 100.0
+            scale_y = h / 8.0
+            rad = mob.radius * scale_y if hasattr(mob, 'radius') else 100.0
             sa = mob.start_angle if hasattr(mob, 'start_angle') else 0
             ang = mob.angle if hasattr(mob, 'angle') else math.pi
             r, g, b = self._stroke_color(mob)
-            sw = self._stroke_width(mob)
+            sw = self._stroke_width(mob) * scale_y
             self.dll.AddArc(sx, sy, rad, sa, ang, r, g, b, sw)
 
         elif isinstance(mob, Polygon):
@@ -254,7 +263,12 @@ class VulkanRender:
 
     def tick(self):
         self.frame_count += 1
-        return self.dll.Vulkan_Tick() != 0
+        result = self.dll.Vulkan_Tick()
+        if result == 0:
+            return False
+        self.win_w = (result >> 16) & 0xFFFF
+        self.win_h = result & 0xFFFF
+        return True
 
     def close(self):
         self.dll.Vulkan_Shutdown()

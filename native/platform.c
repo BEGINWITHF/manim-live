@@ -23,6 +23,10 @@ static int g_arc_count = 0;
 static PointObj g_points[MAX_SHAPES];
 static int g_point_count = 0;
 
+static double g_aspect_ratio = 16.0 / 9.0;
+static int g_min_width = 320;
+static int g_min_height = 240;
+
 BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
     (void)lpvReserved;
     (void)hinstDLL;
@@ -42,6 +46,38 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                 g_framebuffer_resized = true;
             }
             return DefWindowProcW(hwnd, msg, wParam, lParam);
+        case WM_SIZING: {
+            RECT *r = (RECT *)lParam;
+            int w = r->right - r->left;
+            int h = r->bottom - r->top;
+            int border = (int)(GetSystemMetrics(SM_CXEDGE) * 2);
+            int caption = (int)(GetSystemMetrics(SM_CYCAPTION) + GetSystemMetrics(SM_CYEDGE) * 2);
+            int inner_w = w - border;
+            int inner_h = h - caption;
+            if (inner_w <= 0 || inner_h <= 0) return 0;
+            int d = wParam;
+            if (d == WMSZ_LEFT || d == WMSZ_RIGHT) {
+                int new_h = (int)(inner_w / g_aspect_ratio + 0.5);
+                if (d == WMSZ_LEFT) r->top = r->bottom - new_h - caption;
+                else r->bottom = r->top + new_h + caption;
+            } else if (d == WMSZ_TOP || d == WMSZ_BOTTOM) {
+                int new_w = (int)(inner_h * g_aspect_ratio + 0.5);
+                if (d == WMSZ_TOP) r->left = r->right - new_w - border;
+                else r->right = r->left + new_w + border;
+            } else {
+                int new_h = (int)(inner_w / g_aspect_ratio + 0.5);
+                r->bottom = r->top + new_h + caption;
+            }
+            return 0;
+        }
+        case WM_GETMINMAXINFO: {
+            MINMAXINFO *mmi = (MINMAXINFO *)lParam;
+            int border = (int)(GetSystemMetrics(SM_CXEDGE) * 2);
+            int caption = (int)(GetSystemMetrics(SM_CYCAPTION) + GetSystemMetrics(SM_CYEDGE) * 2);
+            mmi->ptMinTrackSize.x = g_min_width + border;
+            mmi->ptMinTrackSize.y = (LONG)(g_min_width / g_aspect_ratio + 0.5) + caption;
+            return 0;
+        }
         default:
             return DefWindowProcW(hwnd, msg, wParam, lParam);
     }
@@ -50,6 +86,9 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
 __declspec(dllexport) int Vulkan_Init(int w, int h) {
     SetProcessDPIAware();
     g_hinst = GetModuleHandleW(NULL);
+    g_aspect_ratio = (double)w / (double)h;
+    g_min_width = w / 4;
+    if (g_min_width < 320) g_min_width = 320;
     WNDCLASSW wc = {
         .lpfnWndProc = WndProc,
         .hInstance = g_hinst,
@@ -177,7 +216,11 @@ __declspec(dllexport) int Vulkan_Tick(void) {
         );
         extern uint32_t g_vertex_count;
         Render_DrawFrame(g_vertex_count);
-        return 1;
+        RECT rc;
+        GetClientRect(g_hwnd, &rc);
+        int cw = rc.right - rc.left;
+        int ch = rc.bottom - rc.top;
+        return (cw << 16) | (ch & 0xFFFF);
     }
     return 0;
 }

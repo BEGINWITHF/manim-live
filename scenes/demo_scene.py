@@ -7,6 +7,16 @@ class VulkanShapeShowcase(Scene):
     def construct(self):
         render = VulkanRender(1280, 720)
 
+        border_top = Line(LEFT * 7 + UP * 4, RIGHT * 7 + UP * 4)
+        border_top.set_stroke(RED, width=0.011)
+        border_bot = Line(LEFT * 7 + DOWN * 4, RIGHT * 7 + DOWN * 4)
+        border_bot.set_stroke(RED, width=0.011)
+        border_left = Line(LEFT * 7 + DOWN * 4, LEFT * 7 + UP * 4)
+        border_left.set_stroke(RED, width=0.011)
+        border_right = Line(RIGHT * 7 + DOWN * 4, RIGHT * 7 + UP * 4)
+        border_right.set_stroke(RED, width=0.011)
+        self.add(border_top, border_bot, border_left, border_right)
+
         title_text = Text("Vulkan Shape Showcase", font_size=28)
         title_text.to_edge(UP, buff=0.3)
         self.add(title_text)
