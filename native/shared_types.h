@@ -61,7 +61,7 @@ typedef struct {
 } PointObj;
 
 #ifndef MAX_TEXT_LEN
-#define MAX_TEXT_LEN 128
+#define MAX_TEXT_LEN 512
 #endif
 
 typedef struct {

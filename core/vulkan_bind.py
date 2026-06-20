@@ -1,10 +1,11 @@
 import ctypes
 import os
 import math
+import time
 from manim import (
     Square, Circle, Line, Rectangle, Polygon,
     Arrow, Dot, DashedLine,
-    Arc, Ellipse, Point, Text
+    Arc, Ellipse, Point, Text, Add, VGroup, Group
 )
 
 
@@ -20,6 +21,7 @@ class VulkanRender:
         self.win_w = w
         self.win_h = h
         self.frame_count = 0
+        self.scene = None
 
         base_dir = os.path.dirname(os.path.abspath(__file__))
         dll_path = os.path.normpath(os.path.join(base_dir, "..", "dist", "release", "vulkan_core.dll"))
@@ -108,30 +110,43 @@ class VulkanRender:
         self._load_font()
 
     def _load_font(self):
+        custom = os.environ.get('MANIM_FONT', '')
+        if custom and os.path.exists(custom):
+            with open(custom, 'rb') as f:
+                data = f.read()
+            buf = ctypes.create_string_buffer(data)
+            self.dll.Text_LoadFont(buf, len(data))
+
         font_paths = []
         if os.name == 'nt':
             windir = os.environ.get('WINDIR', r'C:\Windows')
             font_paths = [
-                os.path.join(windir, 'Fonts', 'arial.ttf'),
+                os.path.join(windir, 'Fonts', 'malgun.ttf'),
+                os.path.join(windir, 'Fonts', 'NotoSansSC-VF.ttf'),
+                os.path.join(windir, 'Fonts', 'NotoSansJP-VF.ttf'),
+                os.path.join(windir, 'Fonts', 'msyh.ttc'),
+                os.path.join(windir, 'Fonts', 'simhei.ttf'),
+                os.path.join(windir, 'Fonts', 'msgothic.ttc'),
                 os.path.join(windir, 'Fonts', 'segoeui.ttf'),
-                os.path.join(windir, 'Fonts', 'tahoma.ttf'),
+                os.path.join(windir, 'Fonts', 'arial.ttf'),
             ]
         else:
             font_paths = [
+                '/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttf',
+                '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+                '/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf',
                 '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
                 '/usr/share/fonts/TTF/DejaVuSans.ttf',
-                '/usr/share/fonts/dejavu/DejaVuSans.ttf',
-                '/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf',
-                '/usr/share/fonts/liberation-sans/LiberationSans-Regular.ttf',
             ]
         for fp in font_paths:
             if os.path.exists(fp):
                 with open(fp, 'rb') as f:
                     data = f.read()
                 buf = ctypes.create_string_buffer(data)
-                if self.dll.Text_LoadFont(buf, len(data)):
-                    return
-        print("[WARNING] No system font found, text will not render")
+                self.dll.Text_LoadFont(buf, len(data))
+
+        if self.dll.Text_LoadFont.argtypes is None:
+            print("[WARNING] No system font found, text will not render")
 
     def sync(self, scene, angle=0.0):
         self.dll.ClearShapes()
@@ -140,6 +155,11 @@ class VulkanRender:
 
     def _send(self, mob, angle=0.0):
         w, h = self.win_w, self.win_h
+
+        if isinstance(mob, (VGroup, Group)):
+            for sub in mob:
+                self._send(sub, angle)
+            return
 
         if isinstance(mob, Square):
             cx, cy, _ = mob.get_center()
@@ -156,8 +176,21 @@ class VulkanRender:
             scale_y = h / 8.0
             hw = mob.width / 2.0 * scale_x
             hh = mob.height / 2.0 * scale_y
-            r, g, b = self._color(mob)
-            self.dll.AddRect(sx, sy, hw, hh, angle, r, g, b)
+            fo = mob.get_fill_opacity() if hasattr(mob, 'get_fill_opacity') else 1.0
+            r, g, b = self._color(mob) if fo > 0 else self._stroke_color(mob)
+            if fo <= 0:
+                sr, sg, sb = self._stroke_color(mob)
+                sw = 2
+                tl = (sx - hw, sy - hh)
+                tr = (sx + hw, sy - hh)
+                br = (sx + hw, sy + hh)
+                bl = (sx - hw, sy + hh)
+                self.dll.AddLine(tl[0], tl[1], tr[0], tr[1], sw, sr, sg, sb)
+                self.dll.AddLine(tr[0], tr[1], br[0], br[1], sw, sr, sg, sb)
+                self.dll.AddLine(br[0], br[1], bl[0], bl[1], sw, sr, sg, sb)
+                self.dll.AddLine(bl[0], bl[1], tl[0], tl[1], sw, sr, sg, sb)
+            else:
+                self.dll.AddRect(sx, sy, hw, hh, angle, r, g, b)
 
         elif isinstance(mob, Circle):
             cx, cy, _ = mob.get_center()
@@ -250,7 +283,7 @@ class VulkanRender:
             if r == 0 and g == 0 and b == 0:
                 r, g, b = 255, 255, 255
             fs = mob.font_size if hasattr(mob, 'font_size') else 48
-            txt = mob.text if hasattr(mob, 'text') else ""
+            txt = mob.original_text if hasattr(mob, 'original_text') else (mob.text if hasattr(mob, 'text') else "")
             self.dll.AddText(sx, sy, r, g, b, float(fs), txt.encode('utf-8'))
 
     def _send_polygon(self, mob, verts):
@@ -319,6 +352,32 @@ class VulkanRender:
         self.win_w = (result >> 16) & 0xFFFF
         self.win_h = result & 0xFFFF
         return True
+
+    def play(self, *animations, **kwargs):
+        if not self.scene:
+            return
+
+        add_anims = []
+        other_anims = []
+        for anim in animations:
+            if isinstance(anim, Add):
+                add_anims.append(anim)
+            else:
+                other_anims.append(anim)
+
+        for anim in add_anims:
+            self.scene.add(anim.mobject)
+
+        if other_anims:
+            self.scene.play(*other_anims, **kwargs)
+
+        for anim in add_anims:
+            if anim.run_time > 0:
+                start = time.time()
+                while time.time() - start < anim.run_time:
+                    if not self.tick():
+                        return
+                    self.sync(self.scene)
 
     def close(self):
         self.dll.Vulkan_Shutdown()
