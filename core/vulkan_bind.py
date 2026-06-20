@@ -253,8 +253,45 @@ class VulkanRender:
             sx, sy = manim_to_screen(cx, cy, w, h)
             scale_x = w / 14.0
             half = mob.side_length / 2.0 * scale_x
-            r, g, b = self._color(mob)
-            self.dll.AddRect(sx, sy, half, half, angle, r, g, b)
+            fo = mob.get_fill_opacity() if hasattr(mob, 'get_fill_opacity') else 1.0
+            so = mob.get_stroke_opacity() if hasattr(mob, 'get_stroke_opacity') else 1.0
+            progress = getattr(mob, '_vulkan_progress', 1.0)
+            if fo <= 0 and so <= 0:
+                return
+            if fo <= 0:
+                sr, sg, sb = self._stroke_color(mob)
+                sr = int(sr * so * a)
+                sg = int(sg * so * a)
+                sb = int(sb * so * a)
+                sw = max(1, round(self._stroke_width(mob)))
+                tl = (sx - half, sy - half)
+                tr = (sx + half, sy - half)
+                br = (sx + half, sy + half)
+                bl = (sx - half, sy + half)
+                perimeter = 2.0 * (2.0 * half + 2.0 * half)
+                drawn = perimeter * progress
+                edges = [
+                    (tr, tl, 2.0 * half),
+                    (tl, bl, 2.0 * half),
+                    (bl, br, 2.0 * half),
+                    (br, tr, 2.0 * half),
+                ]
+                remaining = drawn
+                for (x0, y0), (x1, y1), length in edges:
+                    if remaining <= 0:
+                        break
+                    if remaining >= length:
+                        self.dll.AddLine(x0, y0, x1, y1, sw, sr, sg, sb)
+                        remaining -= length
+                    else:
+                        frac = remaining / length
+                        ex = x0 + (x1 - x0) * frac
+                        ey = y0 + (y1 - y0) * frac
+                        self.dll.AddLine(x0, y0, ex, ey, sw, sr, sg, sb)
+                        remaining = 0
+            else:
+                r, g, b = self._color(mob)
+                self.dll.AddRect(sx, sy, half, half, angle, r, g, b)
 
         elif isinstance(mob, Rectangle):
             cx, cy, _ = mob.get_center()
@@ -309,19 +346,89 @@ class VulkanRender:
             scale = w / 14.0
             rx = mob.width / 2.0 * scale
             ry = mob.height / 2.0 * scale
-            r, g, b = self._color(mob)
-            self.dll.AddEllipse(sx, sy, rx, ry, r, g, b)
+            fo = mob.get_fill_opacity() if hasattr(mob, 'get_fill_opacity') else 1.0
+            so = mob.get_stroke_opacity() if hasattr(mob, 'get_stroke_opacity') else 1.0
+            progress = getattr(mob, '_vulkan_progress', 1.0)
+            if fo <= 0 and so <= 0:
+                return
+            if fo <= 0:
+                sr, sg, sb = self._stroke_color(mob)
+                sr = int(sr * so * a)
+                sg = int(sg * so * a)
+                sb = int(sb * so * a)
+                sw = max(1, round(self._stroke_width(mob)))
+                segs = 48
+                circumference = math.pi * (3 * (rx + ry) - math.sqrt((3 * rx + ry) * (rx + 3 * ry)))
+                drawn = circumference * progress
+                accumulated = 0.0
+                prev_px = sx + rx
+                prev_py = sy
+                for j in range(1, segs + 1):
+                    if accumulated >= drawn:
+                        break
+                    angle = -2.0 * math.pi * j / segs
+                    px = sx + math.cos(angle) * rx
+                    py = sy + math.sin(angle) * ry
+                    seg_len = math.sqrt((px - prev_px) ** 2 + (py - prev_py) ** 2)
+                    if accumulated + seg_len <= drawn:
+                        self.dll.AddLine(prev_px, prev_py, px, py, sw, sr, sg, sb)
+                        accumulated += seg_len
+                    else:
+                        frac = (drawn - accumulated) / seg_len if seg_len > 0 else 0
+                        ex = prev_px + (px - prev_px) * frac
+                        ey = prev_py + (py - prev_py) * frac
+                        self.dll.AddLine(prev_px, prev_py, ex, ey, sw, sr, sg, sb)
+                        accumulated = drawn
+                    prev_px, prev_py = px, py
+            else:
+                r, g, b = self._color(mob)
+                self.dll.AddEllipse(sx, sy, rx, ry, r, g, b)
 
         elif isinstance(mob, Circle):
             cx, cy, _ = mob.get_center()
             sx, sy = manim_to_screen(cx, cy, w, h)
             scale_y = h / 8.0
             sr = mob.radius * scale_y
-            fr, fg, fb = self._color(mob)
-            br, bg, bb = self._stroke_color(mob)
-            bw = self._stroke_width(mob) * (h / 8.0)
-            sp = min(1.0, self.frame_count / 72.0)
-            self.dll.AddCircle(sx, sy, sr, fr, fg, fb, br, bg, bb, bw, sp)
+            fo = mob.get_fill_opacity() if hasattr(mob, 'get_fill_opacity') else 1.0
+            so = mob.get_stroke_opacity() if hasattr(mob, 'get_stroke_opacity') else 1.0
+            progress = getattr(mob, '_vulkan_progress', 1.0)
+            if fo <= 0 and so <= 0:
+                return
+            if fo <= 0:
+                cr, cg, cb = self._stroke_color(mob)
+                cr = int(cr * so * a)
+                cg = int(cg * so * a)
+                cb = int(cb * so * a)
+                sw = max(1, round(self._stroke_width(mob)))
+                segs = 48
+                circumference = 2.0 * math.pi * sr
+                drawn = circumference * progress
+                accumulated = 0.0
+                prev_px = sx + sr
+                prev_py = sy
+                for j in range(1, segs + 1):
+                    if accumulated >= drawn:
+                        break
+                    angle = -2.0 * math.pi * j / segs
+                    px = sx + math.cos(angle) * sr
+                    py = sy + math.sin(angle) * sr
+                    seg_len = math.sqrt((px - prev_px) ** 2 + (py - prev_py) ** 2)
+                    if accumulated + seg_len <= drawn:
+                        self.dll.AddLine(prev_px, prev_py, px, py, sw, cr, cg, cb)
+                        accumulated += seg_len
+                    else:
+                        frac = (drawn - accumulated) / seg_len if seg_len > 0 else 0
+                        ex = prev_px + (px - prev_px) * frac
+                        ey = prev_py + (py - prev_py) * frac
+                        self.dll.AddLine(prev_px, prev_py, ex, ey, sw, cr, cg, cb)
+                        accumulated = drawn
+                    prev_px, prev_py = px, py
+            else:
+                fr, fg, fb = self._color(mob)
+                br, bg, bb = self._stroke_color(mob)
+                bw = self._stroke_width(mob) * (h / 8.0)
+                sp = min(1.0, self.frame_count / 72.0)
+                self.dll.AddCircle(sx, sy, sr, fr, fg, fb, br, bg, bb, bw, sp)
 
         elif isinstance(mob, Arrow):
             s = mob.get_start()
@@ -524,6 +631,11 @@ class VulkanRender:
                 self.scene.add(mob)
         for mob in add_mobs:
             set_anim_opacity(mob, 0.0)
+
+        for a in animations:
+            if isinstance(a, Add):
+                for mob in a.mobjects:
+                    set_anim_opacity(mob, 1.0)
 
         real_anims = [a for a in animations if not isinstance(a, Add)]
 

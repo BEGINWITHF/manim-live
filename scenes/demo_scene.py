@@ -11,68 +11,76 @@ class VulkanShapeShowcase(Scene):
         section_title.shift(UP * 3.3)
 
         sq = Square(side_length=1.0, color=RED)
-        sq.shift(LEFT * 5 + UP * 1.5)
+        sq.set_fill(opacity=0)
+        sq.set_stroke(width=4)
+        sq.shift(LEFT * 5.25 + UP * 2)
 
         rect = Rectangle(width=2.0, height=1.2, color=ORANGE)
-        rect.shift(LEFT * 2 + UP * 1.5)
+        rect.shift(LEFT * 1.75 + UP * 2)
 
         circ = Circle(radius=0.6, color=BLUE)
-        circ.shift(RIGHT * 1.5 + UP * 1.5)
+        circ.set_fill(opacity=0)
+        circ.set_stroke(width=4)
+        circ.shift(RIGHT * 1.75 + UP * 2)
 
         ell = Ellipse(width=1.8, height=0.8, color=TEAL)
-        ell.shift(RIGHT * 4.5 + UP * 1.5)
+        ell.set_fill(opacity=0)
+        ell.set_stroke(width=4)
+        ell.shift(RIGHT * 5.25 + UP * 2)
 
-        ln = Line(start=LEFT * 5 + UP * 0, end=RIGHT * 5 + UP * 0, color=GREEN)
+        ln = Line(start=LEFT * 6 + UP * 0.5, end=RIGHT * 6 + UP * 0.5, color=GREEN)
         ln.set_stroke(width=3)
 
-        arr = Arrow(start=LEFT * 3 + DOWN * 1, end=RIGHT * 3 + DOWN * 1, color=YELLOW)
+        arr = Arrow(start=LEFT * 3 + DOWN * 0.2, end=RIGHT * 3 + DOWN * 0.2, color=YELLOW)
         arr.set_stroke(width=3)
 
         dl = DashedLine(
-            start=LEFT * 4 + DOWN * 1.8,
-            end=RIGHT * 4 + DOWN * 1.8,
+            start=LEFT * 6 + DOWN * 0.9,
+            end=RIGHT * 6 + DOWN * 0.9,
             color=PINK,
         )
 
-        arc = Arc(radius=0.8, start_angle=0, angle=PI, color=GOLD)
-        arc.shift(LEFT * 5 + DOWN * 3)
+        arc = Arc(radius=0.6, start_angle=0, angle=PI, color=GOLD)
+        arc.shift(LEFT * 5.5 + DOWN * 2)
 
-        pt = Dot(point=RIGHT * 5 + DOWN * 3, radius=0.08, color=RED)
+        pt = Dot(point=LEFT * 2 + DOWN * 2, radius=0.08, color=RED)
 
         tri = Polygon(
-            LEFT * 2 + DOWN * 2.8,
-            RIGHT * 1 + DOWN * 2.8,
-            LEFT * 0.5 + DOWN * 4,
+            LEFT * 1.5 + DOWN * 1.7,
+            RIGHT * 1.5 + DOWN * 1.7,
+            RIGHT * 0 + DOWN * 3.2,
             color=MAROON,
         )
 
         label_sq = Text("Square", font_size=16)
-        label_sq.shift(LEFT * 5 + UP * 0.3)
+        label_sq.shift(LEFT * 5.25 + UP * 1.2)
         label_rect = Text("Rectangle", font_size=16)
-        label_rect.shift(LEFT * 2 + UP * 0.3)
+        label_rect.shift(LEFT * 1.75 + UP * 1.2)
         label_circ = Text("Circle", font_size=16)
-        label_circ.shift(RIGHT * 1.5 + UP * 0.3)
+        label_circ.shift(RIGHT * 1.75 + UP * 1.2)
         label_ell = Text("Ellipse", font_size=16)
-        label_ell.shift(RIGHT * 4.5 + UP * 0.3)
-        label_line = Text("Line", font_size=16)
-        label_line.shift(RIGHT * 3 + UP * 0.3)
-        label_arrow = Text("Arrow", font_size=16)
-        label_arrow.shift(RIGHT * 4 + DOWN * 0.7)
-        label_dash = Text("DashedLine", font_size=16)
-        label_dash.shift(RIGHT * 3 + DOWN * 1.5)
-        label_arc = Text("Arc", font_size=16)
-        label_arc.shift(LEFT * 5 + DOWN * 4)
-        label_dot = Text("Dot", font_size=16)
-        label_dot.shift(RIGHT * 4 + DOWN * 3)
-        label_tri = Text("Polygon", font_size=16)
-        label_tri.shift(RIGHT * 1.5 + DOWN * 3.5)
+        label_ell.shift(RIGHT * 5.25 + UP * 1.2)
 
-        lang_en = Text("English: Hello World", font_size=22)
-        lang_en.shift(LEFT * 4 + DOWN * 4.5)
-        lang_cn = Text("Chinese: 你好世界", font_size=22)
-        lang_cn.shift(LEFT * 0.5 + DOWN * 4.5)
-        lang_jp = Text("Japanese: こんにちは", font_size=22)
-        lang_jp.shift(RIGHT * 3.5 + DOWN * 4.5)
+        label_line = Text("Line", font_size=16)
+        label_line.shift(LEFT * 6 + UP * 0.9)
+        label_arrow = Text("Arrow", font_size=16)
+        label_arrow.shift(RIGHT * 3.5 + DOWN * 0.2)
+        label_dash = Text("DashedLine", font_size=16)
+        label_dash.shift(RIGHT * 5 + DOWN * 1.3)
+
+        label_arc = Text("Arc", font_size=16)
+        label_arc.shift(LEFT * 5.5 + DOWN * 2.8)
+        label_dot = Text("Dot", font_size=16)
+        label_dot.shift(LEFT * 2 + DOWN * 2.8)
+        label_tri = Text("Polygon", font_size=16)
+        label_tri.shift(RIGHT * 0 + DOWN * 3.6)
+
+        lang_en = Text("English: Hello World", font_size=20)
+        lang_en.shift(LEFT * 4 + DOWN * 3.3)
+        lang_cn = Text("Chinese: 你好世界", font_size=20)
+        lang_cn.shift(RIGHT * 0 + DOWN * 3.3)
+        lang_jp = Text("Japanese: こんにちは", font_size=20)
+        lang_jp.shift(RIGHT * 4 + DOWN * 3.3)
 
         render.play(
             Create(SurroundingRectangle(section_title, buff=0.3), run_time=1.5),
@@ -105,10 +113,11 @@ class VulkanShapeShowcase(Scene):
 
         render.play(
             Create(arc, run_time=0.8),
+            Create(pt, run_time=0.3),
             Create(tri, run_time=1.0),
             Succession(
                 Wait(0.2),
-                Add(pt, label_arc, label_dot, label_tri),
+                Add(label_arc, label_dot, label_tri),
             ),
         )
 
