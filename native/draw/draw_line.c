@@ -18,12 +18,19 @@ void BuildVerticesFromLines(const LineObj *lines, int count) {
         float nx = (-dy / len) * half_thick;
         float ny = (dx / len) * half_thick;
 
-        PushVertex(l->x1 + nx, l->y1 + ny, nr, ng, nb);
-        PushVertex(l->x1 - nx, l->y1 - ny, nr, ng, nb);
-        PushVertex(l->x2 + nx, l->y2 + ny, nr, ng, nb);
+        float ux = dx / len;
+        float uy = dy / len;
+        float ex1 = l->x1 - ux * half_thick;
+        float ey1 = l->y1 - uy * half_thick;
+        float ex2 = l->x2 + ux * half_thick;
+        float ey2 = l->y2 + uy * half_thick;
 
-        PushVertex(l->x1 - nx, l->y1 - ny, nr, ng, nb);
-        PushVertex(l->x2 - nx, l->y2 - ny, nr, ng, nb);
-        PushVertex(l->x2 + nx, l->y2 + ny, nr, ng, nb);
+        PushVertex(ex1 + nx, ey1 + ny, nr, ng, nb);
+        PushVertex(ex1 - nx, ey1 - ny, nr, ng, nb);
+        PushVertex(ex2 + nx, ey2 + ny, nr, ng, nb);
+
+        PushVertex(ex1 - nx, ey1 - ny, nr, ng, nb);
+        PushVertex(ex2 - nx, ey2 - ny, nr, ng, nb);
+        PushVertex(ex2 + nx, ey2 + ny, nr, ng, nb);
     }
 }
