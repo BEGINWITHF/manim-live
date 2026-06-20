@@ -104,6 +104,8 @@ class VulkanRender:
         self.frame_count = 0
         self.scene = None
         self._active_anims = []
+        self.init_w = w
+        self.init_h = h
 
         base_dir = os.path.dirname(os.path.abspath(__file__))
         dll_path = os.path.normpath(os.path.join(base_dir, "..", "dist", "release", "vulkan_core.dll"))
@@ -415,6 +417,8 @@ class VulkanRender:
             if fo <= 0:
                 return
             fs = mob.font_size if hasattr(mob, 'font_size') else 48
+            scale = min(w / self.init_w, h / self.init_h) if self.init_w > 0 and self.init_h > 0 else 1.0
+            fs = fs * scale
             txt = mob.original_text if hasattr(mob, 'original_text') else (mob.text if hasattr(mob, 'text') else "")
             self.dll.AddText(sx, sy, r, g, b, float(fs), txt.encode('utf-8'))
 
