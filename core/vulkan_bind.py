@@ -5,7 +5,7 @@ import time
 from manim import (
     Square, Circle, Line, Rectangle, Polygon,
     Arrow, Dot, DashedLine,
-    Arc, Ellipse, Point, Text, Add, VGroup, Group
+    Arc, Ellipse, Point, Text, VGroup, Group
 )
 
 
@@ -27,43 +27,233 @@ def get_anim_opacity(mob):
     return _anim_opacity.get(id(mob), 1.0)
 
 
+def _sigmoid(x):
+    return 1.0 / (1.0 + math.exp(-x))
+
+
+def _smooth(t, inflection=10.0):
+    error = _sigmoid(-inflection / 2)
+    val = (_sigmoid(inflection * (t - 0.5)) - error) / (1 - 2 * error)
+    return max(0.0, min(1.0, val))
+
+
+def _linear(t):
+    return t
+
+
+def _rush_into(t, inflection=10.0):
+    return 2.0 * _smooth(t / 2.0, inflection)
+
+
+def _rush_from(t, inflection=10.0):
+    return 2.0 * _smooth(t / 2.0 + 0.5, inflection) - 1.0
+
+
+def _there_and_back(t, inflection=10.0):
+    if t < 0.5:
+        new_t = 2.0 * t
+    else:
+        new_t = 2.0 * (1.0 - t)
+    return _smooth(new_t, inflection)
+
+
+def _slow_into(t):
+    return math.sqrt(1.0 - (1.0 - t) * (1.0 - t))
+
+
+def _double_smooth(t):
+    if t < 0.5:
+        return 0.5 * _smooth(2.0 * t)
+    else:
+        return 0.5 * (1.0 + _smooth(2.0 * t - 1.0))
+
+
+def _wiggle(t, wiggles=2):
+    val = math.sin(wiggles * math.pi * t)
+    return _there_and_back(t) * val
+
+
+def _lingering(t):
+    return _squish_rate_func(lambda x: x, 0, 0.8)(t)
+
+
+def _exponential_decay(t, half_life=0.1):
+    return 1.0 - math.exp(-t / half_life)
+
+
+def _squish_rate_func(func, a, b):
+    def result(t):
+        return func((t - a) / (b - a))
+    return result
+
+
+DEFAULT_ANIMATION_RUN_TIME = 1.0
+DEFAULT_ANIMATION_LAG_RATIO = 0.0
+TARGET_FPS = 60
+FRAME_DURATION = 1.0 / TARGET_FPS
+
+
 class Animation:
-    def __init__(self, mobject=None, run_time=1.0):
+    def __init__(
+        self,
+        mobject=None,
+        lag_ratio=DEFAULT_ANIMATION_LAG_RATIO,
+        run_time=DEFAULT_ANIMATION_RUN_TIME,
+        rate_func=None,
+        reverse_rate_function=False,
+        name=None,
+        remover=False,
+        suspend_mobject_updating=True,
+        introducer=False,
+        **kwargs,
+    ):
         self.mobject = mobject
-        self.run_time = run_time
+        self.lag_ratio = lag_ratio
+        self._run_time = run_time
+        self.rate_func = rate_func if rate_func is not None else _smooth
+        self.reverse_rate_function = reverse_rate_function
+        self.name = name
+        self.remover = remover
+        self.suspend_mobject_updating = suspend_mobject_updating
+        self.introducer = introducer
         self.start_time = 0.0
         self.finished = False
+        self._original_starting_mobject = None
+
+    @property
+    def run_time(self):
+        return self._run_time
+
+    @run_time.setter
+    def run_time(self, value):
+        self._run_time = value
+
+    def __str__(self):
+        return self.name or f"{type(self).__name__}({self.mobject})"
+
+    def __repr__(self):
+        return self.__str__()
 
     def begin(self, t):
         self.start_time = t
-
-    def interpolate(self, t):
-        pass
+        if self.mobject is not None:
+            self._original_starting_mobject = self.create_starting_mobject()
 
     def finish(self):
         self.finished = True
 
+    def interpolate(self, t):
+        alpha = (t - self.start_time) / self.run_time if self.run_time > 0 else 1.0
+        alpha = max(0.0, min(1.0, alpha))
+        if self.reverse_rate_function:
+            alpha = 1.0 - alpha
+        alpha = self.rate_func(alpha)
+        self.interpolate_mobject(alpha)
+
+    def interpolate_mobject(self, alpha):
+        pass
+
+    def interpolate_submobject(self, submobject, starting_submobject, alpha):
+        pass
+
+    def get_sub_alpha(self, alpha, index, num_submobjects):
+        if num_submobjects <= 1:
+            return alpha
+        lag_ratio = self.lag_ratio
+        if lag_ratio == 0:
+            return alpha
+        start = alpha * lag_ratio * index
+        end = alpha + alpha * lag_ratio * (index - num_submobjects + 1)
+        return max(0.0, min(1.0, (end + start) / 2.0 if lag_ratio < 1 else start))
+
+    def clean_up_from_scene(self, scene):
+        pass
+
+    def create_starting_mobject(self):
+        return self.mobject
+
+    def get_all_mobjects(self):
+        if self.mobject is not None:
+            return [self.mobject]
+        return []
+
+    def get_all_families_zipped(self):
+        return []
+
+    def update_mobjects(self, dt):
+        pass
+
+    def get_all_mobjects_to_update(self):
+        return []
+
+    def copy(self):
+        return type(self)(
+            self.mobject,
+            lag_ratio=self.lag_ratio,
+            run_time=self._run_time,
+            rate_func=self.rate_func,
+            reverse_rate_function=self.reverse_rate_function,
+            name=self.name,
+            remover=self.remover,
+            introducer=self.introducer,
+        )
+
+    def set_run_time(self, run_time):
+        self._run_time = run_time
+        return self
+
+    def get_run_time(self):
+        return self._run_time
+
+    def set_rate_func(self, rate_func):
+        self.rate_func = rate_func
+        return self
+
+    def get_rate_func(self):
+        return self.rate_func
+
+    def set_name(self, name):
+        self.name = name
+        return self
+
+    def is_remover(self):
+        return self.remover
+
+    def is_introducer(self):
+        return self.introducer
+
+    @classmethod
+    def set_default(cls, **kwargs):
+        for key, value in kwargs.items():
+            if hasattr(cls, key):
+                setattr(cls, key, value)
+
 
 class Create(Animation):
     def __init__(self, mobject, run_time=1.0, **kwargs):
-        super().__init__(mobject, run_time)
+        super().__init__(mobject, run_time=run_time, **kwargs)
 
     def interpolate(self, t):
-        progress = min(1.0, (t - self.start_time) / self.run_time) if self.run_time > 0 else 1.0
-        self.mobject._vulkan_progress = progress
+        alpha = (t - self.start_time) / self.run_time if self.run_time > 0 else 1.0
+        alpha = max(0.0, min(1.0, alpha))
+        if self.reverse_rate_function:
+            alpha = 1.0 - alpha
+        alpha = self.rate_func(alpha)
+        self.mobject._vulkan_progress = alpha
 
 
 class Succession(Animation):
-    def __init__(self, *animations, **kwargs):
+    def __init__(self, *animations, rate_func=None, **kwargs):
         self.animations = list(animations)
         total = sum(a.run_time for a in self.animations)
-        super().__init__(run_time=total)
+        super().__init__(run_time=total, rate_func=rate_func, **kwargs)
 
     def begin(self, t):
         super().begin(t)
+        cumulative = 0.0
         for a in self.animations:
-            a.begin(t)
-            t += a.run_time
+            a.begin(t + cumulative)
+            cumulative += a.run_time
 
     def interpolate(self, t):
         elapsed = t - self.start_time
@@ -73,22 +263,72 @@ class Succession(Animation):
                 a.interpolate(t)
                 return
             cumulative += a.run_time
+        if self.animations:
+            self.animations[-1].interpolate(t)
 
     def finish(self):
         super().finish()
         for a in self.animations:
             a.finish()
 
+    def get_all_mobjects(self):
+        mobs = []
+        for a in self.animations:
+            mobs.extend(a.get_all_mobjects())
+        return mobs
+
+    def get_all_families_zipped(self):
+        families = []
+        for a in self.animations:
+            families.extend(a.get_all_families_zipped())
+        return families
+
 
 class Wait(Animation):
-    def __init__(self, run_time=1.0, **kwargs):
-        super().__init__(None, run_time)
+    def __init__(
+        self,
+        run_time=1.0,
+        stop_condition=None,
+        frozen_frame=None,
+        rate_func=None,
+        **kwargs,
+    ):
+        super().__init__(None, run_time=run_time, rate_func=rate_func or _linear, **kwargs)
+        self.stop_condition = stop_condition
+        self.frozen_frame = frozen_frame
+
+    def begin(self, t):
+        super().begin(t)
+
+    def finish(self):
+        super().finish()
+
+    def clean_up_from_scene(self, scene):
+        pass
+
+    def update_mobjects(self, dt):
+        pass
+
+    def interpolate(self, alpha):
+        pass
 
 
 class Add(Animation):
-    def __init__(self, *mobjects, run_time=1.0 / 60.0, **kwargs):
+    def __init__(self, *mobjects, run_time=0.0, **kwargs):
         self.mobjects = list(mobjects)
-        super().__init__(mobjects[0] if mobjects else None, run_time)
+        super().__init__(mobjects[0] if mobjects else None, run_time=run_time, **kwargs)
+
+    def begin(self, t):
+        super().begin(t)
+
+    def finish(self):
+        super().finish()
+
+    def clean_up_from_scene(self, scene):
+        pass
+
+    def update_mobjects(self, dt):
+        pass
 
     def interpolate(self, t):
         elapsed = t - self.start_time
@@ -96,9 +336,18 @@ class Add(Animation):
             for mob in self.mobjects:
                 set_anim_opacity(mob, 1.0)
 
+    def get_all_mobjects(self):
+        return list(self.mobjects)
+
+
+def prepare_animation(anim):
+    if isinstance(anim, Animation):
+        return anim
+    raise TypeError(f"Expected Animation, got {type(anim)}")
+
 
 class VulkanRender:
-    def __init__(self, w=800, h=600):
+    def __init__(self, w=1920, h=1080):
         self.win_w = w
         self.win_h = h
         self.frame_count = 0
@@ -645,7 +894,8 @@ class VulkanRender:
         self._active_anims = real_anims
 
         while True:
-            now = time.time()
+            frame_start = time.time()
+            now = frame_start
             all_done = True
             for a in self._active_anims:
                 a.interpolate(now)
@@ -660,6 +910,10 @@ class VulkanRender:
 
             if all_done:
                 break
+
+            elapsed = time.time() - frame_start
+            if elapsed < FRAME_DURATION:
+                time.sleep(FRAME_DURATION - elapsed)
 
     def close(self):
         self.dll.Vulkan_Shutdown()
