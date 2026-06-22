@@ -340,6 +340,147 @@ class Add(Animation):
         return list(self.mobjects)
 
 
+class FadeIn(Animation):
+    def __init__(
+        self,
+        *mobjects,
+        shift=None,
+        target_position=None,
+        scale=1.0,
+        run_time=1.0,
+        **kwargs,
+    ):
+        self.fade_shift = shift
+        self.target_position = target_position
+        self.fade_scale = scale
+        self._start_positions = []
+        super().__init__(mobjects[0] if mobjects else None, run_time=run_time, **kwargs)
+        self.mobjects = list(mobjects)
+
+    def create_starting_mobject(self):
+        return self.mobject
+
+    def create_target(self):
+        return self.mobject
+
+    def begin(self, t):
+        super().begin(t)
+        self._start_positions = []
+        for mob in self.mobjects:
+            set_anim_opacity(mob, 0.0)
+            if self.target_position is not None:
+                if hasattr(self.target_position, 'get_center'):
+                    pos = self.target_position.get_center()
+                else:
+                    pos = self.target_position
+                start_pos = mob.get_center()
+                self._start_positions.append(start_pos - pos)
+            else:
+                self._start_positions.append(None)
+
+    def interpolate(self, t):
+        alpha = (t - self.start_time) / self.run_time if self.run_time > 0 else 1.0
+        alpha = max(0.0, min(1.0, alpha))
+        if self.reverse_rate_function:
+            alpha = 1.0 - alpha
+        alpha = self.rate_func(alpha)
+
+        for i, mob in enumerate(self.mobjects):
+            set_anim_opacity(mob, alpha)
+
+            if self.fade_scale != 1.0:
+                scale_factor = self.fade_scale + (1.0 - self.fade_scale) * alpha
+                mob.scale(scale_factor / getattr(mob, '_last_fade_scale', self.fade_scale))
+                mob._last_fade_scale = scale_factor
+
+            if self.fade_shift is not None and alpha < 1.0:
+                offset = self.fade_shift * (1.0 - alpha)
+                mob.move_to(mob.get_center() + offset * 0.01)
+
+            if self.target_position is not None and i < len(self._start_positions) and self._start_positions[i] is not None:
+                start_offset = self._start_positions[i]
+                current_offset = start_offset * (1.0 - alpha)
+                mob.move_to(mob.get_center() + current_offset * 0.01)
+
+    def finish(self):
+        super().finish()
+        for mob in self.mobjects:
+            set_anim_opacity(mob, 1.0)
+
+    def get_all_mobjects(self):
+        return list(self.mobjects)
+
+
+class FadeOut(Animation):
+    def __init__(
+        self,
+        *mobjects,
+        shift=None,
+        target_position=None,
+        scale=1.0,
+        run_time=1.0,
+        **kwargs,
+    ):
+        self.fade_shift = shift
+        self.target_position = target_position
+        self.fade_scale = scale
+        super().__init__(mobjects[0] if mobjects else None, run_time=run_time, **kwargs)
+        self.mobjects = list(mobjects)
+        self.remover = True
+
+    def create_starting_mobject(self):
+        return self.mobject
+
+    def create_target(self):
+        return self.mobject
+
+    def begin(self, t):
+        super().begin(t)
+
+    def interpolate(self, t):
+        alpha = (t - self.start_time) / self.run_time if self.run_time > 0 else 1.0
+        alpha = max(0.0, min(1.0, alpha))
+        if self.reverse_rate_function:
+            alpha = 1.0 - alpha
+        alpha = self.rate_func(alpha)
+
+        opacity = 1.0 - alpha
+
+        for mob in self.mobjects:
+            set_anim_opacity(mob, opacity)
+
+            if self.fade_scale != 1.0:
+                scale_factor = 1.0 + (self.fade_scale - 1.0) * alpha
+                mob.scale(scale_factor / getattr(mob, '_last_fade_scale', 1.0))
+                mob._last_fade_scale = scale_factor
+
+            if self.fade_shift is not None and alpha > 0.0:
+                offset = self.fade_shift * alpha
+                mob.move_to(mob.get_center() + offset * 0.01)
+
+            if self.target_position is not None and alpha > 0.0:
+                if hasattr(self.target_position, 'get_center'):
+                    target = self.target_position.get_center()
+                else:
+                    target = self.target_position
+                current = mob.get_center()
+                direction = target - current
+                mob.move_to(current + direction * alpha * 0.01)
+
+    def finish(self):
+        super().finish()
+        for mob in self.mobjects:
+            set_anim_opacity(mob, 0.0)
+
+    def clean_up_from_scene(self, scene):
+        for mob in self.mobjects:
+            if mob in scene.mobjects:
+                scene.remove(mob)
+
+    def get_all_mobjects(self):
+        return list(self.mobjects)
+
+
 def prepare_animation(anim):
     if isinstance(anim, Animation):
         return anim
@@ -864,16 +1005,30 @@ class VulkanRender:
 
         all_mobjects = list(add_mobs)
         for anim in animations:
-            if isinstance(anim, Create) and anim.mobject:
-                anim.mobject._vulkan_progress = 0.0
+            if isinstance(anim, (Create, FadeIn)) and anim.mobject:
+                if isinstance(anim, Create):
+                    anim.mobject._vulkan_progress = 0.0
                 if anim.mobject not in all_mobjects:
                     all_mobjects.append(anim.mobject)
+            elif isinstance(anim, (FadeIn, FadeOut)):
+                for mob in anim.mobjects:
+                    if isinstance(anim, FadeIn):
+                        set_anim_opacity(mob, 0.0)
+                    if mob not in all_mobjects:
+                        all_mobjects.append(mob)
             elif isinstance(anim, Succession):
                 for sub in anim.animations:
-                    if isinstance(sub, Create) and sub.mobject:
-                        sub.mobject._vulkan_progress = 0.0
+                    if isinstance(sub, (Create, FadeIn)) and sub.mobject:
+                        if isinstance(sub, Create):
+                            sub.mobject._vulkan_progress = 0.0
                         if sub.mobject not in all_mobjects:
                             all_mobjects.append(sub.mobject)
+                    elif isinstance(sub, (FadeIn, FadeOut)):
+                        for mob in sub.mobjects:
+                            if isinstance(sub, FadeIn):
+                                set_anim_opacity(mob, 0.0)
+                            if mob not in all_mobjects:
+                                all_mobjects.append(mob)
 
         for mob in all_mobjects:
             if mob not in self.scene.mobjects:
