@@ -17,6 +17,7 @@ def manim_to_screen(x, y, w=800, h=600):
 
 
 _anim_opacity = {}
+_anim_rotation = {}
 
 
 def set_anim_opacity(mob, val):
@@ -25,6 +26,14 @@ def set_anim_opacity(mob, val):
 
 def get_anim_opacity(mob):
     return _anim_opacity.get(id(mob), 1.0)
+
+
+def set_anim_rotation(mob, val):
+    _anim_rotation[id(mob)] = val
+
+
+def get_anim_rotation(mob):
+    return _anim_rotation.get(id(mob), 0.0)
 
 
 def _sigmoid(x):
@@ -481,6 +490,66 @@ class FadeOut(Animation):
         return list(self.mobjects)
 
 
+class Rotating(Animation):
+    def __init__(
+        self,
+        mobject,
+        angle=2 * math.pi,
+        about_point=None,
+        about_edge=None,
+        run_time=5.0,
+        rate_func=None,
+        **kwargs,
+    ):
+        self.rot_angle = angle
+        self.about_point = about_point
+        self.about_edge = about_edge
+        super().__init__(mobject, run_time=run_time, rate_func=rate_func or _linear, **kwargs)
+
+    def begin(self, t):
+        super().begin(t)
+        self._start_rotation = get_anim_rotation(self.mobject)
+
+    def interpolate(self, t):
+        alpha = (t - self.start_time) / self.run_time if self.run_time > 0 else 1.0
+        alpha = max(0.0, min(1.0, alpha))
+        if self.reverse_rate_function:
+            alpha = 1.0 - alpha
+        alpha = self.rate_func(alpha)
+        current = self._start_rotation + self.rot_angle * alpha
+        set_anim_rotation(self.mobject, current)
+
+
+class Rotate(Animation):
+    def __init__(
+        self,
+        mobject,
+        angle=math.pi,
+        about_point=None,
+        about_edge=None,
+        run_time=1.0,
+        rate_func=None,
+        **kwargs,
+    ):
+        self.rot_angle = angle
+        self.about_point = about_point
+        self.about_edge = about_edge
+        super().__init__(mobject, run_time=run_time, rate_func=rate_func or _smooth, **kwargs)
+
+    def begin(self, t):
+        super().begin(t)
+        self._start_rotation = get_anim_rotation(self.mobject)
+
+    def interpolate(self, t):
+        alpha = (t - self.start_time) / self.run_time if self.run_time > 0 else 1.0
+        alpha = max(0.0, min(1.0, alpha))
+        if self.reverse_rate_function:
+            alpha = 1.0 - alpha
+        alpha = self.rate_func(alpha)
+        current = self._start_rotation + self.rot_angle * alpha
+        set_anim_rotation(self.mobject, current)
+
+
 def prepare_animation(anim):
     if isinstance(anim, Animation):
         return anim
@@ -633,9 +702,11 @@ class VulkanRender:
         if a <= 0:
             return
 
+        rot = get_anim_rotation(mob) + angle
+
         if isinstance(mob, (VGroup, Group)):
             for sub in mob:
-                self._send(sub, angle)
+                self._send(sub, rot)
             return
 
         if isinstance(mob, Square):
@@ -654,10 +725,10 @@ class VulkanRender:
                 sg = int(sg * so * a)
                 sb = int(sb * so * a)
                 sw = max(1, round(self._stroke_width(mob)))
-                tl = (sx - half, sy - half)
-                tr = (sx + half, sy - half)
-                br = (sx + half, sy + half)
-                bl = (sx - half, sy + half)
+                tl = self._rotate_point(sx - half, sy - half, sx, sy, rot)
+                tr = self._rotate_point(sx + half, sy - half, sx, sy, rot)
+                br = self._rotate_point(sx + half, sy + half, sx, sy, rot)
+                bl = self._rotate_point(sx - half, sy + half, sx, sy, rot)
                 perimeter = 2.0 * (2.0 * half + 2.0 * half)
                 drawn = perimeter * progress
                 edges = [
@@ -681,7 +752,7 @@ class VulkanRender:
                         remaining = 0
             else:
                 r, g, b = self._color(mob)
-                self.dll.AddRect(sx, sy, half, half, angle, r, g, b)
+                self.dll.AddRect(sx, sy, half, half, rot, r, g, b)
 
         elif isinstance(mob, Rectangle):
             cx, cy, _ = mob.get_center()
@@ -701,10 +772,10 @@ class VulkanRender:
                 sg = int(sg * so * a)
                 sb = int(sb * so * a)
                 sw = max(1, round(self._stroke_width(mob)))
-                tl = (sx - hw, sy - hh)
-                tr = (sx + hw, sy - hh)
-                br = (sx + hw, sy + hh)
-                bl = (sx - hw, sy + hh)
+                tl = self._rotate_point(sx - hw, sy - hh, sx, sy, rot)
+                tr = self._rotate_point(sx + hw, sy - hh, sx, sy, rot)
+                br = self._rotate_point(sx + hw, sy + hh, sx, sy, rot)
+                bl = self._rotate_point(sx - hw, sy + hh, sx, sy, rot)
                 perimeter = 2.0 * (2.0 * hw + 2.0 * hh)
                 drawn = perimeter * progress
                 edges = [
@@ -728,7 +799,7 @@ class VulkanRender:
                         remaining = 0
             else:
                 r, g, b = self._color(mob)
-                self.dll.AddRect(sx, sy, hw, hh, angle, r, g, b)
+                self.dll.AddRect(sx, sy, hw, hh, rot, r, g, b)
 
         elif isinstance(mob, Ellipse):
             cx, cy, _ = mob.get_center()
@@ -751,14 +822,15 @@ class VulkanRender:
                 circumference = math.pi * (3 * (rx + ry) - math.sqrt((3 * rx + ry) * (rx + 3 * ry)))
                 drawn = circumference * progress
                 accumulated = 0.0
-                prev_px = sx + rx
-                prev_py = sy
+                prev_angle_rad = rot
+                prev_px = sx + math.cos(prev_angle_rad) * rx
+                prev_py = sy - math.sin(prev_angle_rad) * ry
                 for j in range(1, segs + 1):
                     if accumulated >= drawn:
                         break
-                    angle = -2.0 * math.pi * j / segs
-                    px = sx + math.cos(angle) * rx
-                    py = sy + math.sin(angle) * ry
+                    cur_angle_rad = rot - 2.0 * math.pi * j / segs
+                    px = sx + math.cos(cur_angle_rad) * rx
+                    py = sy - math.sin(cur_angle_rad) * ry
                     seg_len = math.sqrt((px - prev_px) ** 2 + (py - prev_py) ** 2)
                     if accumulated + seg_len <= drawn:
                         self.dll.AddLine(prev_px, prev_py, px, py, sw, sr, sg, sb)
@@ -794,14 +866,15 @@ class VulkanRender:
                 circumference = 2.0 * math.pi * sr
                 drawn = circumference * progress
                 accumulated = 0.0
-                prev_px = sx + sr
-                prev_py = sy
+                prev_angle_rad = rot
+                prev_px = sx + math.cos(prev_angle_rad) * sr
+                prev_py = sy - math.sin(prev_angle_rad) * sr
                 for j in range(1, segs + 1):
                     if accumulated >= drawn:
                         break
-                    angle = -2.0 * math.pi * j / segs
-                    px = sx + math.cos(angle) * sr
-                    py = sy + math.sin(angle) * sr
+                    cur_angle_rad = rot - 2.0 * math.pi * j / segs
+                    px = sx + math.cos(cur_angle_rad) * sr
+                    py = sy - math.sin(cur_angle_rad) * sr
                     seg_len = math.sqrt((px - prev_px) ** 2 + (py - prev_py) ** 2)
                     if accumulated + seg_len <= drawn:
                         self.dll.AddLine(prev_px, prev_py, px, py, sw, cr, cg, cb)
@@ -823,8 +896,12 @@ class VulkanRender:
         elif isinstance(mob, Arrow):
             s = mob.get_start()
             e = mob.get_end()
+            cx, cy, _ = mob.get_center()
             sx1, sy1 = manim_to_screen(s[0], s[1], w, h)
             sx2, sy2 = manim_to_screen(e[0], e[1], w, h)
+            scx, scy = manim_to_screen(cx, cy, w, h)
+            sx1, sy1 = self._rotate_point(sx1, sy1, scx, scy, rot)
+            sx2, sy2 = self._rotate_point(sx2, sy2, scx, scy, rot)
             r, g, b = self._stroke_color(mob)
             sw = max(1, round(self._stroke_width(mob)))
             self.dll.AddLine(sx1, sy1, sx2, sy2, sw, r, g, b)
@@ -848,8 +925,12 @@ class VulkanRender:
         elif isinstance(mob, Line):
             s = mob.get_start()
             e = mob.get_end()
+            cx, cy, _ = mob.get_center()
             sx1, sy1 = manim_to_screen(s[0], s[1], w, h)
             sx2, sy2 = manim_to_screen(e[0], e[1], w, h)
+            scx, scy = manim_to_screen(cx, cy, w, h)
+            sx1, sy1 = self._rotate_point(sx1, sy1, scx, scy, rot)
+            sx2, sy2 = self._rotate_point(sx2, sy2, scx, scy, rot)
             r, g, b = self._stroke_color(mob)
             sw = max(1, round(self._stroke_width(mob)))
             self.dll.AddLine(sx1, sy1, sx2, sy2, sw, r, g, b)
@@ -926,10 +1007,12 @@ class VulkanRender:
         fr, fg, fb = self._color(mob)
         br, bg, bb = self._stroke_color(mob)
         bw = self._stroke_width(mob)
+        rot = get_anim_rotation(mob)
 
         flat = []
         for v in verts:
             vx, vy = manim_to_screen(v[0], v[1], w, h)
+            vx, vy = self._rotate_point(vx, vy, sx, sy, rot)
             flat.append(vx)
             flat.append(vy)
 
@@ -977,6 +1060,17 @@ class VulkanRender:
             pass
         return 0.0
 
+    def _rotate_point(self, x, y, cx, cy, angle):
+        if angle == 0:
+            return x, y
+        cos_a = math.cos(angle)
+        sin_a = math.sin(angle)
+        dx = x - cx
+        dy = y - cy
+        nx = dx * cos_a - dy * sin_a + cx
+        ny = dx * sin_a + dy * cos_a + cy
+        return nx, ny
+
     def tick(self):
         self.frame_count += 1
         result = self.dll.Vulkan_Tick()
@@ -1005,7 +1099,7 @@ class VulkanRender:
 
         all_mobjects = list(add_mobs)
         for anim in animations:
-            if isinstance(anim, (Create, FadeIn)) and anim.mobject:
+            if isinstance(anim, (Create, FadeIn, Rotating, Rotate)) and anim.mobject:
                 if isinstance(anim, Create):
                     anim.mobject._vulkan_progress = 0.0
                 if anim.mobject not in all_mobjects:
@@ -1018,7 +1112,7 @@ class VulkanRender:
                         all_mobjects.append(mob)
             elif isinstance(anim, Succession):
                 for sub in anim.animations:
-                    if isinstance(sub, (Create, FadeIn)) and sub.mobject:
+                    if isinstance(sub, (Create, FadeIn, Rotating, Rotate)) and sub.mobject:
                         if isinstance(sub, Create):
                             sub.mobject._vulkan_progress = 0.0
                         if sub.mobject not in all_mobjects:
