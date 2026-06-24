@@ -2,6 +2,7 @@ import ctypes
 import os
 import math
 import time
+import numpy as np
 from manim import (
     Square, Circle, Line, Rectangle, Polygon,
     Arrow, Dot, DashedLine,
@@ -10,7 +11,8 @@ from manim import (
 
 
 def manim_to_screen(x, y, w=800, h=600):
-    sx = w / 14.0
+    frame_width = w * 8.0 / h
+    sx = w / frame_width
     sy = h / 8.0
     cx, cy = w / 2.0, h / 2.0
     return float(cx + x * sx), float(cy - y * sy)
@@ -96,6 +98,78 @@ def _squish_rate_func(func, a, b):
     return result
 
 
+# ─── Bezier utilities for vector text rendering ────────────────────────
+# Community manim uses CUBIC bezier points:
+#   [P0, P1, P2, P3, P0', P1', P2', P3', ...]
+#   4 points per curve, get_num_curves() = len(points) // 4
+
+
+def _integer_interpolate(start, end, alpha):
+    if alpha >= 1:
+        return (end - 1, 1.0)
+    if alpha <= 0:
+        return (start, 0.0)
+    value = int((end - start) * alpha + start)
+    value = min(value, end - 1)
+    value = max(value, start)
+    residue = ((end - start) * alpha) % 1.0
+    return (value, residue)
+
+
+def _partial_bezier_points(points, a, b):
+    """Extract a portion [a,b] of a cubic bezier curve using De Casteljau.
+    points: 4 points [P0, P1, P2, P3]"""
+    if a <= 0 and b >= 1:
+        return [list(p) for p in points]
+    pts = [list(p[:3]) for p in points]
+    a_to_1 = []
+    for i in range(len(pts)):
+        seg = pts[i:]
+        t = a
+        for _ in range(len(seg) - 1):
+            seg = [[(1 - t) * seg[j][d] + t * seg[j + 1][d] for d in range(len(seg[0]))]
+                   for j in range(len(seg) - 1)]
+        a_to_1.append(seg[0])
+    end_prop = (b - a) / (1.0 - a) if a < 1.0 else 0.0
+    result = []
+    for i in range(len(a_to_1)):
+        seg = a_to_1[:i + 1]
+        t = end_prop
+        for _ in range(len(seg) - 1):
+            seg = [[(1 - t) * seg[j][d] + t * seg[j + 1][d] for d in range(len(seg[0]))]
+                   for j in range(len(seg) - 1)]
+        result.append(seg[0])
+    return result
+
+
+def _pointwise_become_partial_points(outline_points, a, b):
+    """Extract partial curve from cubic bezier points.
+    outline_points: numpy array of shape (N, 3) where N = num_curves * 4.
+    Returns list of 3D points (cubic bezier points for the DLL)."""
+    nppc = 4
+    pts = np.array(outline_points)
+    if pts.ndim == 1:
+        pts = pts.reshape(-1, 3)
+    num_curves = len(pts) // nppc
+    if num_curves == 0:
+        return []
+    if a <= 0 and b >= 1:
+        return [list(p) for p in pts]
+    lower_index, lower_residue = _integer_interpolate(0, num_curves, a)
+    upper_index, upper_residue = _integer_interpolate(0, num_curves, b)
+    result = []
+    if lower_index == upper_index:
+        seg = pts[nppc * lower_index:nppc * (lower_index + 1)]
+        result.extend(_partial_bezier_points(seg, lower_residue, upper_residue))
+    else:
+        seg = pts[nppc * lower_index:nppc * (lower_index + 1)]
+        result.extend(_partial_bezier_points(seg, lower_residue, 1.0))
+        result.extend([list(p) for p in pts[nppc * (lower_index + 1):nppc * upper_index]])
+        seg = pts[nppc * upper_index:nppc * (upper_index + 1)]
+        result.extend(_partial_bezier_points(seg, 0.0, upper_residue))
+    return result
+
+
 DEFAULT_ANIMATION_RUN_TIME = 1.0
 DEFAULT_ANIMATION_LAG_RATIO = 0.0
 TARGET_FPS = 60
@@ -171,9 +245,13 @@ class Animation:
         lag_ratio = self.lag_ratio
         if lag_ratio == 0:
             return alpha
-        start = alpha * lag_ratio * index
-        end = alpha + alpha * lag_ratio * (index - num_submobjects + 1)
-        return max(0.0, min(1.0, (end + start) / 2.0 if lag_ratio < 1 else start))
+        full_length = (num_submobjects - 1) * lag_ratio + 1
+        value = alpha * full_length
+        lower = index * lag_ratio
+        if self.reverse_rate_function:
+            return self.rate_func(1.0 - (value - lower))
+        else:
+            return self.rate_func(max(0.0, value - lower))
 
     def clean_up_from_scene(self, scene):
         pass
@@ -249,6 +327,95 @@ class Create(Animation):
             alpha = 1.0 - alpha
         alpha = self.rate_func(alpha)
         self.mobject._vulkan_progress = alpha
+
+
+class DrawBorderThenFill(Animation):
+    def __init__(self, mobject, run_time=2.0, stroke_width=2, stroke_color=None,
+                 rate_func=_double_smooth, introducer=True, **kwargs):
+        super().__init__(mobject, run_time=run_time, rate_func=rate_func,
+                         introducer=introducer, **kwargs)
+        self.stroke_width = stroke_width
+        self.stroke_color = stroke_color
+        self._starting_mobject = None
+
+    def get_outline(self):
+        outline = self.mobject
+        return outline
+
+    def begin(self, t):
+        super().begin(t)
+        self._starting_mobject = self.mobject.copy() if hasattr(self.mobject, 'copy') else self.mobject
+
+    def interpolate(self, t):
+        alpha = (t - self.start_time) / self.run_time if self.run_time > 0 else 1.0
+        alpha = max(0.0, min(1.0, alpha))
+        if self.reverse_rate_function:
+            alpha = 1.0 - alpha
+        alpha = self.rate_func(alpha)
+        self._apply_to_submobjects(alpha)
+
+    def _apply_to_submobjects(self, alpha):
+        mob = self.mobject
+        if not hasattr(mob, 'submobjects') or not mob.submobjects:
+            mob._vulkan_progress = alpha
+            return
+        num_subs = len(mob.submobjects)
+        letter_alphas = {}
+        for i in range(num_subs):
+            sub_alpha = self.get_sub_alpha(alpha, i, num_subs)
+            letter_alphas[i] = sub_alpha
+        mob._letter_alphas = letter_alphas
+
+    def finish(self):
+        super().finish()
+        mob = self.mobject
+        if hasattr(mob, 'submobjects') and mob.submobjects:
+            mob._letter_alphas = {i: 1.0 for i in range(len(mob.submobjects))}
+        else:
+            mob._vulkan_progress = 1.0
+
+
+class Write(DrawBorderThenFill):
+    def __init__(self, mobject, rate_func=_linear, reverse=False, run_time=None,
+                 lag_ratio=None, **kwargs):
+        self.reverse = reverse
+        if "remover" not in kwargs:
+            kwargs["remover"] = reverse
+        length = 1
+        if hasattr(mobject, 'submobjects'):
+            length = max(1, len(mobject.submobjects))
+        if run_time is None:
+            run_time = 1.0 if length < 15 else 2.0
+        if lag_ratio is None:
+            lag_ratio = min(4.0 / max(1.0, length), 0.2)
+        super().__init__(mobject, run_time=run_time, rate_func=rate_func,
+                         introducer=not reverse, **kwargs)
+        self.lag_ratio = lag_ratio
+
+    def begin(self, t):
+        if self.reverse:
+            if hasattr(self.mobject, 'invert'):
+                self.mobject.invert(recursive=True)
+        super().begin(t)
+
+    def finish(self):
+        super().finish()
+        if self.reverse:
+            if hasattr(self.mobject, 'invert'):
+                self.mobject.invert(recursive=True)
+
+
+class Unwrite(Write):
+    def __init__(self, mobject, rate_func=_linear, reverse=True, run_time=1.0, **kwargs):
+        super().__init__(mobject, rate_func=rate_func, reverse=reverse, run_time=run_time, **kwargs)
+
+    def finish(self):
+        Animation.finish(self)
+        mob = self.mobject
+        if hasattr(mob, 'submobjects') and mob.submobjects:
+            mob._letter_alphas = {i: 0.0 for i in range(len(mob.submobjects))}
+        else:
+            mob._vulkan_progress = 0.0
 
 
 class Succession(Animation):
@@ -366,12 +533,6 @@ class FadeIn(Animation):
         super().__init__(mobjects[0] if mobjects else None, run_time=run_time, **kwargs)
         self.mobjects = list(mobjects)
 
-    def create_starting_mobject(self):
-        return self.mobject
-
-    def create_target(self):
-        return self.mobject
-
     def begin(self, t):
         super().begin(t)
         self._start_positions = []
@@ -436,12 +597,6 @@ class FadeOut(Animation):
         super().__init__(mobjects[0] if mobjects else None, run_time=run_time, **kwargs)
         self.mobjects = list(mobjects)
         self.remover = True
-
-    def create_starting_mobject(self):
-        return self.mobject
-
-    def create_target(self):
-        return self.mobject
 
     def begin(self, t):
         super().begin(t)
@@ -642,10 +797,21 @@ class VulkanRender:
         self.dll.AddText.argtypes = [
             ctypes.c_float, ctypes.c_float,
             ctypes.c_int, ctypes.c_int, ctypes.c_int,
-            ctypes.c_float, ctypes.c_char_p
+            ctypes.c_float, ctypes.c_float, ctypes.c_char_p
         ]
         self.dll.Text_LoadFont.restype = ctypes.c_int
         self.dll.Text_LoadFont.argtypes = [ctypes.c_char_p, ctypes.c_int]
+
+        self.dll.SaveScreenshot.restype = ctypes.c_int
+        self.dll.SaveScreenshot.argtypes = [ctypes.c_char_p]
+
+        self.dll.AddBezierPath.restype = None
+        self.dll.AddBezierPath.argtypes = [
+            ctypes.POINTER(ctypes.c_float), ctypes.c_int,
+            ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float,
+            ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float,
+            ctypes.c_float, ctypes.c_int, ctypes.c_int,
+        ]
 
         if self.dll.Vulkan_Init(w, h) != 1:
             raise RuntimeError("Vulkan_Init failed")
@@ -664,6 +830,9 @@ class VulkanRender:
         if os.name == 'nt':
             windir = os.environ.get('WINDIR', r'C:\Windows')
             font_paths = [
+                os.path.join(windir, 'Fonts', 'times.ttf'),
+                os.path.join(windir, 'Fonts', 'timesbd.ttf'),
+                os.path.join(windir, 'Fonts', 'timesi.ttf'),
                 os.path.join(windir, 'Fonts', 'malgun.ttf'),
                 os.path.join(windir, 'Fonts', 'NotoSansSC-VF.ttf'),
                 os.path.join(windir, 'Fonts', 'NotoSansJP-VF.ttf'),
@@ -706,7 +875,7 @@ class VulkanRender:
 
         if isinstance(mob, (VGroup, Group)):
             for sub in mob:
-                self._send(sub, rot)
+                self._send(sub, angle)
             return
 
         if isinstance(mob, Square):
@@ -751,8 +920,50 @@ class VulkanRender:
                         self.dll.AddLine(x0, y0, ex, ey, sw, sr, sg, sb)
                         remaining = 0
             else:
-                r, g, b = self._color(mob)
-                self.dll.AddRect(sx, sy, half, half, rot, r, g, b)
+                progress = getattr(mob, '_vulkan_progress', 1.0)
+                if progress >= 1.0:
+                    r, g, b = self._color(mob)
+                    self.dll.AddRect(sx, sy, half, half, rot, r, g, b)
+                else:
+                    stroke_progress = min(1.0, progress * 2.0)
+                    if stroke_progress > 0:
+                        sr, sg, sb = self._stroke_color(mob)
+                        sr = int(sr * so * a)
+                        sg = int(sg * so * a)
+                        sb = int(sb * so * a)
+                        sw = max(1, round(self._stroke_width(mob)))
+                        tl = self._rotate_point(sx - half, sy - half, sx, sy, rot)
+                        tr = self._rotate_point(sx + half, sy - half, sx, sy, rot)
+                        br = self._rotate_point(sx + half, sy + half, sx, sy, rot)
+                        bl = self._rotate_point(sx - half, sy + half, sx, sy, rot)
+                        perimeter = 2.0 * (2.0 * half + 2.0 * half)
+                        drawn = perimeter * stroke_progress
+                        edges = [
+                            (tr, tl, 2.0 * half),
+                            (tl, bl, 2.0 * half),
+                            (bl, br, 2.0 * half),
+                            (br, tr, 2.0 * half),
+                        ]
+                        remaining = drawn
+                        for (x0, y0), (x1, y1), length in edges:
+                            if remaining <= 0:
+                                break
+                            if remaining >= length:
+                                self.dll.AddLine(x0, y0, x1, y1, sw, sr, sg, sb)
+                                remaining -= length
+                            else:
+                                frac = remaining / length
+                                ex = x0 + (x1 - x0) * frac
+                                ey = y0 + (y1 - y0) * frac
+                                self.dll.AddLine(x0, y0, ex, ey, sw, sr, sg, sb)
+                                remaining = 0
+                    if progress > 0.5:
+                        fill_alpha = (progress - 0.5) * 2.0
+                        r, g, b = self._color(mob)
+                        fr = int(r * fill_alpha)
+                        fg = int(g * fill_alpha)
+                        fb = int(b * fill_alpha)
+                        self.dll.AddRect(sx, sy, half, half, rot, fr, fg, fb)
 
         elif isinstance(mob, Rectangle):
             cx, cy, _ = mob.get_center()
@@ -798,8 +1009,50 @@ class VulkanRender:
                         self.dll.AddLine(x0, y0, ex, ey, sw, sr, sg, sb)
                         remaining = 0
             else:
-                r, g, b = self._color(mob)
-                self.dll.AddRect(sx, sy, hw, hh, rot, r, g, b)
+                progress = getattr(mob, '_vulkan_progress', 1.0)
+                if progress >= 1.0:
+                    r, g, b = self._color(mob)
+                    self.dll.AddRect(sx, sy, hw, hh, rot, r, g, b)
+                else:
+                    stroke_progress = min(1.0, progress * 2.0)
+                    if stroke_progress > 0:
+                        sr, sg, sb = self._stroke_color(mob)
+                        sr = int(sr * so * a)
+                        sg = int(sg * so * a)
+                        sb = int(sb * so * a)
+                        sw = max(1, round(self._stroke_width(mob)))
+                        tl = self._rotate_point(sx - hw, sy - hh, sx, sy, rot)
+                        tr = self._rotate_point(sx + hw, sy - hh, sx, sy, rot)
+                        br = self._rotate_point(sx + hw, sy + hh, sx, sy, rot)
+                        bl = self._rotate_point(sx - hw, sy + hh, sx, sy, rot)
+                        perimeter = 2.0 * (2.0 * hw + 2.0 * hh)
+                        drawn = perimeter * stroke_progress
+                        edges = [
+                            (tr, tl, 2.0 * hw),
+                            (tl, bl, 2.0 * hh),
+                            (bl, br, 2.0 * hw),
+                            (br, tr, 2.0 * hh),
+                        ]
+                        remaining = drawn
+                        for (x0, y0), (x1, y1), length in edges:
+                            if remaining <= 0:
+                                break
+                            if remaining >= length:
+                                self.dll.AddLine(x0, y0, x1, y1, sw, sr, sg, sb)
+                                remaining -= length
+                            else:
+                                frac = remaining / length
+                                ex = x0 + (x1 - x0) * frac
+                                ey = y0 + (y1 - y0) * frac
+                                self.dll.AddLine(x0, y0, ex, ey, sw, sr, sg, sb)
+                                remaining = 0
+                    if progress > 0.5:
+                        fill_opacity = (progress - 0.5) * 2.0
+                        r, g, b = self._color(mob)
+                        r = int(r * fill_opacity)
+                        g = int(g * fill_opacity)
+                        b = int(b * fill_opacity)
+                        self.dll.AddRect(sx, sy, hw, hh, rot, r, g, b)
 
         elif isinstance(mob, Ellipse):
             cx, cy, _ = mob.get_center()
@@ -843,8 +1096,49 @@ class VulkanRender:
                         accumulated = drawn
                     prev_px, prev_py = px, py
             else:
-                r, g, b = self._color(mob)
-                self.dll.AddEllipse(sx, sy, rx, ry, r, g, b)
+                progress = getattr(mob, '_vulkan_progress', 1.0)
+                if progress >= 1.0:
+                    r, g, b = self._color(mob)
+                    self.dll.AddEllipse(sx, sy, rx, ry, r, g, b)
+                else:
+                    stroke_progress = min(1.0, progress * 2.0)
+                    if stroke_progress > 0:
+                        sr2, sg2, sb2 = self._stroke_color(mob)
+                        sr2 = int(sr2 * so * a)
+                        sg2 = int(sg2 * so * a)
+                        sb2 = int(sb2 * so * a)
+                        sw2 = max(1, round(self._stroke_width(mob)))
+                        segs = 48
+                        circumference = math.pi * (3 * (rx + ry) - math.sqrt((3 * rx + ry) * (rx + 3 * ry)))
+                        drawn = circumference * stroke_progress
+                        accumulated = 0.0
+                        prev_angle_rad = rot
+                        prev_px = sx + math.cos(prev_angle_rad) * rx
+                        prev_py = sy - math.sin(prev_angle_rad) * ry
+                        for j in range(1, segs + 1):
+                            if accumulated >= drawn:
+                                break
+                            cur_angle_rad = rot - 2.0 * math.pi * j / segs
+                            px = sx + math.cos(cur_angle_rad) * rx
+                            py = sy - math.sin(cur_angle_rad) * ry
+                            seg_len = math.sqrt((px - prev_px) ** 2 + (py - prev_py) ** 2)
+                            if accumulated + seg_len <= drawn:
+                                self.dll.AddLine(prev_px, prev_py, px, py, sw2, sr2, sg2, sb2)
+                                accumulated += seg_len
+                            else:
+                                frac = (drawn - accumulated) / seg_len if seg_len > 0 else 0
+                                ex = prev_px + (px - prev_px) * frac
+                                ey = prev_py + (py - prev_py) * frac
+                                self.dll.AddLine(prev_px, prev_py, ex, ey, sw2, sr2, sg2, sb2)
+                                accumulated = drawn
+                            prev_px, prev_py = px, py
+                    if progress > 0.5:
+                        fill_opacity = (progress - 0.5) * 2.0
+                        r, g, b = self._color(mob)
+                        r = int(r * fill_opacity)
+                        g = int(g * fill_opacity)
+                        b = int(b * fill_opacity)
+                        self.dll.AddEllipse(sx, sy, rx, ry, r, g, b)
 
         elif isinstance(mob, Circle):
             cx, cy, _ = mob.get_center()
@@ -887,11 +1181,50 @@ class VulkanRender:
                         accumulated = drawn
                     prev_px, prev_py = px, py
             else:
-                fr, fg, fb = self._color(mob)
-                br, bg, bb = self._stroke_color(mob)
-                bw = self._stroke_width(mob) * (h / 8.0)
-                sp = min(1.0, self.frame_count / 72.0)
-                self.dll.AddCircle(sx, sy, sr, fr, fg, fb, br, bg, bb, bw, sp)
+                progress = getattr(mob, '_vulkan_progress', 1.0)
+                if progress >= 1.0:
+                    fr, fg, fb = self._color(mob)
+                    br, bg, bb = self._stroke_color(mob)
+                    bw = self._stroke_width(mob) * (h / 8.0)
+                    self.dll.AddCircle(sx, sy, sr, fr, fg, fb, br, bg, bb, bw, 1.0)
+                else:
+                    stroke_progress = min(1.0, progress * 2.0)
+                    if stroke_progress > 0:
+                        cr2, cg2, cb2 = self._stroke_color(mob)
+                        cr2 = int(cr2 * so * a)
+                        cg2 = int(cg2 * so * a)
+                        cb2 = int(cb2 * so * a)
+                        sw2 = max(1, round(self._stroke_width(mob)))
+                        segs = 48
+                        circumference = 2.0 * math.pi * sr
+                        drawn = circumference * stroke_progress
+                        accumulated = 0.0
+                        prev_angle_rad = rot
+                        prev_px = sx + math.cos(prev_angle_rad) * sr
+                        prev_py = sy - math.sin(prev_angle_rad) * sr
+                        for j in range(1, segs + 1):
+                            if accumulated >= drawn:
+                                break
+                            cur_angle_rad = rot - 2.0 * math.pi * j / segs
+                            px = sx + math.cos(cur_angle_rad) * sr
+                            py = sy - math.sin(cur_angle_rad) * sr
+                            seg_len = math.sqrt((px - prev_px) ** 2 + (py - prev_py) ** 2)
+                            if accumulated + seg_len <= drawn:
+                                self.dll.AddLine(prev_px, prev_py, px, py, sw2, cr2, cg2, cb2)
+                                accumulated += seg_len
+                            else:
+                                frac = (drawn - accumulated) / seg_len if seg_len > 0 else 0
+                                ex = prev_px + (px - prev_px) * frac
+                                ey = prev_py + (py - prev_py) * frac
+                                self.dll.AddLine(prev_px, prev_py, ex, ey, sw2, cr2, cg2, cb2)
+                                accumulated = drawn
+                            prev_px, prev_py = px, py
+                    if progress > 0.5:
+                        fill_opacity = (progress - 0.5) * 2.0
+                        fr, fg, fb = self._color(mob)
+                        br2, bg2, bb2 = self._stroke_color(mob)
+                        bw2 = self._stroke_width(mob) * (h / 8.0)
+                        self.dll.AddCircle(sx, sy, sr, fr, fg, fb, br2, bg2, bb2, bw2, fill_opacity)
 
         elif isinstance(mob, Arrow):
             s = mob.get_start()
@@ -982,23 +1315,11 @@ class VulkanRender:
             self.dll.AddPoint(sx, sy, r, g, b)
 
         elif isinstance(mob, Text):
-            cx, cy, _ = mob.get_center()
-            sx, sy = manim_to_screen(cx, cy, w, h)
-            try:
-                c = mob.get_color()
-                r, g, b = int(c[0] * 255), int(c[1] * 255), int(c[2] * 255)
-            except Exception:
-                r, g, b = 255, 255, 255
-            if r == 0 and g == 0 and b == 0:
-                r, g, b = 255, 255, 255
-            fo = mob.get_fill_opacity() if hasattr(mob, 'get_fill_opacity') else 1.0
-            if fo <= 0:
-                return
-            fs = mob.font_size if hasattr(mob, 'font_size') else 48
-            scale = min(w / self.init_w, h / self.init_h) if self.init_w > 0 and self.init_h > 0 else 1.0
-            fs = fs * scale
-            txt = mob.original_text if hasattr(mob, 'original_text') else (mob.text if hasattr(mob, 'text') else "")
-            self.dll.AddText(sx, sy, r, g, b, float(fs), txt.encode('utf-8'))
+            letter_alphas = getattr(mob, '_letter_alphas', None)
+            if letter_alphas is not None and hasattr(mob, 'submobjects') and mob.submobjects:
+                self._send_text_write(mob, letter_alphas, w, h)
+            else:
+                self._send_text_bitmap(mob, w, h)
 
     def _send_polygon(self, mob, verts):
         w, h = self.win_w, self.win_h
@@ -1021,6 +1342,73 @@ class VulkanRender:
             sx, sy, fr, fg, fb, br, bg, bb, bw,
             len(verts), arr
         )
+
+    def _send_text_write(self, mob, letter_alphas, w, h):
+        try:
+            c = mob.get_color()
+            base_r, base_g, base_b = int(c[0] * 255), int(c[1] * 255), int(c[2] * 255)
+        except Exception:
+            base_r, base_g, base_b = 255, 255, 255
+        if base_r == 0 and base_g == 0 and base_b == 0:
+            base_r, base_g, base_b = 255, 255, 255
+
+        for i, sub in enumerate(mob.submobjects):
+            sub_alpha = letter_alphas.get(i, 0.0)
+            if sub_alpha <= 0.001:
+                continue
+
+            pts = sub.get_points()
+            if len(pts) < 8:
+                continue
+
+            flat = []
+            for p in pts:
+                sx, sy = manim_to_screen(p[0], p[1], w, h)
+                flat.append(sx)
+                flat.append(sy)
+                flat.append(0.0)
+
+            n = len(flat) // 3
+            arr = (ctypes.c_float * len(flat))(*flat)
+
+            if sub_alpha < 0.5:
+                progress = min(1.0, sub_alpha * 2.0)
+                self.dll.AddBezierPath(
+                    arr, n,
+                    base_r, base_g, base_b, 0.7,
+                    base_r, base_g, base_b, 0.0,
+                    progress, 1, 0,
+                )
+            else:
+                fill_alpha = (sub_alpha - 0.5) * 2.0
+                self.dll.AddBezierPath(
+                    arr, n,
+                    base_r, base_g, base_b, 0.7,
+                    base_r, base_g, base_b, fill_alpha,
+                    1.0, 1, 1,
+                )
+
+    def _send_text_bitmap(self, mob, w, h):
+        cx, cy, _ = mob.get_center()
+        raw_fs = mob.font_size if hasattr(mob, 'font_size') else 48
+        scale_factor = min(w / self.init_w, h / self.init_h) if self.init_w > 0 and self.init_h > 0 else 1.0
+        fs = raw_fs * scale_factor * 2.34
+        manim_h = raw_fs * 0.0098
+        cy = cy - manim_h * 0.35
+        sx, sy = manim_to_screen(cx, cy, w, h)
+        try:
+            c = mob.get_color()
+            r, g, b = int(c[0] * 255), int(c[1] * 255), int(c[2] * 255)
+        except Exception:
+            r, g, b = 255, 255, 255
+        if r == 0 and g == 0 and b == 0:
+            r, g, b = 255, 255, 255
+        fo = mob.get_fill_opacity() if hasattr(mob, 'get_fill_opacity') else 1.0
+        if fo <= 0:
+            return
+        progress = getattr(mob, '_vulkan_progress', 1.0)
+        txt = mob.original_text if hasattr(mob, 'original_text') else (mob.text if hasattr(mob, 'text') else "")
+        self.dll.AddText(sx, sy, r, g, b, float(fs), float(progress), txt.encode('utf-8'))
 
     def _color(self, mob):
         try:
@@ -1099,7 +1487,7 @@ class VulkanRender:
 
         all_mobjects = list(add_mobs)
         for anim in animations:
-            if isinstance(anim, (Create, FadeIn, Rotating, Rotate)) and anim.mobject:
+            if isinstance(anim, (Create, Write, FadeIn, Rotating, Rotate)) and anim.mobject:
                 if isinstance(anim, Create):
                     anim.mobject._vulkan_progress = 0.0
                 if anim.mobject not in all_mobjects:
@@ -1112,7 +1500,7 @@ class VulkanRender:
                         all_mobjects.append(mob)
             elif isinstance(anim, Succession):
                 for sub in anim.animations:
-                    if isinstance(sub, (Create, FadeIn, Rotating, Rotate)) and sub.mobject:
+                    if isinstance(sub, (Create, Write, FadeIn, Rotating, Rotate)) and sub.mobject:
                         if isinstance(sub, Create):
                             sub.mobject._vulkan_progress = 0.0
                         if sub.mobject not in all_mobjects:
@@ -1163,6 +1551,10 @@ class VulkanRender:
             elapsed = time.time() - frame_start
             if elapsed < FRAME_DURATION:
                 time.sleep(FRAME_DURATION - elapsed)
+
+    def screenshot(self, path):
+        path_bytes = path.encode('utf-8') if isinstance(path, str) else path
+        return self.dll.SaveScreenshot(path_bytes)
 
     def close(self):
         self.dll.Vulkan_Shutdown()

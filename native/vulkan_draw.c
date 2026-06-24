@@ -14,6 +14,7 @@ void BuildVerticesFromDashedLines(const DashedLineObj *lines, int count);
 void BuildVerticesFromArcs(const ArcObj *arcs, int count);
 void BuildVerticesFromPoints(const PointObj *points, int count);
 void BuildVerticesFromTexts(const TextObj *texts, int count);
+void BuildVerticesFromBezierPaths(void);
 
 void Render_DrawScene(const Rect* rects, int rect_count,
                       const Circle* circles, int circle_count,
@@ -53,6 +54,8 @@ void Render_DrawScene(const Rect* rects, int rect_count,
 
     if (texts && text_count > 0)
         BuildVerticesFromTexts(texts, text_count);
+
+    BuildVerticesFromBezierPaths();
 
     if (g_vertex_count > 0) {
         update_vertex_buffer(g_vertices, g_vertex_count * 5 * sizeof(float));

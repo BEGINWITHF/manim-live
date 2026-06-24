@@ -181,12 +181,13 @@ __declspec(dllexport) void AddPoint(float x, float y, int r, int g, int b) {
     }
 }
 
-__declspec(dllexport) void AddText(float x, float y, int r, int g, int b, float font_size, const char* text) {
+__declspec(dllexport) void AddText(float x, float y, int r, int g, int b, float font_size, float opacity, const char* text) {
     if (g_text_count < MAX_SHAPES && text) {
         TextObj* t = &g_texts[g_text_count++];
         t->x = x; t->y = y;
         t->r = r; t->g = g; t->b = b;
         t->font_size = font_size;
+        t->opacity = opacity;
         int len = 0;
         while (text[len] && len < MAX_TEXT_LEN - 1) {
             t->text[len] = text[len];
@@ -250,4 +251,46 @@ __declspec(dllexport) void Vulkan_Shutdown(void) {
         g_hwnd = NULL;
     }
     UnregisterClassW(L"ManimVulkanClass", g_hinst);
+}
+
+__declspec(dllexport) int SaveScreenshot(const char *path) {
+    if (!g_hwnd || !IsWindow(g_hwnd)) return 0;
+    HDC hdcWindow = GetDC(g_hwnd);
+    if (!hdcWindow) return 0;
+    RECT rc;
+    GetClientRect(g_hwnd, &rc);
+    int w = rc.right - rc.left;
+    int h = rc.bottom - rc.top;
+    if (w <= 0 || h <= 0) { ReleaseDC(g_hwnd, hdcWindow); return 0; }
+    HDC hdcMem = CreateCompatibleDC(hdcWindow);
+    HBITMAP hBitmap = CreateCompatibleBitmap(hdcWindow, w, h);
+    SelectObject(hdcMem, hBitmap);
+    BitBlt(hdcMem, 0, 0, w, h, hdcWindow, 0, 0, SRCCOPY);
+    BITMAPINFOHEADER bi = {0};
+    bi.biSize = sizeof(BITMAPINFOHEADER);
+    bi.biWidth = w;
+    bi.biHeight = -h;
+    bi.biPlanes = 1;
+    bi.biBitCount = 24;
+    bi.biCompression = BI_RGB;
+    int rowBytes = ((w * 3 + 3) & ~3);
+    int imgSize = rowBytes * h;
+    char *buf = (char *)malloc(imgSize);
+    if (!buf) { DeleteObject(hBitmap); DeleteDC(hdcMem); ReleaseDC(g_hwnd, hdcWindow); return 0; }
+    GetDIBits(hdcMem, hBitmap, 0, h, buf, (BITMAPINFO *)&bi, DIB_RGB_COLORS);
+    BITMAPFILEHEADER bfh = {0};
+    bfh.bfType = 0x4D42;
+    bfh.bfOffBits = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
+    bfh.bfSize = bfh.bfOffBits + imgSize;
+    FILE *fp = fopen(path, "wb");
+    if (!fp) { free(buf); DeleteObject(hBitmap); DeleteDC(hdcMem); ReleaseDC(g_hwnd, hdcWindow); return 0; }
+    fwrite(&bfh, sizeof(bfh), 1, fp);
+    fwrite(&bi, sizeof(bi), 1, fp);
+    fwrite(buf, imgSize, 1, fp);
+    fclose(fp);
+    free(buf);
+    DeleteObject(hBitmap);
+    DeleteDC(hdcMem);
+    ReleaseDC(g_hwnd, hdcWindow);
+    return 1;
 }

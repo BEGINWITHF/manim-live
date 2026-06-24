@@ -5,7 +5,7 @@
 #include <string.h>
 #include <math.h>
 
-#define MAX_FONTS 4
+#define MAX_FONTS 12
 
 static unsigned char font_data[MAX_FONTS][1 << 25];
 static stbtt_fontinfo fonts[MAX_FONTS];
@@ -89,6 +89,13 @@ static int get_glyph_font(int codepoint) {
     return first_font >= 0 ? first_font : 0;
 }
 
+static float get_kerning(stbtt_fontinfo *font, int cp1, int cp2, float scale) {
+    int g1 = stbtt_FindGlyphIndex(font, cp1);
+    int g2 = stbtt_FindGlyphIndex(font, cp2);
+    int kern = stbtt_GetGlyphKernAdvance(font, g1, g2);
+    return kern * scale;
+}
+
 void BuildVerticesFromTexts(const TextObj *texts, int count) {
     if (font_count == 0) return;
 
@@ -96,22 +103,41 @@ void BuildVerticesFromTexts(const TextObj *texts, int count) {
         const TextObj *t = &texts[i];
         if (t->text[0] == '\0') continue;
 
-        float r = t->r / 255.0f;
-        float g = t->g / 255.0f;
-        float b = t->b / 255.0f;
+        float base_r = t->r / 255.0f;
+        float base_g = t->g / 255.0f;
+        float base_b = t->b / 255.0f;
 
         int best = pick_best_font(t->text);
         float scale = stbtt_ScaleForPixelHeight(&fonts[best], t->font_size);
 
         int len = (int)strlen(t->text);
+
+        int total_chars = 0;
+        { int ci2 = 0; while (ci2 < len) { int cp2; utf8_decode(t->text, &ci2, &cp2); if (cp2 > 32 && cp2 != 10) total_chars++; } }
+
+        float char_progress = t->opacity * (float)total_chars;
+        int full_chars = (int)char_progress;
+        float frac = char_progress - (float)full_chars;
+        if (t->opacity >= 1.0f) { full_chars = total_chars; frac = 0.0f; }
+        if (full_chars > total_chars) full_chars = total_chars;
+
         float text_width = 0;
+        int prev_cp = 0;
 
         int ci = 0;
         while (ci < len) {
             int cp;
             utf8_decode(t->text, &ci, &cp);
+            if (cp == 10) { prev_cp = 0; continue; }
+            if (cp < 32) { prev_cp = cp; continue; }
+
+            int fi = best;
+            int gidx = stbtt_FindGlyphIndex(&fonts[best], cp);
+            if (gidx == 0) fi = get_glyph_font(cp);
+            float fscale = stbtt_ScaleForPixelHeight(&fonts[fi], t->font_size);
+
             int adv = 0;
-            stbtt_GetCodepointHMetrics(&fonts[best], cp, &adv, NULL);
+            stbtt_GetCodepointHMetrics(&fonts[fi], cp, &adv, NULL);
             if (adv == 0) {
                 stbtt_GetCodepointHMetrics(&fonts[0], cp, &adv, NULL);
             }
@@ -119,17 +145,31 @@ void BuildVerticesFromTexts(const TextObj *texts, int count) {
                 stbtt_GetCodepointHMetrics(&fonts[best], 'x', &adv, NULL);
                 if (adv == 0) adv = 1024;
             }
-            text_width += adv * scale;
+            text_width += adv * fscale;
+
+            if (prev_cp > 32) {
+                text_width += get_kerning(&fonts[fi], prev_cp, cp, fscale);
+            }
+            prev_cp = cp;
         }
 
         float cursor_x = t->x - text_width * 0.5f;
         float baseline_y = t->y;
+        prev_cp = 0;
 
+        int visible_char_idx = 0;
         ci = 0;
         while (ci < len) {
             int cp;
             utf8_decode(t->text, &ci, &cp);
-            if (cp < 32) continue;
+
+            if (cp == 10) {
+                cursor_x = t->x - text_width * 0.5f;
+                baseline_y += t->font_size * 1.2f;
+                prev_cp = 0;
+                continue;
+            }
+            if (cp < 32) { prev_cp = cp; continue; }
 
             int fi = best;
             int idx = stbtt_FindGlyphIndex(&fonts[best], cp);
@@ -137,7 +177,7 @@ void BuildVerticesFromTexts(const TextObj *texts, int count) {
             float fscale = stbtt_ScaleForPixelHeight(&fonts[fi], t->font_size);
 
             int adv = 0;
-            stbtt_GetCodepointHMetrics(&fonts[best], cp, &adv, NULL);
+            stbtt_GetCodepointHMetrics(&fonts[fi], cp, &adv, NULL);
             if (adv == 0) {
                 stbtt_GetCodepointHMetrics(&fonts[0], cp, &adv, NULL);
             }
@@ -146,8 +186,27 @@ void BuildVerticesFromTexts(const TextObj *texts, int count) {
                 if (adv == 0) adv = 1024;
             }
 
-            int w = 0, h = 0, xoff = 0, yoff = 0;
-            unsigned char *bmp = stbtt_GetCodepointBitmap(&fonts[fi], fscale, fscale, cp, &w, &h, &xoff, &yoff);
+            if (prev_cp > 32) {
+                cursor_x += get_kerning(&fonts[fi], prev_cp, cp, fscale);
+            }
+
+            float char_alpha = 0.0f;
+            if (visible_char_idx < full_chars) {
+                char_alpha = 1.0f;
+            } else if (visible_char_idx == full_chars && frac > 0.0f) {
+                char_alpha = frac;
+            } else if (t->opacity >= 1.0f) {
+                char_alpha = 1.0f;
+            }
+            visible_char_idx++;
+
+            if (char_alpha > 0.004f) {
+                float cr = base_r * char_alpha;
+                float cg = base_g * char_alpha;
+                float cb = base_b * char_alpha;
+
+                int w = 0, h = 0, xoff = 0, yoff = 0;
+                unsigned char *bmp = stbtt_GetCodepointBitmap(&fonts[fi], fscale, fscale, cp, &w, &h, &xoff, &yoff);
 
             if (bmp && w > 0 && h > 0) {
                 float glyph_left = cursor_x + (float)xoff;
@@ -156,9 +215,10 @@ void BuildVerticesFromTexts(const TextObj *texts, int count) {
                 for (int row = 0; row < h; row++) {
                     int col = 0;
                     while (col < w) {
-                        if (bmp[row * w + col] > 0) {
+                        unsigned char alpha = bmp[row * w + col];
+                        if (alpha > 16) {
                             int run_start = col;
-                            while (col < w && bmp[row * w + col] > 0) col++;
+                            while (col < w && bmp[row * w + col] > 16) col++;
                             int run_end = col;
 
                             float x0 = glyph_left + (float)run_start;
@@ -166,12 +226,12 @@ void BuildVerticesFromTexts(const TextObj *texts, int count) {
                             float x1 = glyph_left + (float)run_end;
                             float y1 = y0 + 1.0f;
 
-                            PushVertex(x0, y0, r, g, b);
-                            PushVertex(x1, y0, r, g, b);
-                            PushVertex(x1, y1, r, g, b);
-                            PushVertex(x0, y0, r, g, b);
-                            PushVertex(x1, y1, r, g, b);
-                            PushVertex(x0, y1, r, g, b);
+                            PushVertex(x0, y0, cr, cg, cb);
+                            PushVertex(x1, y0, cr, cg, cb);
+                            PushVertex(x1, y1, cr, cg, cb);
+                            PushVertex(x0, y0, cr, cg, cb);
+                            PushVertex(x1, y1, cr, cg, cb);
+                            PushVertex(x0, y1, cr, cg, cb);
                         } else {
                             col++;
                         }
@@ -179,8 +239,10 @@ void BuildVerticesFromTexts(const TextObj *texts, int count) {
                 }
                 stbtt_FreeBitmap(bmp, NULL);
             }
+            }
 
-            cursor_x += adv * scale;
+            cursor_x += adv * fscale;
+            prev_cp = cp;
         }
     }
 }

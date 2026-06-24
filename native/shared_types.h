@@ -68,6 +68,7 @@ typedef struct {
     float x, y;
     int r, g, b;
     float font_size;
+    float opacity;
     char text[MAX_TEXT_LEN];
 } TextObj;
 

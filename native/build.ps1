@@ -66,7 +66,8 @@ $SourceFiles = @(
     "draw/draw_dashed_line.c",
     "draw/draw_arc.c",
     "draw/draw_point.c",
-    "draw/draw_text.c"
+    "draw/draw_text.c",
+    "draw/draw_bezier.c"
 )
 
 Write-Host "[INFO] Compiling source files to object files..." -ForegroundColor Cyan
@@ -96,7 +97,7 @@ $LinkCmd = "gcc $CompilerFlags -o `"$OutputPath`""
 foreach ($obj in $ObjectFiles) {
     $LinkCmd += " `"$obj`""
 }
-$LinkCmd += " -L`"$env:VULKAN_SDK/Lib`" -lvulkan-1 -luser32"
+$LinkCmd += " -L`"$env:VULKAN_SDK/Lib`" -lvulkan-1 -luser32 -lgdi32"
 
 Write-Host "[CMD] $LinkCmd" -ForegroundColor DarkGray
 Invoke-Expression $LinkCmd

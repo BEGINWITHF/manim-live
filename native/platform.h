@@ -17,10 +17,12 @@ __declspec(dllexport) void AddPolygon(float x, float y, int r, int g, int b, int
 __declspec(dllexport) void AddDashedLine(float x1, float y1, float x2, float y2, int width, int r, int g, int b, float dash_length, float gap_length);
 __declspec(dllexport) void AddArc(float x, float y, float radius, float start_angle, float angle, int r, int g, int b, float stroke_width);
 __declspec(dllexport) void AddPoint(float x, float y, int r, int g, int b);
-__declspec(dllexport) void AddText(float x, float y, int r, int g, int b, float font_size, const char* text);
+__declspec(dllexport) void AddText(float x, float y, int r, int g, int b, float font_size, float opacity, const char* text);
 __declspec(dllexport) int Text_LoadFont(const unsigned char *data, int data_len);
+__declspec(dllexport) void AddBezierPath(const float *points, int num_points, int sr, int sg, int sb, float stroke_width, int fr, int fg, int fb, float fill_opacity, float progress, int show_stroke, int show_fill);
 
 __declspec(dllexport) void ClearShapes(void);
+__declspec(dllexport) int SaveScreenshot(const char *path);
 
 #ifdef __cplusplus
 }

@@ -1,4 +1,5 @@
 #include "vulkan_core.h"
+#include "draw_common.h"
 
 #define VK_CHECK(call) do { \
     VkResult _result = (call); \
@@ -764,7 +765,7 @@ static void CreateSyncObjects(void) {
 
 static void CreateVertexBuffer(void) {
 
-    VkDeviceSize buf_size = sizeof(float) * 5 * MAX_SHAPES * 6;
+    VkDeviceSize buf_size = sizeof(float) * 5 * MAX_VERTICES;
 
     CreateBuffer(buf_size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
 
