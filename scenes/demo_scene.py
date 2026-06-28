@@ -55,10 +55,8 @@ class VulkanShapeShowcase(Scene):
         circ.set_stroke(width=3)
         circ.shift(LEFT * 1.5)
 
-        tri = Triangle(color=RED)
-        tri.set_fill(RED, opacity=0.6)
-        tri.set_stroke(width=3)
-        tri.scale(0.6)
+        tri = Triangle(color=RED, fill_opacity=0.6, stroke_width=3)
+        tri.scale(0.8)
         tri.shift(RIGHT * 1.5)
 
         arrow = Arrow(ORIGIN, RIGHT * 2, color=YELLOW, stroke_width=4)

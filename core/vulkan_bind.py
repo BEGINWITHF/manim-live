@@ -4,7 +4,7 @@ import math
 import time
 import numpy as np
 from manim import (
-    Square, Circle, Line, Rectangle, Polygon,
+    Square, Circle, Line, Rectangle, Polygon, Polygram,
     Arrow, Dot, DashedLine,
     Arc, Ellipse, Point, Text, VGroup, Group
 )
@@ -710,33 +710,66 @@ class Transform(Animation):
         self.target_mobject = target_mobject
         super().__init__(mobject, run_time=run_time, **kwargs)
 
+    def begin(self, t):
+        super().begin(t)
+        self._starting_mobject = self.mobject.copy()
+        self._target_copy = self.target_mobject.copy()
+        try:
+            self.mobject.align_data(self._target_copy)
+        except Exception:
+            pass
+        set_anim_opacity(self.mobject, 1.0)
+        set_anim_opacity(self.target_mobject, 1.0)
+        if hasattr(self.mobject, '_transforming'):
+            self.mobject._transforming = True
+        if hasattr(self.target_mobject, '_transforming'):
+            self.target_mobject._transforming = True
+
     def interpolate(self, t):
         alpha = (t - self.start_time) / self.run_time if self.run_time > 0 else 1.0
         alpha = max(0.0, min(1.0, alpha))
         if self.reverse_rate_function:
             alpha = 1.0 - alpha
         alpha = self.rate_func(alpha)
-        self.mobject._transform_alpha = alpha
-        self.mobject._transform_target = self.target_mobject
+        try:
+            self.mobject.interpolate(self._starting_mobject, self._target_copy, alpha)
+        except Exception:
+            pass
 
     def finish(self):
         super().finish()
-        self.mobject.become(self.target_mobject)
-        if hasattr(self.mobject, '_transform_alpha'):
-            del self.mobject._transform_alpha
-        if hasattr(self.mobject, '_transform_target'):
-            del self.mobject._transform_target
+        try:
+            self.mobject.become(self.target_mobject)
+        except Exception:
+            pass
+        set_anim_opacity(self.mobject, 1.0)
+        if hasattr(self.mobject, '_transforming'):
+            self.mobject._transforming = False
+        if hasattr(self.target_mobject, '_transforming'):
+            self.target_mobject._transforming = False
 
 
 class FadeTransform(Animation):
     def __init__(self, mobject, target_mobject, run_time=1.0, **kwargs):
         self.target_mobject = target_mobject
+        self.to_add_on_completion = target_mobject
         super().__init__(mobject, run_time=run_time, **kwargs)
 
     def begin(self, t):
         super().begin(t)
+        self.mobject.save_state()
+        self._starting_mobject = self.mobject.copy()
+        self._target_copy = self.target_mobject.copy()
+        try:
+            self.mobject.align_data(self._target_copy)
+        except Exception:
+            pass
         set_anim_opacity(self.mobject, 1.0)
-        set_anim_opacity(self.target_mobject, 0.0)
+        set_anim_opacity(self.target_mobject, 1.0)
+        if hasattr(self.mobject, '_transforming'):
+            self.mobject._transforming = True
+        if hasattr(self.target_mobject, '_transforming'):
+            self.target_mobject._transforming = True
 
     def interpolate(self, t):
         alpha = (t - self.start_time) / self.run_time if self.run_time > 0 else 1.0
@@ -744,13 +777,23 @@ class FadeTransform(Animation):
         if self.reverse_rate_function:
             alpha = 1.0 - alpha
         alpha = self.rate_func(alpha)
-        set_anim_opacity(self.mobject, 1.0 - alpha)
-        set_anim_opacity(self.target_mobject, alpha)
+        try:
+            self.mobject.interpolate(self._starting_mobject, self._target_copy, alpha)
+        except Exception:
+            pass
 
     def finish(self):
         super().finish()
         set_anim_opacity(self.mobject, 0.0)
         set_anim_opacity(self.target_mobject, 1.0)
+        try:
+            self.mobject.restore()
+        except Exception:
+            pass
+        if hasattr(self.mobject, '_transforming'):
+            self.mobject._transforming = False
+        if hasattr(self.target_mobject, '_transforming'):
+            self.target_mobject._transforming = False
 
     def get_all_mobjects(self):
         return [self.mobject, self.target_mobject]
@@ -787,8 +830,8 @@ class TransformMatchingAbstractBase(Animation):
         self._source_shape_map = {}
         self._target_shape_map = {}
         self._matched_anims = []
-        self._mismatched_source = []
-        self._mismatched_target = []
+        self._fade_out_anims = []
+        self._fade_in_anims = []
         self._scene = None
         super().__init__(mobject, run_time=run_time, **kwargs)
 
@@ -804,6 +847,8 @@ class TransformMatchingAbstractBase(Animation):
         super().begin(t)
         self._source_shape_map = self.get_shape_map(self.mobject)
         self._target_shape_map = self.get_shape_map(self.target_mobject)
+        set_anim_opacity(self.mobject, 1.0)
+        set_anim_opacity(self.target_mobject, 1.0)
 
         source_keys = set(self._source_shape_map.keys())
         target_keys = set(self._target_shape_map.keys())
@@ -827,46 +872,54 @@ class TransformMatchingAbstractBase(Animation):
 
         for key in source_keys:
             if key not in target_keys:
-                self._mismatched_source.append(self._source_shape_map[key])
+                self._fade_out_anims.append(self._source_shape_map[key])
 
         for key in target_keys:
             if key not in source_keys and key not in mapped_target_keys:
-                self._mismatched_target.append(self._target_shape_map[key])
-
-        for part in self._mismatched_source:
-            if self.transform_mismatches and self._mismatched_target:
-                target = self._mismatched_target.pop(0)
-                anim = Transform(part, target, run_time=self.run_time)
-                self._matched_anims.append(anim)
-            elif self.fade_transform_mismatches and self._mismatched_target:
-                target = self._mismatched_target.pop(0)
-                anim = FadeTransform(part, target, run_time=self.run_time)
-                self._matched_anims.append(anim)
+                self._fade_in_anims.append(self._target_shape_map[key])
 
         for anim in self._matched_anims:
             anim.begin(t)
 
+        for part in self._fade_out_anims:
+            set_anim_opacity(part, 1.0)
+
+        for part in self._fade_in_anims:
+            set_anim_opacity(part, 0.0)
+
     def interpolate(self, t):
+        alpha = (t - self.start_time) / self.run_time if self.run_time > 0 else 1.0
+        alpha = max(0.0, min(1.0, alpha))
+        alpha = self.rate_func(alpha)
+
         for anim in self._matched_anims:
             anim.interpolate(t)
+
+        for part in self._fade_out_anims:
+            set_anim_opacity(part, 1.0 - alpha)
+
+        for part in self._fade_in_anims:
+            set_anim_opacity(part, alpha)
 
     def finish(self):
         super().finish()
         for anim in self._matched_anims:
             anim.finish()
-        for part in self._mismatched_source:
+        for part in self._fade_out_anims:
             set_anim_opacity(part, 0.0)
-        for part in self._mismatched_target:
+        for part in self._fade_in_anims:
             set_anim_opacity(part, 1.0)
 
     def get_all_mobjects(self):
-        mobs = [self.mobject, self.target_mobject]
-        return mobs
+        return [self.mobject, self.target_mobject]
 
     def clean_up_from_scene(self, scene):
-        for part in self._mismatched_source:
-            if part in scene.mobjects:
-                scene.remove(part)
+        if self.mobject in scene.mobjects:
+            scene.remove(self.mobject)
+        if self.target_mobject not in scene.mobjects:
+            scene.add(self.target_mobject)
+        set_anim_opacity(self.mobject, 0.0)
+        set_anim_opacity(self.target_mobject, 1.0)
 
     @staticmethod
     def get_mobject_parts(mobject):
@@ -1136,7 +1189,7 @@ class VulkanRender:
             else:
                 progress = getattr(mob, '_vulkan_progress', 1.0)
                 if progress >= 1.0:
-                    r, g, b = self._color(mob)
+                    r, g, b = self._color(mob, a)
                     self.dll.AddRect(sx, sy, half, half, rot, r, g, b)
                 else:
                     stroke_progress = min(1.0, progress * 2.0)
@@ -1173,7 +1226,7 @@ class VulkanRender:
                                 remaining = 0
                     if progress > 0.5:
                         fill_alpha = (progress - 0.5) * 2.0
-                        r, g, b = self._color(mob)
+                        r, g, b = self._color(mob, a)
                         fr = int(r * fill_alpha)
                         fg = int(g * fill_alpha)
                         fb = int(b * fill_alpha)
@@ -1225,7 +1278,7 @@ class VulkanRender:
             else:
                 progress = getattr(mob, '_vulkan_progress', 1.0)
                 if progress >= 1.0:
-                    r, g, b = self._color(mob)
+                    r, g, b = self._color(mob, a)
                     self.dll.AddRect(sx, sy, hw, hh, rot, r, g, b)
                 else:
                     stroke_progress = min(1.0, progress * 2.0)
@@ -1262,7 +1315,7 @@ class VulkanRender:
                                 remaining = 0
                     if progress > 0.5:
                         fill_opacity = (progress - 0.5) * 2.0
-                        r, g, b = self._color(mob)
+                        r, g, b = self._color(mob, a)
                         r = int(r * fill_opacity)
                         g = int(g * fill_opacity)
                         b = int(b * fill_opacity)
@@ -1312,7 +1365,7 @@ class VulkanRender:
             else:
                 progress = getattr(mob, '_vulkan_progress', 1.0)
                 if progress >= 1.0:
-                    r, g, b = self._color(mob)
+                    r, g, b = self._color(mob, a)
                     self.dll.AddEllipse(sx, sy, rx, ry, r, g, b)
                 else:
                     stroke_progress = min(1.0, progress * 2.0)
@@ -1348,7 +1401,7 @@ class VulkanRender:
                             prev_px, prev_py = px, py
                     if progress > 0.5:
                         fill_opacity = (progress - 0.5) * 2.0
-                        r, g, b = self._color(mob)
+                        r, g, b = self._color(mob, a)
                         r = int(r * fill_opacity)
                         g = int(g * fill_opacity)
                         b = int(b * fill_opacity)
@@ -1397,7 +1450,7 @@ class VulkanRender:
             else:
                 progress = getattr(mob, '_vulkan_progress', 1.0)
                 if progress >= 1.0:
-                    fr, fg, fb = self._color(mob)
+                    fr, fg, fb = self._color(mob, a)
                     br, bg, bb = self._stroke_color(mob)
                     bw = self._stroke_width(mob) * (h / 8.0)
                     self.dll.AddCircle(sx, sy, sr, fr, fg, fb, br, bg, bb, bw, 1.0)
@@ -1435,7 +1488,7 @@ class VulkanRender:
                             prev_px, prev_py = px, py
                     if progress > 0.5:
                         fill_opacity = (progress - 0.5) * 2.0
-                        fr, fg, fb = self._color(mob)
+                        fr, fg, fb = self._color(mob, a)
                         br2, bg2, bb2 = self._stroke_color(mob)
                         bw2 = self._stroke_width(mob) * (h / 8.0)
                         self.dll.AddCircle(sx, sy, sr, fr, fg, fb, br2, bg2, bb2, bw2, fill_opacity)
@@ -1487,7 +1540,7 @@ class VulkanRender:
             sx, sy = manim_to_screen(cx, cy, w, h)
             scale_y = h / 8.0
             rad = mob.radius * scale_y if hasattr(mob, 'radius') else 6.0
-            r, g, b = self._color(mob)
+            r, g, b = self._color(mob, a)
             self.dll.AddCircle(sx, sy, rad, r, g, b, 0, 0, 0, 0.0, 1.0)
 
         elif isinstance(mob, DashedLine):
@@ -1520,26 +1573,32 @@ class VulkanRender:
 
         elif isinstance(mob, Polygon):
             verts = mob.get_vertices()
-            self._send_polygon(mob, verts)
+            self._send_polygon(mob, verts, a)
+
+        elif isinstance(mob, Polygram):
+            verts = mob.get_vertices()
+            self._send_polygon(mob, verts, a)
 
         elif isinstance(mob, Point):
             pos = mob.get_location()
             sx, sy = manim_to_screen(pos[0], pos[1], w, h)
-            r, g, b = self._color(mob)
+            r, g, b = self._color(mob, a)
             self.dll.AddPoint(sx, sy, r, g, b)
 
         elif isinstance(mob, Text):
             letter_alphas = getattr(mob, '_letter_alphas', None)
             if letter_alphas is not None and hasattr(mob, 'submobjects') and mob.submobjects:
                 self._send_text_write(mob, letter_alphas, w, h)
+            elif getattr(mob, '_transforming', False) and hasattr(mob, 'submobjects') and mob.submobjects:
+                self._send_transformed_text(mob, w, h)
             else:
                 self._send_text_bitmap(mob, w, h)
 
-    def _send_polygon(self, mob, verts):
+    def _send_polygon(self, mob, verts, alpha=1.0):
         w, h = self.win_w, self.win_h
         cx, cy, _ = mob.get_center()
         sx, sy = manim_to_screen(cx, cy, w, h)
-        fr, fg, fb = self._color(mob)
+        fr, fg, fb = self._color(mob, alpha)
         br, bg, bb = self._stroke_color(mob)
         bw = self._stroke_width(mob)
         rot = get_anim_rotation(mob)
@@ -1556,6 +1615,47 @@ class VulkanRender:
             sx, sy, fr, fg, fb, br, bg, bb, bw,
             len(verts), arr
         )
+
+    def _send_transformed_text(self, mob, w, h):
+        try:
+            c = mob.get_color()
+            base_r, base_g, base_b = int(c[0] * 255), int(c[1] * 255), int(c[2] * 255)
+        except Exception:
+            base_r, base_g, base_b = 255, 255, 255
+        if base_r == 0 and base_g == 0 and base_b == 0:
+            base_r, base_g, base_b = 255, 255, 255
+
+        for sub in mob.submobjects:
+            sub_a = get_anim_opacity(sub)
+            if sub_a <= 0:
+                continue
+            try:
+                pts = sub.get_points() if hasattr(sub, 'get_points') else sub.points
+                if len(pts) < 4:
+                    continue
+                num_segs = len(pts) // 4
+                if num_segs == 0:
+                    continue
+                sr = int(base_r * sub_a)
+                sg = int(base_g * sub_a)
+                sb = int(base_b * sub_a)
+                flat = []
+                for seg_i in range(num_segs):
+                    for pt_i in range(4):
+                        p = pts[seg_i * 4 + pt_i]
+                        vx, vy = manim_to_screen(p[0], p[1], w, h)
+                        flat.append(vx)
+                        flat.append(vy)
+                        flat.append(0.0)
+                arr = (ctypes.c_float * len(flat))(*flat)
+                self.dll.AddBezierPath(
+                    arr, num_segs * 4,
+                    sr, sg, sb, 0.7,
+                    sr, sg, sb, 1.0,
+                    1.0, 1, 1,
+                )
+            except Exception:
+                pass
 
     def _send_text_write(self, mob, letter_alphas, w, h):
         try:
@@ -1624,22 +1724,22 @@ class VulkanRender:
         txt = mob.original_text if hasattr(mob, 'original_text') else (mob.text if hasattr(mob, 'text') else "")
         self.dll.AddText(sx, sy, r, g, b, float(fs), float(progress), txt.encode('utf-8'))
 
-    def _color(self, mob):
+    def _color(self, mob, alpha=1.0):
         try:
             rgbas = mob.get_fill_rgbas()
             if len(rgbas) > 0:
                 r, g, b, a = rgbas[0]
-                return int(r * 255), int(g * 255), int(b * 255)
+                return int(r * 255 * alpha), int(g * 255 * alpha), int(b * 255 * alpha)
         except Exception:
             pass
         try:
             rgbas = mob.get_stroke_rgbas()
             if len(rgbas) > 0:
                 r, g, b, a = rgbas[0]
-                return int(r * 255), int(g * 255), int(b * 255)
+                return int(r * 255 * alpha), int(g * 255 * alpha), int(b * 255 * alpha)
         except Exception:
             pass
-        return 255, 255, 255
+        return int(255 * alpha), int(255 * alpha), int(255 * alpha)
 
     def _stroke_color(self, mob):
         try:
@@ -1717,7 +1817,21 @@ class VulkanRender:
                     all_mobjects.append(anim.mobject)
                 if anim.target_mobject not in all_mobjects:
                     all_mobjects.append(anim.target_mobject)
+                set_anim_opacity(anim.mobject, 1.0)
+                set_anim_opacity(anim.target_mobject, 1.0)
+                anim.mobject._transforming = True
+                anim.target_mobject._transforming = True
+            elif isinstance(anim, Transform):
+                if anim.mobject not in all_mobjects:
+                    all_mobjects.append(anim.mobject)
+                if anim.target_mobject not in all_mobjects:
+                    all_mobjects.append(anim.target_mobject)
                 set_anim_opacity(anim.target_mobject, 0.0)
+            elif isinstance(anim, FadeTransform):
+                if anim.mobject not in all_mobjects:
+                    all_mobjects.append(anim.mobject)
+                if anim.target_mobject not in all_mobjects:
+                    all_mobjects.append(anim.target_mobject)
             elif isinstance(anim, Succession):
                 for sub in anim.animations:
                     if isinstance(sub, (Create, Write, FadeIn, Rotating, Rotate)) and sub.mobject:
@@ -1736,7 +1850,15 @@ class VulkanRender:
                             all_mobjects.append(sub.mobject)
                         if sub.target_mobject not in all_mobjects:
                             all_mobjects.append(sub.target_mobject)
-                        set_anim_opacity(sub.target_mobject, 0.0)
+                        set_anim_opacity(sub.mobject, 1.0)
+                        set_anim_opacity(sub.target_mobject, 1.0)
+                        sub.mobject._transforming = True
+                        sub.target_mobject._transforming = True
+                    elif isinstance(sub, FadeTransform):
+                        if sub.mobject not in all_mobjects:
+                            all_mobjects.append(sub.mobject)
+                        if sub.target_mobject not in all_mobjects:
+                            all_mobjects.append(sub.target_mobject)
 
         for mob in all_mobjects:
             if mob not in self.scene.mobjects:
@@ -1777,6 +1899,10 @@ class VulkanRender:
             elapsed = time.time() - frame_start
             if elapsed < FRAME_DURATION:
                 time.sleep(FRAME_DURATION - elapsed)
+
+        for a in real_anims:
+            if hasattr(a, 'clean_up_from_scene'):
+                a.clean_up_from_scene(self.scene)
 
     def screenshot(self, path):
         path_bytes = path.encode('utf-8') if isinstance(path, str) else path

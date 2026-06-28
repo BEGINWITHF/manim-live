@@ -1,153 +1,216 @@
 from manim import *
+import math
 
 
 class ManimOriginalDemo(Scene):
     def construct(self):
-        title = Text("Animation API Demo", font_size=40)
+        title = Text("Vulkan Features Demo", font_size=42)
         title.shift(UP * 3.3)
         title_box = SurroundingRectangle(title, buff=0.3)
 
         self.play(
             Create(title_box, run_time=1.0),
+            Write(title, run_time=1.5),
         )
-        self.add(title)
-
         self.wait(0.5)
 
-        sec1 = Text("Rate Functions: smooth vs linear vs rush", font_size=24)
-        sec1.shift(UP * 2.0)
-        self.add(sec1)
-
-        box_smooth = Rectangle(width=2, height=1, color=BLUE)
-        box_smooth.set_fill(opacity=0)
-        box_smooth.set_stroke(width=3)
-        box_smooth.shift(LEFT * 5 + UP * 0.5)
-
-        box_linear = Rectangle(width=2, height=1, color=GREEN)
-        box_linear.set_fill(opacity=0)
-        box_linear.set_stroke(width=3)
-        box_linear.shift(UP * 0.5)
-
-        box_rush = Rectangle(width=2, height=1, color=RED)
-        box_rush.set_fill(opacity=0)
-        box_rush.set_stroke(width=3)
-        box_rush.shift(RIGHT * 5 + UP * 0.5)
-
-        lbl_smooth = Text("smooth", font_size=18)
-        lbl_smooth.shift(LEFT * 5 + DOWN * 0.5)
-        lbl_linear = Text("linear", font_size=18)
-        lbl_linear.shift(DOWN * 0.5)
-        lbl_rush = Text("rush_into", font_size=18)
-        lbl_rush.shift(RIGHT * 5 + DOWN * 0.5)
-
-        self.play(
-            Create(box_smooth, run_time=2.0, rate_func=smooth),
-            Create(box_linear, run_time=2.0, rate_func=linear),
-            Create(box_rush, run_time=2.0, rate_func=rush_into),
-        )
-        self.add(lbl_smooth, lbl_linear, lbl_rush)
-
-        self.wait(1.0)
-
-        sec2 = Text("there_and_back + double_smooth", font_size=24)
-        sec2.shift(UP * 2.0)
-        self.add(sec2)
-
-        box_tab = Rectangle(width=2, height=1, color=YELLOW)
-        box_tab.set_fill(opacity=0)
-        box_tab.set_stroke(width=3)
-        box_tab.shift(LEFT * 3 + DOWN * 1.5)
-
-        box_ds = Rectangle(width=2, height=1, color=ORANGE)
-        box_ds.set_fill(opacity=0)
-        box_ds.set_stroke(width=3)
-        box_ds.shift(RIGHT * 3 + DOWN * 1.5)
-
-        lbl_tab = Text("there_and_back", font_size=18)
-        lbl_tab.shift(LEFT * 3 + DOWN * 2.5)
-        lbl_ds = Text("double_smooth", font_size=18)
-        lbl_ds.shift(RIGHT * 3 + DOWN * 2.5)
-
-        self.play(
-            Create(box_tab, run_time=2.5, rate_func=there_and_back),
-            Create(box_ds, run_time=2.5, rate_func=double_smooth),
-        )
-        self.add(lbl_tab, lbl_ds)
-
-        self.wait(1.0)
-
-        sec3 = Text("Create + Succession stagger", font_size=24)
-        sec3.shift(UP * 2.0)
-        self.add(sec3)
-
-        stagger_dots = []
-        for i in range(8):
-            d = Dot(color=BLUE + i * 0.3, radius=0.15)
-            x = LEFT * 5.25 + RIGHT * i * 1.5
-            d.shift(x + DOWN * 1.0)
-            stagger_dots.append(d)
-
-        self.add(*stagger_dots)
-
-        self.play(
-            *[
-                Create(d, run_time=0.8, rate_func=smooth)
-                for d in stagger_dots
-            ],
-        )
-
-        self.wait(0.5)
-
-        self.play(
-            *[
-                Create(d, run_time=0.8, rate_func=rush_into)
-                for d in stagger_dots
-            ],
-        )
-
-        self.wait(1.0)
-
-        sec4 = Text("Add with run_time", font_size=24)
-        sec4.shift(UP * 2.0)
-        self.add(sec4)
-
-        add_rects = []
-        for i in range(5):
-            r = Rectangle(width=1.5, height=0.8, color=TEAL)
-            r.set_fill(opacity=0)
-            r.set_stroke(width=3)
-            x = LEFT * 5 + RIGHT * i * 2.5
-            r.shift(x + DOWN * 1.5)
-            add_rects.append(r)
-
-        for i, r in enumerate(add_rects):
-            self.play(Succession(Wait(0.3), Create(r, run_time=0.3)))
+        self.section_rotation()
+        self.section_fade()
+        self.section_transform_matching()
+        self.section_write_stagger()
+        self.section_rate_functions()
 
         self.wait(2.0)
 
-        sec5 = Text("Lingering + slow_into", font_size=24)
-        sec5.shift(UP * 2.0)
-        self.add(sec5)
+    def section_rotation(self):
+        for m in self.mobjects:
+            m.set_opacity(0)
+        self.wait(0.1)
 
-        box_linger = Rectangle(width=2, height=1, color=PURPLE)
-        box_linger.set_fill(opacity=0)
-        box_linger.set_stroke(width=3)
-        box_linger.shift(LEFT * 3 + DOWN * 1.5)
+        sec = Text("Rotation", font_size=28)
+        sec.shift(UP * 2.5)
+        self.add(sec)
 
-        box_slow = Rectangle(width=2, height=1, color=MAROON)
-        box_slow.set_fill(opacity=0)
-        box_slow.set_stroke(width=3)
-        box_slow.shift(RIGHT * 3 + DOWN * 1.5)
+        sq = Square(side_length=1.2, color=BLUE)
+        sq.set_fill(BLUE, opacity=0.6)
+        sq.set_stroke(width=3)
+        sq.shift(LEFT * 4.5)
 
-        lbl_linger = Text("lingering", font_size=18)
-        lbl_linger.shift(LEFT * 3 + DOWN * 2.5)
-        lbl_slow = Text("slow_into", font_size=18)
-        lbl_slow.shift(RIGHT * 3 + DOWN * 2.5)
+        circ = Circle(radius=0.6, color=GREEN)
+        circ.set_fill(GREEN, opacity=0.6)
+        circ.set_stroke(width=3)
+        circ.shift(LEFT * 1.5)
+
+        tri = Triangle(color=RED, fill_opacity=0.6, stroke_width=3)
+        tri.scale(0.8)
+        tri.shift(RIGHT * 1.5)
+
+        arrow = Arrow(ORIGIN, RIGHT * 2, color=YELLOW, stroke_width=4)
+        arrow.shift(RIGHT * 4.5)
+
+        lbl_sq = Text("Rotate", font_size=16)
+        lbl_sq.shift(LEFT * 4.5 + DOWN * 1.5)
+        lbl_circ = Text("Rotating", font_size=16)
+        lbl_circ.shift(LEFT * 1.5 + DOWN * 1.5)
+        lbl_tri = Text("90°", font_size=16)
+        lbl_tri.shift(RIGHT * 1.5 + DOWN * 1.5)
+
+        self.add(sq, circ, tri, arrow, lbl_sq, lbl_circ, lbl_tri)
+        self.wait(0.3)
+
+        self.play(Rotate(sq, angle=PI / 2, run_time=1.5))
+        self.wait(0.3)
+
+        self.play(Rotating(tri, angle=2 * PI, run_time=2.0))
+        self.wait(0.3)
+
+        self.play(Rotating(arrow, angle=2 * PI, run_time=2.0))
+        self.wait(1.0)
+
+    def section_fade(self):
+        for m in self.mobjects:
+            m.set_opacity(0)
+        self.wait(0.1)
+
+        sec = Text("FadeIn & FadeOut", font_size=28)
+        sec.shift(UP * 2.5)
+        self.add(sec)
+
+        sq1 = Square(side_length=1.0, color=BLUE)
+        sq1.set_fill(BLUE, opacity=0.7)
+        sq1.set_stroke(width=3)
+        sq1.shift(LEFT * 4)
+
+        sq2 = Square(side_length=1.0, color=GREEN)
+        sq2.set_fill(GREEN, opacity=0.7)
+        sq2.set_stroke(width=3)
+        sq2.shift(LEFT * 1.5)
+
+        sq3 = Square(side_length=1.0, color=RED)
+        sq3.set_fill(RED, opacity=0.7)
+        sq3.set_stroke(width=3)
+        sq3.shift(RIGHT * 1.5)
+
+        sq4 = Square(side_length=1.0, color=YELLOW)
+        sq4.set_fill(YELLOW, opacity=0.7)
+        sq4.set_stroke(width=3)
+        sq4.shift(RIGHT * 4)
+
+        lbl1 = Text("FadeIn", font_size=16)
+        lbl1.shift(LEFT * 4 + DOWN * 1.5)
+        lbl2 = Text("FadeOut", font_size=16)
+        lbl2.shift(LEFT * 1.5 + DOWN * 1.5)
+        lbl3 = Text("FadeTransform", font_size=16)
+        lbl3.shift(RIGHT * 1.5 + DOWN * 1.5)
+        lbl4 = Text("Shift", font_size=16)
+        lbl4.shift(RIGHT * 4 + DOWN * 1.5)
+
+        self.add(lbl1, lbl2, lbl3, lbl4)
+
+        self.play(FadeIn(sq1, run_time=1.0))
+        self.wait(0.3)
+
+        self.add(sq2)
+        self.play(FadeOut(sq2, run_time=1.0))
+        self.wait(0.3)
+
+        self.add(sq3)
+        self.play(FadeTransform(sq3, sq4, run_time=1.5))
+        self.wait(1.0)
+
+    def section_transform_matching(self):
+        for m in self.mobjects:
+            m.set_opacity(0)
+        self.wait(0.1)
+
+        sec = Text("Transform Matching Shapes", font_size=28)
+        sec.shift(UP * 2.5)
+        self.add(sec)
+
+        src = Text("abc", font_size=48)
+        src.shift(LEFT * 3 + UP * 0.5)
+
+        tar = Text("xyz", font_size=48)
+        tar.shift(RIGHT * 3 + UP * 0.5)
+
+        arrow_lbl = Text("→", font_size=36)
+        arrow_lbl.shift(UP * 0.5)
+
+        self.play(Write(src, run_time=1.5))
+        self.add(tar, arrow_lbl)
+        self.wait(0.5)
 
         self.play(
-            Create(box_linger, run_time=2.5, rate_func=lingering),
-            Create(box_slow, run_time=2.5, rate_func=slow_into),
+            TransformMatchingShapes(src, tar, run_time=2.0),
         )
-        self.add(lbl_linger, lbl_slow)
+        self.wait(1.5)
 
-        self.wait(3.0)
+    def section_write_stagger(self):
+        for m in self.mobjects:
+            m.set_opacity(0)
+        self.wait(0.1)
+
+        sec = Text("Write Stagger Effect", font_size=28)
+        sec.shift(UP * 2.5)
+        self.add(sec)
+
+        line1 = Text("Staggered writing", font_size=32)
+        line1.shift(UP * 1.0)
+
+        line2 = Text("with lag ratio", font_size=32)
+        line2.shift(DOWN * 0.0)
+
+        line3 = Text("animation timing", font_size=32)
+        line3.shift(DOWN * 1.0)
+
+        self.play(Write(line1, run_time=2.0, lag_ratio=0.15))
+        self.wait(0.3)
+        self.play(Write(line2, run_time=2.0, lag_ratio=0.15))
+        self.wait(0.3)
+        self.play(Write(line3, run_time=2.0, lag_ratio=0.15))
+        self.wait(1.0)
+
+    def section_rate_functions(self):
+        for m in self.mobjects:
+            m.set_opacity(0)
+        self.wait(0.1)
+
+        sec = Text("Rate Functions", font_size=28)
+        sec.shift(UP * 2.5)
+        self.add(sec)
+
+        funcs = [
+            ("smooth", smooth),
+            ("linear", linear),
+            ("rush_into", rush_into),
+            ("rush_from", rush_from),
+            ("there_and_back", there_and_back),
+            ("double_smooth", double_smooth),
+        ]
+
+        circles = []
+        labels = []
+        for i, (name, func) in enumerate(funcs):
+            col = i % 3
+            row = i // 3
+            x = (col - 1) * 3.5
+            y = 0.8 - row * 2.0
+
+            c = Circle(radius=0.4, color=BLUE)
+            c.set_fill(BLUE, opacity=0.7)
+            c.set_stroke(width=2)
+            c.shift(LEFT * x + UP * y)
+
+            lbl = Text(name, font_size=14)
+            lbl.shift(LEFT * x + UP * (y - 0.7))
+
+            circles.append((c, func))
+            labels.append(lbl)
+
+        for lbl in labels:
+            self.add(lbl)
+
+        for c, func in circles:
+            self.play(Create(c, rate_func=func, run_time=1.5))
+
+        self.wait(1.0)
