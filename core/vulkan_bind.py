@@ -538,15 +538,7 @@ class FadeIn(Animation):
         self._start_positions = []
         for mob in self.mobjects:
             set_anim_opacity(mob, 0.0)
-            if self.target_position is not None:
-                if hasattr(self.target_position, 'get_center'):
-                    pos = self.target_position.get_center()
-                else:
-                    pos = self.target_position
-                start_pos = mob.get_center()
-                self._start_positions.append(start_pos - pos)
-            else:
-                self._start_positions.append(None)
+            self._start_positions.append(mob.get_center().copy())
 
     def interpolate(self, t):
         alpha = (t - self.start_time) / self.run_time if self.run_time > 0 else 1.0
@@ -564,13 +556,15 @@ class FadeIn(Animation):
                 mob._last_fade_scale = scale_factor
 
             if self.fade_shift is not None and alpha < 1.0:
-                offset = self.fade_shift * (1.0 - alpha)
-                mob.move_to(mob.get_center() + offset * 0.01)
+                mob.move_to(self._start_positions[i] + self.fade_shift * (1.0 - alpha))
 
-            if self.target_position is not None and i < len(self._start_positions) and self._start_positions[i] is not None:
-                start_offset = self._start_positions[i]
-                current_offset = start_offset * (1.0 - alpha)
-                mob.move_to(mob.get_center() + current_offset * 0.01)
+            if self.target_position is not None and i < len(self._start_positions):
+                if hasattr(self.target_position, 'get_center'):
+                    target = self.target_position.get_center()
+                else:
+                    target = np.array(self.target_position, dtype=float)
+                original = self._start_positions[i]
+                mob.move_to(target + (original - target) * alpha)
 
     def finish(self):
         super().finish()
@@ -597,9 +591,13 @@ class FadeOut(Animation):
         super().__init__(mobjects[0] if mobjects else None, run_time=run_time, **kwargs)
         self.mobjects = list(mobjects)
         self.remover = True
+        self._start_positions = []
 
     def begin(self, t):
         super().begin(t)
+        self._start_positions = []
+        for mob in self.mobjects:
+            self._start_positions.append(mob.get_center().copy())
 
     def interpolate(self, t):
         alpha = (t - self.start_time) / self.run_time if self.run_time > 0 else 1.0
@@ -610,7 +608,7 @@ class FadeOut(Animation):
 
         opacity = 1.0 - alpha
 
-        for mob in self.mobjects:
+        for i, mob in enumerate(self.mobjects):
             set_anim_opacity(mob, opacity)
 
             if self.fade_scale != 1.0:
@@ -619,17 +617,15 @@ class FadeOut(Animation):
                 mob._last_fade_scale = scale_factor
 
             if self.fade_shift is not None and alpha > 0.0:
-                offset = self.fade_shift * alpha
-                mob.move_to(mob.get_center() + offset * 0.01)
+                mob.move_to(self._start_positions[i] + self.fade_shift * alpha)
 
             if self.target_position is not None and alpha > 0.0:
                 if hasattr(self.target_position, 'get_center'):
                     target = self.target_position.get_center()
                 else:
-                    target = self.target_position
-                current = mob.get_center()
-                direction = target - current
-                mob.move_to(current + direction * alpha * 0.01)
+                    target = np.array(self.target_position, dtype=float)
+                original = self._start_positions[i]
+                mob.move_to(original + (target - original) * alpha)
 
     def finish(self):
         super().finish()
@@ -827,102 +823,109 @@ class TransformMatchingAbstractBase(Animation):
         self.transform_mismatches = transform_mismatches
         self.fade_transform_mismatches = fade_transform_mismatches
         self.key_map = key_map or {}
-        self._source_shape_map = {}
-        self._target_shape_map = {}
-        self._matched_anims = []
-        self._fade_out_anims = []
-        self._fade_in_anims = []
+        self._anims = []
         self._scene = None
         super().__init__(mobject, run_time=run_time, **kwargs)
 
     def get_shape_map(self, mobject):
         shape_map = {}
-        parts = self.get_mobject_parts(mobject)
-        for part in parts:
-            key = self.get_mobject_key(part)
-            shape_map[key] = part
+        for sm in self.get_mobject_parts(mobject):
+            key = self.get_mobject_key(sm)
+            if key not in shape_map:
+                shape_map[key] = VGroup()
+            shape_map[key].add(sm)
         return shape_map
 
     def begin(self, t):
         super().begin(t)
-        self._source_shape_map = self.get_shape_map(self.mobject)
-        self._target_shape_map = self.get_shape_map(self.target_mobject)
-        set_anim_opacity(self.mobject, 1.0)
-        set_anim_opacity(self.target_mobject, 1.0)
+        if hasattr(self.mobject, '_letter_alphas'):
+            self.mobject._letter_alphas = None
+        if hasattr(self.target_mobject, '_letter_alphas'):
+            self.target_mobject._letter_alphas = None
 
-        source_keys = set(self._source_shape_map.keys())
-        target_keys = set(self._target_shape_map.keys())
+        source_map = self.get_shape_map(self.mobject)
+        target_map = self.get_shape_map(self.target_mobject)
 
-        mapped_target_keys = set()
-        for sk, tk in self.key_map.items():
-            if sk in source_keys and tk in target_keys:
-                source_part = self._source_shape_map[sk]
-                target_part = self._target_shape_map[tk]
-                anim = Transform(source_part, target_part, run_time=self.run_time)
-                self._matched_anims.append(anim)
-                mapped_target_keys.add(tk)
+        transform_source = VGroup()
+        transform_target = VGroup()
+        for key in set(source_map).intersection(target_map):
+            transform_source.add(source_map[key])
+            transform_target.add(target_map[key])
+        self._anims.append(
+            Transform(transform_source, transform_target, run_time=self.run_time)
+        )
 
-        for key in source_keys:
-            if key in target_keys and key not in mapped_target_keys:
-                source_part = self._source_shape_map[key]
-                target_part = self._target_shape_map[key]
-                anim = Transform(source_part, target_part, run_time=self.run_time)
-                self._matched_anims.append(anim)
-                mapped_target_keys.add(key)
+        key_mapped_source = VGroup()
+        key_mapped_target = VGroup()
+        for key1, key2 in self.key_map.items():
+            if key1 in source_map and key2 in target_map:
+                key_mapped_source.add(source_map[key1])
+                key_mapped_target.add(target_map[key2])
+                source_map.pop(key1, None)
+                target_map.pop(key2, None)
+        if len(key_mapped_source.submobjects) > 0:
+            self._anims.append(
+                FadeTransform(key_mapped_source, key_mapped_target, run_time=self.run_time)
+            )
 
-        for key in source_keys:
-            if key not in target_keys:
-                self._fade_out_anims.append(self._source_shape_map[key])
+        fade_source = VGroup()
+        fade_target = VGroup()
+        for key in set(source_map).difference(target_map):
+            fade_source.add(source_map[key])
+        for key in set(target_map).difference(source_map):
+            fade_target.add(target_map[key])
+        self._fade_target_copy = fade_target.copy()
 
-        for key in target_keys:
-            if key not in source_keys and key not in mapped_target_keys:
-                self._fade_in_anims.append(self._target_shape_map[key])
+        if self.transform_mismatches:
+            self._anims.append(
+                Transform(fade_source, fade_target, run_time=self.run_time,
+                          replace_mobject_with_target_in_scene=True)
+            )
+        elif self.fade_transform_mismatches:
+            self._anims.append(
+                FadeTransformPieces(fade_source, fade_target, run_time=self.run_time)
+            )
+        else:
+            self._anims.append(
+                FadeOut(fade_source, target_position=fade_target, run_time=self.run_time)
+            )
+            self._anims.append(
+                FadeIn(self._fade_target_copy, target_position=fade_target, run_time=self.run_time)
+            )
 
-        for anim in self._matched_anims:
+        for anim in self._anims:
             anim.begin(t)
 
-        for part in self._fade_out_anims:
-            set_anim_opacity(part, 1.0)
-
-        for part in self._fade_in_anims:
-            set_anim_opacity(part, 0.0)
-
     def interpolate(self, t):
-        alpha = (t - self.start_time) / self.run_time if self.run_time > 0 else 1.0
-        alpha = max(0.0, min(1.0, alpha))
-        alpha = self.rate_func(alpha)
-
-        for anim in self._matched_anims:
+        for anim in self._anims:
             anim.interpolate(t)
-
-        for part in self._fade_out_anims:
-            set_anim_opacity(part, 1.0 - alpha)
-
-        for part in self._fade_in_anims:
-            set_anim_opacity(part, alpha)
 
     def finish(self):
         super().finish()
-        for anim in self._matched_anims:
+        for anim in self._anims:
             anim.finish()
-        for part in self._fade_out_anims:
-            set_anim_opacity(part, 0.0)
-        for part in self._fade_in_anims:
-            set_anim_opacity(part, 1.0)
 
     def get_all_mobjects(self):
         return [self.mobject, self.target_mobject]
 
     def clean_up_from_scene(self, scene):
+        for anim in self._anims:
+            anim.interpolate(0)
         if self.mobject in scene.mobjects:
             scene.remove(self.mobject)
+        if self._fade_target_copy in scene.mobjects:
+            scene.remove(self._fade_target_copy)
         if self.target_mobject not in scene.mobjects:
             scene.add(self.target_mobject)
-        set_anim_opacity(self.mobject, 0.0)
-        set_anim_opacity(self.target_mobject, 1.0)
+        if hasattr(self.mobject, '_transforming'):
+            self.mobject._transforming = False
+        if hasattr(self.target_mobject, '_transforming'):
+            self.target_mobject._transforming = False
 
     @staticmethod
     def get_mobject_parts(mobject):
+        if hasattr(mobject, 'family_members_with_points'):
+            return mobject.family_members_with_points()
         if hasattr(mobject, 'submobjects') and mobject.submobjects:
             return list(mobject.submobjects)
         return [mobject]
@@ -935,27 +938,21 @@ class TransformMatchingAbstractBase(Animation):
 class TransformMatchingShapes(TransformMatchingAbstractBase):
     @staticmethod
     def get_mobject_parts(mobject):
+        if hasattr(mobject, 'family_members_with_points'):
+            return mobject.family_members_with_points()
         if hasattr(mobject, 'submobjects') and mobject.submobjects:
             return list(mobject.submobjects)
         return [mobject]
 
     @staticmethod
     def get_mobject_key(mobject):
-        pts = []
-        if hasattr(mobject, 'get_points'):
-            raw = mobject.get_points()
-            if hasattr(raw, 'tolist'):
-                pts = raw.tolist()
-            else:
-                pts = list(raw)
-        elif hasattr(mobject, 'points'):
-            raw = mobject.points
-            if hasattr(raw, 'tolist'):
-                pts = raw.tolist()
-            else:
-                pts = list(raw)
-        normalized = _normalize_points(pts)
-        return hash(normalized)
+        mobject.save_state()
+        mobject.center()
+        mobject.set(height=1)
+        rounded_points = np.round(mobject.points, 3) + 0.0
+        result = hash(rounded_points.tobytes())
+        mobject.restore()
+        return result
 
 
 class TransformMatchingTex(TransformMatchingAbstractBase):
@@ -1533,11 +1530,10 @@ class VulkanRender:
             self.dll.AddPoint(sx, sy, r, g, b)
 
         elif isinstance(mob, Text):
-            letter_alphas = getattr(mob, '_letter_alphas', None)
-            if letter_alphas is not None and hasattr(mob, 'submobjects') and mob.submobjects:
-                self._send_text_write(mob, letter_alphas, w, h)
-            elif getattr(mob, '_transforming', False) and hasattr(mob, 'submobjects') and mob.submobjects:
+            if getattr(mob, '_transforming', False) and hasattr(mob, 'submobjects') and mob.submobjects:
                 self._send_transformed_text(mob, w, h)
+            elif getattr(mob, '_letter_alphas', None) is not None and hasattr(mob, 'submobjects') and mob.submobjects:
+                self._send_text_write(mob, mob._letter_alphas, w, h)
             else:
                 self._send_text_bitmap(mob, w, h)
 
@@ -1777,10 +1773,22 @@ class VulkanRender:
                     all_mobjects.append(anim.mobject)
                 if anim.target_mobject not in all_mobjects:
                     all_mobjects.append(anim.target_mobject)
-                set_anim_opacity(anim.mobject, 1.0)
-                set_anim_opacity(anim.target_mobject, 1.0)
+                if hasattr(anim, '_fade_target_copy') and anim._fade_target_copy not in all_mobjects:
+                    all_mobjects.append(anim._fade_target_copy)
                 anim.mobject._transforming = True
                 anim.target_mobject._transforming = True
+                for sub_anim in getattr(anim, '_anims', []):
+                    if isinstance(sub_anim, (FadeIn, FadeOut)):
+                        for mob in sub_anim.mobjects:
+                            if isinstance(sub_anim, FadeIn):
+                                set_anim_opacity(mob, 0.0)
+                            if mob not in all_mobjects:
+                                all_mobjects.append(mob)
+                    elif isinstance(sub_anim, Transform):
+                        if sub_anim.mobject not in all_mobjects:
+                            all_mobjects.append(sub_anim.mobject)
+                        if sub_anim.target_mobject not in all_mobjects:
+                            all_mobjects.append(sub_anim.target_mobject)
             elif isinstance(anim, Transform):
                 if anim.mobject not in all_mobjects:
                     all_mobjects.append(anim.mobject)
@@ -1810,10 +1818,22 @@ class VulkanRender:
                             all_mobjects.append(sub.mobject)
                         if sub.target_mobject not in all_mobjects:
                             all_mobjects.append(sub.target_mobject)
-                        set_anim_opacity(sub.mobject, 1.0)
-                        set_anim_opacity(sub.target_mobject, 1.0)
+                        if hasattr(sub, '_fade_target_copy') and sub._fade_target_copy not in all_mobjects:
+                            all_mobjects.append(sub._fade_target_copy)
                         sub.mobject._transforming = True
                         sub.target_mobject._transforming = True
+                        for sub_anim in getattr(sub, '_anims', []):
+                            if isinstance(sub_anim, (FadeIn, FadeOut)):
+                                for mob in sub_anim.mobjects:
+                                    if isinstance(sub_anim, FadeIn):
+                                        set_anim_opacity(mob, 0.0)
+                                    if mob not in all_mobjects:
+                                        all_mobjects.append(mob)
+                            elif isinstance(sub_anim, Transform):
+                                if sub_anim.mobject not in all_mobjects:
+                                    all_mobjects.append(sub_anim.mobject)
+                                if sub_anim.target_mobject not in all_mobjects:
+                                    all_mobjects.append(sub_anim.target_mobject)
                     elif isinstance(sub, FadeTransform):
                         if sub.mobject not in all_mobjects:
                             all_mobjects.append(sub.mobject)

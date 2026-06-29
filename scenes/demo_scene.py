@@ -17,7 +17,7 @@ class VulkanShapeShowcase(Scene):
         render = VulkanRender(1920, 1080)
         render.scene = self
 
-        title = Text("Vulkan Features Demo", font_size=42)
+        title = Text("Vulkan Features Demo你好", font_size=42)
         title.shift(UP * 3.3)
         title_box = SurroundingRectangle(title, buff=0.3)
 
