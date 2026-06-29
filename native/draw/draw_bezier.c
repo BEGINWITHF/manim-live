@@ -198,6 +198,8 @@ static void tessellate_stroke(BezierPathObj *bp) {
 static float g_cross_x[4096];
 static int g_cross_dir[4096];
 
+static int g_pt_sub[ MAX_BEZIER_SEGMENTS * BEZIER_SAMPLES + 1 ];
+
 static void tessellate_fill(BezierPathObj *bp) {
     float fr = bp->fr / 255.0f;
     float fg = bp->fg / 255.0f;
@@ -205,19 +207,25 @@ static void tessellate_fill(BezierPathObj *bp) {
     float fo = bp->fill_opacity;
     float cr = fr * fo, cg = fg * fo, cb = fb * fo;
 
-    int total_segs = bp->num_segs;
     int total_pts = 0;
 
-    for (int si = 0; si < total_segs; si++) {
-        const CubicSeg *s = &bp->segs[si];
-        for (int i = 0; i < BEZIER_SAMPLES; i++) {
-            float t = (float)i / (float)BEZIER_SAMPLES;
-            sample_cubic(s, t, &g_fill_pts[total_pts][0], &g_fill_pts[total_pts][1]);
-            total_pts++;
-            if (total_pts >= MAX_BEZIER_SEGMENTS * BEZIER_SAMPLES) goto done_sample;
+    for (int s = 0; s < bp->sub_count; s++) {
+        int start = bp->sub_seg_start[s];
+        int end = (s < bp->sub_count - 1) ? bp->sub_seg_start[s + 1] : bp->num_segs;
+
+        int sub_start = total_pts;
+        for (int si = start; si < end; si++) {
+            const CubicSeg *seg = &bp->segs[si];
+            for (int i = 0; i < BEZIER_SAMPLES; i++) {
+                float t = (float)i / (float)BEZIER_SAMPLES;
+                sample_cubic(seg, t, &g_fill_pts[total_pts][0], &g_fill_pts[total_pts][1]);
+                g_pt_sub[total_pts] = s;
+                total_pts++;
+                if (total_pts >= MAX_BEZIER_SEGMENTS * BEZIER_SAMPLES) goto done_sample_all;
+            }
         }
     }
-done_sample:
+done_sample_all:
     if (total_pts < 3) return;
 
     float y_min = g_fill_pts[0][1], y_max = g_fill_pts[0][1];
@@ -232,21 +240,31 @@ done_sample:
     for (int y = y_start; y <= y_end; y++) {
         float scan_y = (float)y + 0.5f;
         int n_cross = 0;
-        int last_idx = total_pts - 1;
 
         for (int i = 0; i < total_pts && n_cross < 4096; i++) {
+            int j;
+            if (i + 1 < total_pts && g_pt_sub[i] == g_pt_sub[i + 1]) {
+                j = i + 1;
+            } else {
+                int s = g_pt_sub[i];
+                int sub_seg_end = (s < bp->sub_count - 1) ? bp->sub_seg_start[s + 1] : bp->num_segs;
+                int sub_start_idx = 0;
+                for (int k = 0; k < total_pts; k++) {
+                    if (g_pt_sub[k] == s) { sub_start_idx = k; break; }
+                }
+                j = sub_start_idx;
+            }
             float yi = g_fill_pts[i][1];
-            float yl = g_fill_pts[last_idx][1];
-            float dy = yl - yi;
-            if (fabsf(dy) < 0.0001f) { last_idx = i; continue; }
-            float ey0 = yi, ey1 = yl;
+            float yj = g_fill_pts[j][1];
+            float dy = yj - yi;
+            if (fabsf(dy) < 0.0001f) continue;
+            float ey0 = yi, ey1 = yj;
             if (ey0 > ey1) { float tmp = ey0; ey0 = ey1; ey1 = tmp; }
-            if (scan_y <= ey0 || scan_y > ey1) { last_idx = i; continue; }
+            if (scan_y <= ey0 || scan_y > ey1) continue;
             float t = (scan_y - yi) / dy;
-            g_cross_x[n_cross] = g_fill_pts[i][0] + t * (g_fill_pts[last_idx][0] - g_fill_pts[i][0]);
+            g_cross_x[n_cross] = g_fill_pts[i][0] + t * (g_fill_pts[j][0] - g_fill_pts[i][0]);
             g_cross_dir[n_cross] = (dy > 0) ? 1 : -1;
             n_cross++;
-            last_idx = i;
         }
 
         for (int a = 1; a < n_cross; a++) {
@@ -262,10 +280,10 @@ done_sample:
             g_cross_dir[b + 1] = key_d;
         }
 
-        int winding = 0;
+        int inside = 0;
         for (int i = 0; i < n_cross; i++) {
-            winding += g_cross_dir[i];
-            if (winding != 0 && i + 1 < n_cross) {
+            inside ^= 1;
+            if (inside && i + 1 < n_cross) {
                 float xl = g_cross_x[i];
                 float xr = g_cross_x[i + 1];
                 if (xr <= xl) continue;

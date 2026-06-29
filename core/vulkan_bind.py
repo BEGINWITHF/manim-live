@@ -1060,18 +1060,6 @@ class VulkanRender:
             ctypes.c_float, ctypes.c_float,
             ctypes.c_int, ctypes.c_int, ctypes.c_int
         ]
-        self.dll.AddText.restype = None
-        self.dll.AddText.argtypes = [
-            ctypes.c_float, ctypes.c_float,
-            ctypes.c_int, ctypes.c_int, ctypes.c_int,
-            ctypes.c_float, ctypes.c_float, ctypes.c_char_p
-        ]
-        self.dll.Text_LoadFont.restype = ctypes.c_int
-        self.dll.Text_LoadFont.argtypes = [ctypes.c_char_p, ctypes.c_int]
-
-        self.dll.SaveScreenshot.restype = ctypes.c_int
-        self.dll.SaveScreenshot.argtypes = [ctypes.c_char_p]
-
         self.dll.AddBezierPath.restype = None
         self.dll.AddBezierPath.argtypes = [
             ctypes.POINTER(ctypes.c_float), ctypes.c_int,
@@ -1080,52 +1068,11 @@ class VulkanRender:
             ctypes.c_float, ctypes.c_int, ctypes.c_int,
         ]
 
+        self.dll.SaveScreenshot.restype = ctypes.c_int
+        self.dll.SaveScreenshot.argtypes = [ctypes.c_char_p]
+
         if self.dll.Vulkan_Init(w, h) != 1:
             raise RuntimeError("Vulkan_Init failed")
-
-        self._load_font()
-
-    def _load_font(self):
-        custom = os.environ.get('MANIM_FONT', '')
-        if custom and os.path.exists(custom):
-            with open(custom, 'rb') as f:
-                data = f.read()
-            buf = ctypes.create_string_buffer(data)
-            self.dll.Text_LoadFont(buf, len(data))
-
-        font_paths = []
-        if os.name == 'nt':
-            windir = os.environ.get('WINDIR', r'C:\Windows')
-            font_paths = [
-                os.path.join(windir, 'Fonts', 'times.ttf'),
-                os.path.join(windir, 'Fonts', 'timesbd.ttf'),
-                os.path.join(windir, 'Fonts', 'timesi.ttf'),
-                os.path.join(windir, 'Fonts', 'malgun.ttf'),
-                os.path.join(windir, 'Fonts', 'NotoSansSC-VF.ttf'),
-                os.path.join(windir, 'Fonts', 'NotoSansJP-VF.ttf'),
-                os.path.join(windir, 'Fonts', 'msyh.ttc'),
-                os.path.join(windir, 'Fonts', 'simhei.ttf'),
-                os.path.join(windir, 'Fonts', 'msgothic.ttc'),
-                os.path.join(windir, 'Fonts', 'segoeui.ttf'),
-                os.path.join(windir, 'Fonts', 'arial.ttf'),
-            ]
-        else:
-            font_paths = [
-                '/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttf',
-                '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
-                '/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf',
-                '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-                '/usr/share/fonts/TTF/DejaVuSans.ttf',
-            ]
-        for fp in font_paths:
-            if os.path.exists(fp):
-                with open(fp, 'rb') as f:
-                    data = f.read()
-                buf = ctypes.create_string_buffer(data)
-                self.dll.Text_LoadFont(buf, len(data))
-
-        if self.dll.Text_LoadFont.argtypes is None:
-            print("[WARNING] No system font found, text will not render")
 
     def sync(self, scene, angle=0.0):
         self.dll.ClearShapes()
@@ -1685,44 +1632,57 @@ class VulkanRender:
             n = len(flat) // 3
             arr = (ctypes.c_float * len(flat))(*flat)
 
-            if sub_alpha < 0.5:
-                progress = min(1.0, sub_alpha * 2.0)
-                self.dll.AddBezierPath(
-                    arr, n,
-                    base_r, base_g, base_b, 0.7,
-                    base_r, base_g, base_b, 0.0,
-                    progress, 1, 0,
-                )
-            else:
-                fill_alpha = (sub_alpha - 0.5) * 2.0
-                self.dll.AddBezierPath(
-                    arr, n,
-                    base_r, base_g, base_b, 0.7,
-                    base_r, base_g, base_b, fill_alpha,
-                    1.0, 1, 1,
-                )
+            stroke_progress = min(1.0, sub_alpha * 2.5)
+            stroke_fade = max(0.0, 1.0 - max(0.0, (sub_alpha - 0.4) * 2.5))
+            fill_alpha = max(0.0, (sub_alpha - 0.3) * 2.0)
+
+            sr = int(base_r * stroke_fade)
+            sg = int(base_g * stroke_fade)
+            sb = int(base_b * stroke_fade)
+
+            self.dll.AddBezierPath(
+                arr, n,
+                sr, sg, sb, 0.7,
+                base_r, base_g, base_b, fill_alpha,
+                stroke_progress, 1, 1 if fill_alpha > 0 else 0,
+            )
 
     def _send_text_bitmap(self, mob, w, h):
-        cx, cy, _ = mob.get_center()
-        raw_fs = mob.font_size if hasattr(mob, 'font_size') else 48
-        scale_factor = min(w / self.init_w, h / self.init_h) if self.init_w > 0 and self.init_h > 0 else 1.0
-        fs = raw_fs * scale_factor * 2.34
-        manim_h = raw_fs * 0.0098
-        cy = cy - manim_h * 0.35
-        sx, sy = manim_to_screen(cx, cy, w, h)
         try:
             c = mob.get_color()
-            r, g, b = int(c[0] * 255), int(c[1] * 255), int(c[2] * 255)
+            base_r, base_g, base_b = int(c[0] * 255), int(c[1] * 255), int(c[2] * 255)
         except Exception:
-            r, g, b = 255, 255, 255
-        if r == 0 and g == 0 and b == 0:
-            r, g, b = 255, 255, 255
+            base_r, base_g, base_b = 255, 255, 255
+        if base_r == 0 and base_g == 0 and base_b == 0:
+            base_r, base_g, base_b = 255, 255, 255
         fo = mob.get_fill_opacity() if hasattr(mob, 'get_fill_opacity') else 1.0
         if fo <= 0:
             return
         progress = getattr(mob, '_vulkan_progress', 1.0)
-        txt = mob.original_text if hasattr(mob, 'original_text') else (mob.text if hasattr(mob, 'text') else "")
-        self.dll.AddText(sx, sy, r, g, b, float(fs), float(progress), txt.encode('utf-8'))
+        for sub in mob.submobjects:
+            try:
+                pts = sub.get_points()
+            except Exception:
+                continue
+            if len(pts) < 8:
+                continue
+            num_segs = len(pts) // 4
+            if num_segs == 0:
+                continue
+            flat = []
+            for p in pts:
+                sx, sy = manim_to_screen(p[0], p[1], w, h)
+                flat.append(sx)
+                flat.append(sy)
+                flat.append(0.0)
+            arr = (ctypes.c_float * len(flat))(*flat)
+            n = len(flat) // 3
+            self.dll.AddBezierPath(
+                arr, n,
+                base_r, base_g, base_b, 0.7,
+                base_r, base_g, base_b, 1.0,
+                progress, 1, 1,
+            )
 
     def _color(self, mob, alpha=1.0):
         try:
