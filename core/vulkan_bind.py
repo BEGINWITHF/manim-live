@@ -230,7 +230,6 @@ class Animation:
         alpha = max(0.0, min(1.0, alpha))
         if self.reverse_rate_function:
             alpha = 1.0 - alpha
-        alpha = self.rate_func(alpha)
         self.interpolate_mobject(alpha)
 
     def interpolate_mobject(self, alpha):
@@ -240,18 +239,15 @@ class Animation:
         pass
 
     def get_sub_alpha(self, alpha, index, num_submobjects):
-        if num_submobjects <= 1:
-            return alpha
         lag_ratio = self.lag_ratio
-        if lag_ratio == 0:
-            return alpha
         full_length = (num_submobjects - 1) * lag_ratio + 1
         value = alpha * full_length
         lower = index * lag_ratio
+        raw_sub_alpha = max(0.0, min(1.0, value - lower))
         if self.reverse_rate_function:
-            return self.rate_func(1.0 - (value - lower))
+            return self.rate_func(1.0 - raw_sub_alpha)
         else:
-            return self.rate_func(max(0.0, value - lower))
+            return self.rate_func(raw_sub_alpha)
 
     def clean_up_from_scene(self, scene):
         pass
@@ -351,13 +347,12 @@ class DrawBorderThenFill(Animation):
         alpha = max(0.0, min(1.0, alpha))
         if self.reverse_rate_function:
             alpha = 1.0 - alpha
-        alpha = self.rate_func(alpha)
         self._apply_to_submobjects(alpha)
 
     def _apply_to_submobjects(self, alpha):
         mob = self.mobject
         if not hasattr(mob, 'submobjects') or not mob.submobjects:
-            mob._vulkan_progress = alpha
+            mob._vulkan_progress = self.rate_func(alpha)
             return
         num_subs = len(mob.submobjects)
         letter_alphas = {}
@@ -702,8 +697,9 @@ class Rotate(Animation):
 
 
 class Transform(Animation):
-    def __init__(self, mobject, target_mobject, run_time=1.0, **kwargs):
+    def __init__(self, mobject, target_mobject, replace_mobject_with_target_in_scene=False, run_time=1.0, **kwargs):
         self.target_mobject = target_mobject
+        self.replace_mobject_with_target_in_scene = replace_mobject_with_target_in_scene
         super().__init__(mobject, run_time=run_time, **kwargs)
 
     def begin(self, t):
@@ -715,11 +711,8 @@ class Transform(Animation):
         except Exception:
             pass
         set_anim_opacity(self.mobject, 1.0)
-        set_anim_opacity(self.target_mobject, 1.0)
-        if hasattr(self.mobject, '_transforming'):
-            self.mobject._transforming = True
-        if hasattr(self.target_mobject, '_transforming'):
-            self.target_mobject._transforming = True
+        self._set_transforming(self.mobject, True)
+        self._set_transforming(self.target_mobject, True)
 
     def interpolate(self, t):
         alpha = (t - self.start_time) / self.run_time if self.run_time > 0 else 1.0
@@ -734,15 +727,45 @@ class Transform(Animation):
 
     def finish(self):
         super().finish()
-        try:
-            self.mobject.become(self.target_mobject)
-        except Exception:
-            pass
         set_anim_opacity(self.mobject, 1.0)
-        if hasattr(self.mobject, '_transforming'):
-            self.mobject._transforming = False
-        if hasattr(self.target_mobject, '_transforming'):
-            self.target_mobject._transforming = False
+        self._set_transforming(self.mobject, True)
+        self._set_transforming(self.target_mobject, False)
+
+    @staticmethod
+    def _set_transforming(mob, val):
+        Transform._set_transforming_impl(mob, val, set())
+
+    @staticmethod
+    def _set_transforming_impl(mob, val, seen):
+        mid = id(mob)
+        if mid in seen:
+            return
+        seen.add(mid)
+        mob._transforming = val
+        if hasattr(mob, 'family_members_with_points'):
+            for sub in mob.family_members_with_points():
+                Transform._set_transforming_impl(sub, val, seen)
+        elif hasattr(mob, 'submobjects'):
+            for sub in mob.submobjects:
+                Transform._set_transforming_impl(sub, val, seen)
+
+    def clean_up_from_scene(self, scene):
+        if self.replace_mobject_with_target_in_scene:
+            if self.mobject in scene.mobjects:
+                scene.remove(self.mobject)
+            if self.target_mobject not in scene.mobjects:
+                scene.add(self.target_mobject)
+            set_anim_opacity(self.target_mobject, 1.0)
+            self._set_transforming(self.target_mobject, False)
+        else:
+            if self.target_mobject in scene.mobjects:
+                scene.remove(self.target_mobject)
+
+
+class ReplacementTransform(Transform):
+    def __init__(self, mobject, target_mobject, **kwargs):
+        kwargs['replace_mobject_with_target_in_scene'] = True
+        super().__init__(mobject, target_mobject, **kwargs)
 
 
 class FadeTransform(Animation):
@@ -762,10 +785,8 @@ class FadeTransform(Animation):
             pass
         set_anim_opacity(self.mobject, 1.0)
         set_anim_opacity(self.target_mobject, 1.0)
-        if hasattr(self.mobject, '_transforming'):
-            self.mobject._transforming = True
-        if hasattr(self.target_mobject, '_transforming'):
-            self.target_mobject._transforming = True
+        Transform._set_transforming(self.mobject, True)
+        Transform._set_transforming(self.target_mobject, True)
 
     def interpolate(self, t):
         alpha = (t - self.start_time) / self.run_time if self.run_time > 0 else 1.0
@@ -786,10 +807,8 @@ class FadeTransform(Animation):
             self.mobject.restore()
         except Exception:
             pass
-        if hasattr(self.mobject, '_transforming'):
-            self.mobject._transforming = False
-        if hasattr(self.target_mobject, '_transforming'):
-            self.target_mobject._transforming = False
+        Transform._set_transforming(self.mobject, False)
+        Transform._set_transforming(self.target_mobject, False)
 
     def get_all_mobjects(self):
         return [self.mobject, self.target_mobject]
@@ -1087,6 +1106,10 @@ class VulkanRender:
         if isinstance(mob, (VGroup, Group)):
             for sub in mob:
                 self._send(sub, angle)
+            return
+
+        if getattr(mob, '_transforming', False):
+            self._send_vmobject(mob, a, w, h)
             return
 
         if isinstance(mob, Square):
@@ -1680,6 +1703,41 @@ class VulkanRender:
                 progress, 1, 1,
             )
 
+    def _send_vmobject(self, mob, a, w, h):
+        try:
+            pts = mob.get_points()
+            if len(pts) < 4:
+                return
+            c = mob.get_color()
+            base_r, base_g, base_b = int(c[0] * 255 * a), int(c[1] * 255 * a), int(c[2] * 255 * a)
+        except Exception:
+            return
+        if base_r == 0 and base_g == 0 and base_b == 0:
+            base_r, base_g, base_b = int(255 * a), int(255 * a), int(255 * a)
+
+        flat = []
+        for p in pts:
+            sx, sy = manim_to_screen(p[0], p[1], w, h)
+            flat.append(sx)
+            flat.append(sy)
+            flat.append(0.0)
+
+        n = len(flat) // 3
+        arr = (ctypes.c_float * len(flat))(*flat)
+
+        fo = mob.get_fill_opacity() if hasattr(mob, 'get_fill_opacity') else 1.0
+        so = mob.get_stroke_opacity() if hasattr(mob, 'get_stroke_opacity') else 1.0
+        sw = self._stroke_width(mob)
+        fill_alpha = min(1.0, fo * a)
+        stroke_w = max(1.0, sw)
+
+        self.dll.AddBezierPath(
+            arr, n,
+            base_r, base_g, base_b, stroke_w,
+            base_r, base_g, base_b, fill_alpha,
+            1.0, 1, 1 if fill_alpha > 0 else 0,
+        )
+
     def _color(self, mob, alpha=1.0):
         try:
             rgbas = mob.get_fill_rgbas()
@@ -1800,6 +1858,7 @@ class VulkanRender:
                     all_mobjects.append(anim.mobject)
                 if anim.target_mobject not in all_mobjects:
                     all_mobjects.append(anim.target_mobject)
+                set_anim_opacity(anim.target_mobject, 0.0)
             elif isinstance(anim, Succession):
                 for sub in anim.animations:
                     if isinstance(sub, (Create, Write, FadeIn, Rotating, Rotate)) and sub.mobject:
