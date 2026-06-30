@@ -777,16 +777,8 @@ class FadeTransform(Animation):
     def begin(self, t):
         super().begin(t)
         self.mobject.save_state()
-        self._starting_mobject = self.mobject.copy()
-        self._target_copy = self.target_mobject.copy()
-        try:
-            self.mobject.align_data(self._target_copy)
-        except Exception:
-            pass
         set_anim_opacity(self.mobject, 1.0)
-        set_anim_opacity(self.target_mobject, 1.0)
-        Transform._set_transforming(self.mobject, True)
-        Transform._set_transforming(self.target_mobject, True)
+        set_anim_opacity(self.target_mobject, 0.0)
 
     def interpolate(self, t):
         alpha = (t - self.start_time) / self.run_time if self.run_time > 0 else 1.0
@@ -794,10 +786,8 @@ class FadeTransform(Animation):
         if self.reverse_rate_function:
             alpha = 1.0 - alpha
         alpha = self.rate_func(alpha)
-        try:
-            self.mobject.interpolate(self._starting_mobject, self._target_copy, alpha)
-        except Exception:
-            pass
+        set_anim_opacity(self.mobject, max(0.0, 1.0 - alpha))
+        set_anim_opacity(self.target_mobject, max(0.0, alpha))
 
     def finish(self):
         super().finish()
@@ -807,8 +797,14 @@ class FadeTransform(Animation):
             self.mobject.restore()
         except Exception:
             pass
-        Transform._set_transforming(self.mobject, False)
-        Transform._set_transforming(self.target_mobject, False)
+
+    def clean_up_from_scene(self, scene):
+        super().clean_up_from_scene(scene)
+        if self.mobject in scene.mobjects:
+            scene.remove(self.mobject)
+        if self.target_mobject not in scene.mobjects:
+            scene.add(self.target_mobject)
+        set_anim_opacity(self.target_mobject, 1.0)
 
     def get_all_mobjects(self):
         return [self.mobject, self.target_mobject]
@@ -1158,6 +1154,20 @@ class VulkanRender:
                 if progress >= 1.0:
                     r, g, b = self._color(mob, a)
                     self.dll.AddRect(sx, sy, half, half, rot, r, g, b)
+                    if so > 0:
+                        sr, sg, sb = self._stroke_color(mob)
+                        sr = int(sr * so * a)
+                        sg = int(sg * so * a)
+                        sb = int(sb * so * a)
+                        sw = max(1, round(self._stroke_width(mob)))
+                        tl = self._rotate_point(sx - half, sy - half, sx, sy, rot)
+                        tr = self._rotate_point(sx + half, sy - half, sx, sy, rot)
+                        br = self._rotate_point(sx + half, sy + half, sx, sy, rot)
+                        bl = self._rotate_point(sx - half, sy + half, sx, sy, rot)
+                        self.dll.AddLine(tr[0], tr[1], tl[0], tl[1], sw, sr, sg, sb)
+                        self.dll.AddLine(tl[0], tl[1], bl[0], bl[1], sw, sr, sg, sb)
+                        self.dll.AddLine(bl[0], bl[1], br[0], br[1], sw, sr, sg, sb)
+                        self.dll.AddLine(br[0], br[1], tr[0], tr[1], sw, sr, sg, sb)
                 else:
                     stroke_progress = min(1.0, progress * 2.0)
                     if stroke_progress > 0:
@@ -1419,7 +1429,7 @@ class VulkanRender:
                 if progress >= 1.0:
                     fr, fg, fb = self._color(mob, a)
                     br, bg, bb = self._stroke_color(mob)
-                    bw = self._stroke_width(mob) * (h / 8.0)
+                    bw = self._stroke_width(mob)
                     self.dll.AddCircle(sx, sy, sr, fr, fg, fb, br, bg, bb, bw, 1.0)
                 else:
                     stroke_progress = min(1.0, progress * 2.0)
@@ -1488,6 +1498,27 @@ class VulkanRender:
                 hy2 = sy2 - uy * head_len - py * head_w
                 self.dll.AddLine(sx2, sy2, hx1, hy1, sw, r, g, b)
                 self.dll.AddLine(sx2, sy2, hx2, hy2, sw, r, g, b)
+                head_pts = [
+                    sx2, sy2, 0.0,
+                    sx2, sy2, 0.0,
+                    hx1, hy1, 0.0,
+                    hx1, hy1, 0.0,
+                    hx1, hy1, 0.0,
+                    hx1, hy1, 0.0,
+                    hx2, hy2, 0.0,
+                    hx2, hy2, 0.0,
+                    hx2, hy2, 0.0,
+                    hx2, hy2, 0.0,
+                    sx2, sy2, 0.0,
+                    sx2, sy2, 0.0,
+                ]
+                head_arr = (ctypes.c_float * len(head_pts))(*head_pts)
+                self.dll.AddBezierPath(
+                    head_arr, 12,
+                    r, g, b, float(sw),
+                    r, g, b, 1.0,
+                    1.0, 1, 1,
+                )
 
         elif isinstance(mob, Line):
             s = mob.get_start()
@@ -1585,7 +1616,7 @@ class VulkanRender:
     def _send_transformed_text(self, mob, w, h):
         try:
             c = mob.get_color()
-            base_r, base_g, base_b = int(c[0] * 255), int(c[1] * 255), int(c[2] * 255)
+            base_r, base_g, base_b = round(float(c[0]) * 255), round(float(c[1]) * 255), round(float(c[2]) * 255)
         except Exception:
             base_r, base_g, base_b = 255, 255, 255
         if base_r == 0 and base_g == 0 and base_b == 0:
@@ -1626,7 +1657,7 @@ class VulkanRender:
     def _send_text_write(self, mob, letter_alphas, w, h):
         try:
             c = mob.get_color()
-            base_r, base_g, base_b = int(c[0] * 255), int(c[1] * 255), int(c[2] * 255)
+            base_r, base_g, base_b = round(float(c[0]) * 255), round(float(c[1]) * 255), round(float(c[2]) * 255)
         except Exception:
             base_r, base_g, base_b = 255, 255, 255
         if base_r == 0 and base_g == 0 and base_b == 0:
@@ -1708,12 +1739,8 @@ class VulkanRender:
             pts = mob.get_points()
             if len(pts) < 4:
                 return
-            c = mob.get_color()
-            base_r, base_g, base_b = int(c[0] * 255 * a), int(c[1] * 255 * a), int(c[2] * 255 * a)
         except Exception:
             return
-        if base_r == 0 and base_g == 0 and base_b == 0:
-            base_r, base_g, base_b = int(255 * a), int(255 * a), int(255 * a)
 
         flat = []
         for p in pts:
@@ -1725,17 +1752,52 @@ class VulkanRender:
         n = len(flat) // 3
         arr = (ctypes.c_float * len(flat))(*flat)
 
-        fo = mob.get_fill_opacity() if hasattr(mob, 'get_fill_opacity') else 1.0
+        fr, fg, fb, fa = 0, 0, 0, 0
+        try:
+            frgbas = mob.get_fill_rgbas()
+            if len(frgbas) > 0:
+                fr, fg, fb, fa = float(frgbas[0][0]), float(frgbas[0][1]), float(frgbas[0][2]), float(frgbas[0][3])
+        except Exception:
+            pass
+        if fr == 0 and fg == 0 and fb == 0:
+            try:
+                c = mob.get_color()
+                fr, fg, fb = float(c[0]), float(c[1]), float(c[2])
+                fa = 1.0
+            except Exception:
+                fr, fg, fb = 1.0, 1.0, 1.0
+                fa = 1.0
+
+        sr, sg, sb, sa = 1, 1, 1, 1
+        try:
+            srgbas = mob.get_stroke_rgbas()
+            if len(srgbas) > 0:
+                sr, sg, sb, sa = float(srgbas[0][0]), float(srgbas[0][1]), float(srgbas[0][2]), float(srgbas[0][3])
+        except Exception:
+            sr, sg, sb = fr, fg, fb
+            sa = 1.0
+
         so = mob.get_stroke_opacity() if hasattr(mob, 'get_stroke_opacity') else 1.0
         sw = self._stroke_width(mob)
-        fill_alpha = min(1.0, fo * a)
+        fill_alpha = min(1.0, fa * a)
+        stroke_alpha = min(1.0, sa * so * a)
         stroke_w = max(1.0, sw)
+
+        sri = round(sr * 255 * stroke_alpha)
+        sgi = round(sg * 255 * stroke_alpha)
+        sbi = round(sb * 255 * stroke_alpha)
+        fri = round(fr * 255)
+        fgi = round(fg * 255)
+        fbi = round(fb * 255)
+
+        show_fill = 1 if fill_alpha > 0.01 else 0
+        show_stroke = 1 if (stroke_alpha > 0.01 and stroke_w > 0) else 0
 
         self.dll.AddBezierPath(
             arr, n,
-            base_r, base_g, base_b, stroke_w,
-            base_r, base_g, base_b, fill_alpha,
-            1.0, 1, 1 if fill_alpha > 0 else 0,
+            sri, sgi, sbi, stroke_w,
+            fri, fgi, fbi, fill_alpha,
+            1.0, show_stroke, show_fill,
         )
 
     def _color(self, mob, alpha=1.0):
@@ -1743,7 +1805,8 @@ class VulkanRender:
             rgbas = mob.get_fill_rgbas()
             if len(rgbas) > 0:
                 r, g, b, a = rgbas[0]
-                return int(r * 255 * alpha), int(g * 255 * alpha), int(b * 255 * alpha)
+                fo = float(a)
+                return int(r * 255 * alpha * fo), int(g * 255 * alpha * fo), int(b * 255 * alpha * fo)
         except Exception:
             pass
         try:
@@ -1850,9 +1913,10 @@ class VulkanRender:
             elif isinstance(anim, Transform):
                 if anim.mobject not in all_mobjects:
                     all_mobjects.append(anim.mobject)
-                if anim.target_mobject not in all_mobjects:
-                    all_mobjects.append(anim.target_mobject)
-                set_anim_opacity(anim.target_mobject, 0.0)
+                if anim.replace_mobject_with_target_in_scene:
+                    if anim.target_mobject not in all_mobjects:
+                        all_mobjects.append(anim.target_mobject)
+                    set_anim_opacity(anim.target_mobject, 0.0)
             elif isinstance(anim, FadeTransform):
                 if anim.mobject not in all_mobjects:
                     all_mobjects.append(anim.mobject)

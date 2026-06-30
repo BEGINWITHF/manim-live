@@ -48,19 +48,19 @@ class VulkanShapeShowcase(Scene):
 
         sq = Square(side_length=1.2, color=BLUE)
         sq.set_fill(BLUE, opacity=0.6)
-        sq.set_stroke(width=3)
+        sq.set_stroke(width=4)
         sq.shift(LEFT * 4.5)
 
         circ = Circle(radius=0.6, color=GREEN)
         circ.set_fill(GREEN, opacity=0.6)
-        circ.set_stroke(width=3)
+        circ.set_stroke(width=4)
         circ.shift(LEFT * 1.5)
 
-        tri = Triangle(color=RED, fill_opacity=0.6, stroke_width=3)
+        tri = Triangle(color=RED, fill_opacity=0.6, stroke_width=4)
         tri.scale(0.8)
         tri.shift(RIGHT * 1.5)
 
-        arrow = Arrow(ORIGIN, RIGHT * 2, color=YELLOW, stroke_width=4)
+        arrow = Arrow(ORIGIN, RIGHT * 2, color=YELLOW, stroke_width=5)
         arrow.shift(RIGHT * 4.5)
 
         lbl_sq = Text("Rotate", font_size=16)
@@ -96,22 +96,22 @@ class VulkanShapeShowcase(Scene):
 
         sq1 = Square(side_length=1.0, color=BLUE)
         sq1.set_fill(BLUE, opacity=0.7)
-        sq1.set_stroke(width=3)
+        sq1.set_stroke(width=4)
         sq1.shift(LEFT * 4)
 
         sq2 = Square(side_length=1.0, color=GREEN)
         sq2.set_fill(GREEN, opacity=0.7)
-        sq2.set_stroke(width=3)
+        sq2.set_stroke(width=4)
         sq2.shift(LEFT * 1.5)
 
         sq3 = Square(side_length=1.0, color=RED)
         sq3.set_fill(RED, opacity=0.7)
-        sq3.set_stroke(width=3)
+        sq3.set_stroke(width=4)
         sq3.shift(RIGHT * 1.5)
 
         sq4 = Square(side_length=1.0, color=YELLOW)
         sq4.set_fill(YELLOW, opacity=0.7)
-        sq4.set_stroke(width=3)
+        sq4.set_stroke(width=4)
         sq4.shift(RIGHT * 4)
 
         lbl1 = Text("FadeIn", font_size=16)
@@ -147,7 +147,7 @@ class VulkanShapeShowcase(Scene):
 
         s1 = Square(side_length=1.0, color=BLUE)
         s1.set_fill(BLUE, opacity=0.7)
-        s1.set_stroke(width=3)
+        s1.set_stroke(width=4)
         s1.shift(LEFT * 5 + DOWN * 0.5)
 
         lbl1 = Text("Transform", font_size=16)
@@ -156,7 +156,7 @@ class VulkanShapeShowcase(Scene):
         render.play(Add(s1), Add(lbl1))
         render.play(Wait(0.3))
 
-        t1 = Triangle(color=RED, fill_opacity=0.7, stroke_width=3)
+        t1 = Triangle(color=RED, fill_opacity=0.7, stroke_width=4)
         t1.scale(0.7)
         t1.shift(LEFT * 2 + DOWN * 0.5)
 
@@ -166,7 +166,7 @@ class VulkanShapeShowcase(Scene):
 
         s2 = Square(side_length=1.0, color=GREEN)
         s2.set_fill(GREEN, opacity=0.7)
-        s2.set_stroke(width=3)
+        s2.set_stroke(width=4)
         s2.shift(RIGHT * 2 + DOWN * 0.5)
 
         lbl2 = Text("ReplacementTransform", font_size=16)
@@ -175,7 +175,7 @@ class VulkanShapeShowcase(Scene):
         render.play(Add(s2), Add(lbl2))
         render.play(Wait(0.3))
 
-        t2 = Triangle(color=YELLOW, fill_opacity=0.7, stroke_width=3)
+        t2 = Triangle(color=YELLOW, fill_opacity=0.7, stroke_width=4)
         t2.scale(0.7)
         t2.shift(RIGHT * 5 + DOWN * 0.5)
 

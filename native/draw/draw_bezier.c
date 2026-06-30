@@ -172,6 +172,16 @@ static void tessellate_stroke(BezierPathObj *bp) {
                     has_prev = 1;
                     continue;
                 }
+                float cnx = (-ty / tlen) * half_w * wind;
+                float cny = (tx / tlen) * half_w * wind;
+                if (g_vertex_count + 3 > MAX_VERTICES) return;
+                PushVertex(prev_x, prev_y, nr, ng, nb);
+                PushVertex(prev_x - prev_nx, prev_y - prev_ny, nr, ng, nb);
+                PushVertex(px - cnx, py - cny, nr, ng, nb);
+                prev_x = px; prev_y = py;
+                prev_nx = cnx; prev_ny = cny;
+                has_prev = 1;
+                continue;
             }
 
             float nx = (-ty / tlen) * half_w * wind;
