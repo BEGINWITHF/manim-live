@@ -553,6 +553,14 @@ class FadeIn(Animation):
             if self.fade_shift is not None and alpha < 1.0:
                 mob.move_to(self._start_positions[i] + self.fade_shift * (1.0 - alpha))
 
+            if self.target_position is not None and i < len(self._start_positions):
+                if hasattr(self.target_position, 'get_center'):
+                    target = self.target_position.get_center()
+                else:
+                    target = np.array(self.target_position, dtype=float)
+                original = self._start_positions[i]
+                mob.move_to(target + (original - target) * alpha)
+
     def finish(self):
         super().finish()
         for mob in self.mobjects:
@@ -605,6 +613,14 @@ class FadeOut(Animation):
 
             if self.fade_shift is not None and alpha > 0.0:
                 mob.move_to(self._start_positions[i] + self.fade_shift * alpha)
+
+            if self.target_position is not None and i < len(self._start_positions):
+                if hasattr(self.target_position, 'get_center'):
+                    target = self.target_position.get_center()
+                else:
+                    target = np.array(self.target_position, dtype=float)
+                original = self._start_positions[i]
+                mob.move_to(original + (target - original) * alpha)
 
     def finish(self):
         super().finish()
@@ -681,8 +697,9 @@ class Rotate(Animation):
 
 
 class Transform(Animation):
-    def __init__(self, mobject, target_mobject, run_time=1.0, **kwargs):
+    def __init__(self, mobject, target_mobject, replace_mobject_with_target_in_scene=False, run_time=1.0, **kwargs):
         self.target_mobject = target_mobject
+        self.replace_mobject_with_target_in_scene = replace_mobject_with_target_in_scene
         super().__init__(mobject, run_time=run_time, **kwargs)
 
     def begin(self, t):
@@ -694,7 +711,6 @@ class Transform(Animation):
         except Exception:
             pass
         set_anim_opacity(self.mobject, 1.0)
-        set_anim_opacity(self.target_mobject, 1.0)
         self._set_transforming(self.mobject, True)
         self._set_transforming(self.target_mobject, True)
 
@@ -711,12 +727,8 @@ class Transform(Animation):
 
     def finish(self):
         super().finish()
-        try:
-            self.mobject.become(self.target_mobject)
-        except Exception:
-            pass
         set_anim_opacity(self.mobject, 1.0)
-        self._set_transforming(self.mobject, False)
+        self._set_transforming(self.mobject, True)
         self._set_transforming(self.target_mobject, False)
 
     @staticmethod
@@ -737,36 +749,50 @@ class Transform(Animation):
             for sub in mob.submobjects:
                 Transform._set_transforming_impl(sub, val, seen)
 
+    def clean_up_from_scene(self, scene):
+        if self.replace_mobject_with_target_in_scene:
+            if self.mobject in scene.mobjects:
+                scene.remove(self.mobject)
+            if self.target_mobject not in scene.mobjects:
+                scene.add(self.target_mobject)
+            set_anim_opacity(self.target_mobject, 1.0)
+            self._set_transforming(self.target_mobject, False)
+        else:
+            if self.target_mobject in scene.mobjects:
+                scene.remove(self.target_mobject)
+
 
 class ReplacementTransform(Transform):
-    def clean_up_from_scene(self, scene):
-        if self.mobject in scene.mobjects:
-            scene.remove(self.mobject)
-        if self.target_mobject not in scene.mobjects:
-            scene.add(self.target_mobject)
+    def __init__(self, mobject, target_mobject, **kwargs):
+        kwargs['replace_mobject_with_target_in_scene'] = True
+        super().__init__(mobject, target_mobject, **kwargs)
 
 
 class FadeTransform(Animation):
     def __init__(self, mobject, target_mobject, run_time=1.0, **kwargs):
         self.target_mobject = target_mobject
         self.to_add_on_completion = target_mobject
+        self._source_start_pos = None
+        self._target_start_pos = None
+        try:
+            self._ghost = target_mobject.copy()
+            self._ghost.move_to(mobject.get_center())
+        except Exception:
+            self._ghost = None
         super().__init__(mobject, run_time=run_time, **kwargs)
 
     def begin(self, t):
         super().begin(t)
         self.mobject.save_state()
-        self._starting_mobject = self.mobject.copy()
-        self._target_copy = self.target_mobject.copy()
-        try:
-            self.mobject.align_data(self._target_copy)
-        except Exception:
-            pass
+        self.target_mobject.save_state()
+        self._source_start_pos = self.mobject.get_center().copy()
+        self._target_start_pos = self.target_mobject.get_center().copy()
+        if self._ghost is not None:
+            self._ghost.move_to(self._source_start_pos)
         set_anim_opacity(self.mobject, 1.0)
         set_anim_opacity(self.target_mobject, 1.0)
-        if hasattr(self.mobject, '_transforming'):
-            self.mobject._transforming = True
-        if hasattr(self.target_mobject, '_transforming'):
-            self.target_mobject._transforming = True
+        if self._ghost is not None:
+            set_anim_opacity(self._ghost, 0.0)
 
     def interpolate(self, t):
         alpha = (t - self.start_time) / self.run_time if self.run_time > 0 else 1.0
@@ -774,26 +800,45 @@ class FadeTransform(Animation):
         if self.reverse_rate_function:
             alpha = 1.0 - alpha
         alpha = self.rate_func(alpha)
-        try:
-            self.mobject.interpolate(self._starting_mobject, self._target_copy, alpha)
-        except Exception:
-            pass
+        cur_pos = (
+            self._source_start_pos * (1.0 - alpha)
+            + self._target_start_pos * alpha
+        )
+        self.mobject.move_to(cur_pos)
+        if self._ghost is not None:
+            self._ghost.move_to(cur_pos)
+            set_anim_opacity(self._ghost, max(0.0, alpha))
+        set_anim_opacity(self.mobject, max(0.0, 1.0 - alpha))
+        set_anim_opacity(self.target_mobject, 1.0)
 
     def finish(self):
         super().finish()
+        self.mobject.move_to(self._target_start_pos)
         set_anim_opacity(self.mobject, 0.0)
         set_anim_opacity(self.target_mobject, 1.0)
+        if self._ghost is not None:
+            set_anim_opacity(self._ghost, 0.0)
         try:
             self.mobject.restore()
+            self.target_mobject.restore()
         except Exception:
             pass
-        if hasattr(self.mobject, '_transforming'):
-            self.mobject._transforming = False
-        if hasattr(self.target_mobject, '_transforming'):
-            self.target_mobject._transforming = False
+
+    def clean_up_from_scene(self, scene):
+        super().clean_up_from_scene(scene)
+        if self.mobject in scene.mobjects:
+            scene.remove(self.mobject)
+        if self._ghost is not None and self._ghost in scene.mobjects:
+            scene.remove(self._ghost)
+        if self.target_mobject not in scene.mobjects:
+            scene.add(self.target_mobject)
+        set_anim_opacity(self.target_mobject, 1.0)
 
     def get_all_mobjects(self):
-        return [self.mobject, self.target_mobject]
+        mobs = [self.mobject, self.target_mobject]
+        if self._ghost is not None:
+            mobs.append(self._ghost)
+        return mobs
 
 
 def _normalize_points(pts):
@@ -879,7 +924,8 @@ class TransformMatchingAbstractBase(Animation):
 
         if self.transform_mismatches:
             self._anims.append(
-                Transform(fade_source, fade_target, run_time=self.run_time)
+                Transform(fade_source, fade_target, run_time=self.run_time,
+                          replace_mobject_with_target_in_scene=True)
             )
         elif self.fade_transform_mismatches:
             self._anims.append(
@@ -1091,10 +1137,7 @@ class VulkanRender:
             return
 
         if getattr(mob, '_transforming', False):
-            if isinstance(mob, Text) and hasattr(mob, 'submobjects') and mob.submobjects:
-                self._send_transformed_text(mob, w, h)
-            else:
-                self._send_vmobject(mob, a, w, h)
+            self._send_vmobject(mob, a, w, h)
             return
 
         if isinstance(mob, Square):
@@ -1910,14 +1953,18 @@ class VulkanRender:
             elif isinstance(anim, Transform):
                 if anim.mobject not in all_mobjects:
                     all_mobjects.append(anim.mobject)
-                if anim.target_mobject not in all_mobjects:
-                    all_mobjects.append(anim.target_mobject)
-                set_anim_opacity(anim.target_mobject, 0.0)
+                if anim.replace_mobject_with_target_in_scene:
+                    if anim.target_mobject not in all_mobjects:
+                        all_mobjects.append(anim.target_mobject)
+                    set_anim_opacity(anim.target_mobject, 0.0)
             elif isinstance(anim, FadeTransform):
                 if anim.mobject not in all_mobjects:
                     all_mobjects.append(anim.mobject)
                 if anim.target_mobject not in all_mobjects:
                     all_mobjects.append(anim.target_mobject)
+                ghost = getattr(anim, '_ghost', None)
+                if ghost is not None and ghost not in all_mobjects:
+                    all_mobjects.append(ghost)
             elif isinstance(anim, Succession):
                 for sub in anim.animations:
                     if isinstance(sub, (Create, Write, FadeIn, Rotating, Rotate)) and sub.mobject:
@@ -1957,6 +2004,9 @@ class VulkanRender:
                             all_mobjects.append(sub.mobject)
                         if sub.target_mobject not in all_mobjects:
                             all_mobjects.append(sub.target_mobject)
+                        ghost = getattr(sub, '_ghost', None)
+                        if ghost is not None and ghost not in all_mobjects:
+                            all_mobjects.append(ghost)
 
         for mob in all_mobjects:
             if mob not in self.scene.mobjects:
@@ -1973,6 +2023,23 @@ class VulkanRender:
 
         for a in real_anims:
             a.begin(time.time())
+
+        for a in real_anims:
+            if isinstance(a, TransformMatchingAbstractBase):
+                if a.mobject in self.scene.mobjects:
+                    self.scene.mobjects.remove(a.mobject)
+                if a.target_mobject in self.scene.mobjects:
+                    self.scene.mobjects.remove(a.target_mobject)
+                for sub_anim in getattr(a, '_anims', []):
+                    if isinstance(sub_anim, (FadeIn, FadeOut)):
+                        for mob in sub_anim.mobjects:
+                            if mob not in self.scene.mobjects:
+                                self.scene.add(mob)
+                    elif isinstance(sub_anim, Transform):
+                        if sub_anim.mobject not in self.scene.mobjects:
+                            self.scene.add(sub_anim.mobject)
+                        if sub_anim.target_mobject not in self.scene.mobjects:
+                            self.scene.add(sub_anim.target_mobject)
 
         self._active_anims = real_anims
 
