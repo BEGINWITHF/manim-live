@@ -1124,15 +1124,13 @@ class VulkanRender:
         rot = get_anim_rotation(mob) + angle
 
         if isinstance(mob, Text):
-            if getattr(mob, '_transforming', False) and hasattr(mob, 'submobjects') and mob.submobjects:
-                self._send_transformed_text(mob, w, h)
-            elif getattr(mob, '_letter_alphas', None) is not None and hasattr(mob, 'submobjects') and mob.submobjects:
+            if getattr(mob, '_letter_alphas', None) is not None and hasattr(mob, 'submobjects') and mob.submobjects:
                 self._send_text_write(mob, mob._letter_alphas, w, h)
-            elif a < 1.0:
-                if hasattr(mob, 'submobjects') and mob.submobjects:
+            elif hasattr(mob, 'submobjects') and mob.submobjects:
+                if a < 1.0:
                     self._send_transformed_text(mob, w, h, alpha=a)
-            else:
-                self._send_text_bitmap(mob, w, h)
+                else:
+                    self._send_text_bitmap(mob, w, h)
 
         elif isinstance(mob, (VGroup, Group)):
             own_alpha = get_anim_opacity(mob)
