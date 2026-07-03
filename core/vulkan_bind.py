@@ -920,7 +920,6 @@ class TransformMatchingAbstractBase(Animation):
             fade_source.add(source_map[key])
         for key in set(target_map).difference(source_map):
             fade_target.add(target_map[key])
-        self._fade_target_copy = fade_target.copy()
 
         if self.transform_mismatches:
             self._anims.append(
@@ -933,10 +932,7 @@ class TransformMatchingAbstractBase(Animation):
             )
         else:
             self._anims.append(
-                FadeOut(fade_source, target_position=fade_target, run_time=self.run_time)
-            )
-            self._anims.append(
-                FadeIn(self._fade_target_copy, target_position=fade_target, run_time=self.run_time)
+                FadeOut(self.mobject, target_position=fade_target, run_time=self.run_time)
             )
 
         for anim in self._anims:
@@ -955,12 +951,8 @@ class TransformMatchingAbstractBase(Animation):
         return [self.mobject, self.target_mobject]
 
     def clean_up_from_scene(self, scene):
-        for anim in self._anims:
-            anim.interpolate(0)
         if self.mobject in scene.mobjects:
             scene.remove(self.mobject)
-        if self._fade_target_copy in scene.mobjects:
-            scene.remove(self._fade_target_copy)
         if self.target_mobject not in scene.mobjects:
             scene.add(self.target_mobject)
         if hasattr(self.mobject, '_transforming'):
@@ -1122,7 +1114,7 @@ class VulkanRender:
         for mob in scene.mobjects:
             self._send(mob, angle, parent_alpha=1.0)
 
-    def _send(self, mob, angle=0.0, parent_alpha=1.0):
+    def _send(self, mob, angle=0.0, parent_alpha=1.0, parent_offset=None):
         w, h = self.win_w, self.win_h
         own_alpha = get_anim_opacity(mob)
         a = parent_alpha * own_alpha
@@ -1131,13 +1123,36 @@ class VulkanRender:
 
         rot = get_anim_rotation(mob) + angle
 
-        if isinstance(mob, (VGroup, Group)):
+        if isinstance(mob, Text):
+            if getattr(mob, '_transforming', False) and hasattr(mob, 'submobjects') and mob.submobjects:
+                self._send_transformed_text(mob, w, h)
+            elif getattr(mob, '_letter_alphas', None) is not None and hasattr(mob, 'submobjects') and mob.submobjects:
+                self._send_text_write(mob, mob._letter_alphas, w, h)
+            elif a < 1.0:
+                if hasattr(mob, 'submobjects') and mob.submobjects:
+                    self._send_transformed_text(mob, w, h, alpha=a)
+            else:
+                self._send_text_bitmap(mob, w, h)
+
+        elif isinstance(mob, (VGroup, Group)):
+            own_alpha = get_anim_opacity(mob)
+            effective_alpha = parent_alpha * own_alpha
+            if effective_alpha <= 0:
+                return
+            vgroup_center = np.array(mob.get_center(), dtype=float)
+            try:
+                original_center = np.array(mob.get_points().mean(axis=0) if len(mob.get_points()) > 0 else mob.get_center(), dtype=float)
+            except Exception:
+                original_center = vgroup_center.copy()
+            offset = vgroup_center - original_center
+            if parent_offset is not None:
+                offset = offset + parent_offset
             for sub in mob:
-                self._send(sub, angle, parent_alpha=a)
+                self._send(sub, angle, parent_alpha=effective_alpha, parent_offset=offset)
             return
 
         if getattr(mob, '_transforming', False):
-            self._send_vmobject(mob, a, w, h)
+            self._send_vmobject(mob, a, w, h, parent_offset)
             return
 
         if isinstance(mob, Square):
@@ -1615,19 +1630,11 @@ class VulkanRender:
             r, g, b = self._color(mob, a)
             self.dll.AddPoint(sx, sy, r, g, b)
 
-        elif isinstance(mob, Text):
-            if getattr(mob, '_transforming', False) and hasattr(mob, 'submobjects') and mob.submobjects:
-                self._send_transformed_text(mob, w, h)
-            elif getattr(mob, '_letter_alphas', None) is not None and hasattr(mob, 'submobjects') and mob.submobjects:
-                self._send_text_write(mob, mob._letter_alphas, w, h)
-            else:
-                self._send_text_bitmap(mob, w, h)
-
         else:
             try:
                 pts = mob.get_points()
                 if len(pts) >= 4:
-                    self._send_vmobject(mob, a, w, h)
+                    self._send_vmobject(mob, a, w, h, parent_offset)
             except Exception:
                 pass
 
@@ -1653,7 +1660,7 @@ class VulkanRender:
             len(verts), arr
         )
 
-    def _send_transformed_text(self, mob, w, h):
+    def _send_transformed_text(self, mob, w, h, alpha=1.0):
         try:
             c = mob.get_color()
             base_r, base_g, base_b = round(float(c[0]) * 255), round(float(c[1]) * 255), round(float(c[2]) * 255)
@@ -1673,9 +1680,9 @@ class VulkanRender:
                 num_segs = len(pts) // 4
                 if num_segs == 0:
                     continue
-                sr = int(base_r * sub_a)
-                sg = int(base_g * sub_a)
-                sb = int(base_b * sub_a)
+                sr = int(base_r * sub_a * alpha)
+                sg = int(base_g * sub_a * alpha)
+                sb = int(base_b * sub_a * alpha)
                 flat = []
                 for seg_i in range(num_segs):
                     for pt_i in range(4):
@@ -1774,7 +1781,7 @@ class VulkanRender:
                 progress, 1, 1,
             )
 
-    def _send_vmobject(self, mob, a, w, h):
+    def _send_vmobject(self, mob, a, w, h, parent_offset=None):
         try:
             pts = mob.get_points()
             if len(pts) < 4:
@@ -1784,7 +1791,11 @@ class VulkanRender:
 
         flat = []
         for p in pts:
-            sx, sy = manim_to_screen(p[0], p[1], w, h)
+            px, py = p[0], p[1]
+            if parent_offset is not None:
+                px += parent_offset[0]
+                py += parent_offset[1]
+            sx, sy = manim_to_screen(px, py, w, h)
             flat.append(sx)
             flat.append(sy)
             flat.append(0.0)
@@ -1934,10 +1945,7 @@ class VulkanRender:
                     all_mobjects.append(anim.mobject)
                 if anim.target_mobject not in all_mobjects:
                     all_mobjects.append(anim.target_mobject)
-                if hasattr(anim, '_fade_target_copy') and anim._fade_target_copy not in all_mobjects:
-                    all_mobjects.append(anim._fade_target_copy)
                 anim.mobject._transforming = True
-                anim.target_mobject._transforming = True
                 for sub_anim in getattr(anim, '_anims', []):
                     if isinstance(sub_anim, (FadeIn, FadeOut)):
                         for mob in sub_anim.mobjects:
@@ -1986,7 +1994,6 @@ class VulkanRender:
                         if hasattr(sub, '_fade_target_copy') and sub._fade_target_copy not in all_mobjects:
                             all_mobjects.append(sub._fade_target_copy)
                         sub.mobject._transforming = True
-                        sub.target_mobject._transforming = True
                         for sub_anim in getattr(sub, '_anims', []):
                             if isinstance(sub_anim, (FadeIn, FadeOut)):
                                 for mob in sub_anim.mobjects:
@@ -2026,16 +2033,8 @@ class VulkanRender:
 
         for a in real_anims:
             if isinstance(a, TransformMatchingAbstractBase):
-                if a.mobject in self.scene.mobjects:
-                    self.scene.mobjects.remove(a.mobject)
-                if a.target_mobject in self.scene.mobjects:
-                    self.scene.mobjects.remove(a.target_mobject)
                 for sub_anim in getattr(a, '_anims', []):
-                    if isinstance(sub_anim, (FadeIn, FadeOut)):
-                        for mob in sub_anim.mobjects:
-                            if mob not in self.scene.mobjects:
-                                self.scene.add(mob)
-                    elif isinstance(sub_anim, Transform):
+                    if isinstance(sub_anim, Transform):
                         if sub_anim.mobject not in self.scene.mobjects:
                             self.scene.add(sub_anim.mobject)
                         if sub_anim.target_mobject not in self.scene.mobjects:
