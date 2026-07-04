@@ -1,15 +1,9 @@
 from manim import *
 from core.vulkan_bind import (
-    VulkanRender, Animation, Create, Write, Unwrite, Succession, Wait, Add,
-    FadeIn, FadeOut, FadeTransform,
-    Rotating, Rotate,
-    Transform, ReplacementTransform, TransformMatchingShapes, TransformMatchingTex,
-    _smooth, _linear, _rush_into, _rush_from,
-    _there_and_back, _slow_into, _double_smooth, _lingering,
-    _wiggle, _exponential_decay,
-    set_anim_opacity,
+    VulkanRender, Write, Wait, Add,
+    FadeTransform,
+    Transform, TransformMatchingShapes,
 )
-import math
 
 
 class TestTransform(Scene):

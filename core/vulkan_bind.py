@@ -104,71 +104,6 @@ def _squish_rate_func(func, a, b):
 #   4 points per curve, get_num_curves() = len(points) // 4
 
 
-def _integer_interpolate(start, end, alpha):
-    if alpha >= 1:
-        return (end - 1, 1.0)
-    if alpha <= 0:
-        return (start, 0.0)
-    value = int((end - start) * alpha + start)
-    value = min(value, end - 1)
-    value = max(value, start)
-    residue = ((end - start) * alpha) % 1.0
-    return (value, residue)
-
-
-def _partial_bezier_points(points, a, b):
-    """Extract a portion [a,b] of a cubic bezier curve using De Casteljau.
-    points: 4 points [P0, P1, P2, P3]"""
-    if a <= 0 and b >= 1:
-        return [list(p) for p in points]
-    pts = [list(p[:3]) for p in points]
-    a_to_1 = []
-    for i in range(len(pts)):
-        seg = pts[i:]
-        t = a
-        for _ in range(len(seg) - 1):
-            seg = [[(1 - t) * seg[j][d] + t * seg[j + 1][d] for d in range(len(seg[0]))]
-                   for j in range(len(seg) - 1)]
-        a_to_1.append(seg[0])
-    end_prop = (b - a) / (1.0 - a) if a < 1.0 else 0.0
-    result = []
-    for i in range(len(a_to_1)):
-        seg = a_to_1[:i + 1]
-        t = end_prop
-        for _ in range(len(seg) - 1):
-            seg = [[(1 - t) * seg[j][d] + t * seg[j + 1][d] for d in range(len(seg[0]))]
-                   for j in range(len(seg) - 1)]
-        result.append(seg[0])
-    return result
-
-
-def _pointwise_become_partial_points(outline_points, a, b):
-    """Extract partial curve from cubic bezier points.
-    outline_points: numpy array of shape (N, 3) where N = num_curves * 4.
-    Returns list of 3D points (cubic bezier points for the DLL)."""
-    nppc = 4
-    pts = np.array(outline_points)
-    if pts.ndim == 1:
-        pts = pts.reshape(-1, 3)
-    num_curves = len(pts) // nppc
-    if num_curves == 0:
-        return []
-    if a <= 0 and b >= 1:
-        return [list(p) for p in pts]
-    lower_index, lower_residue = _integer_interpolate(0, num_curves, a)
-    upper_index, upper_residue = _integer_interpolate(0, num_curves, b)
-    result = []
-    if lower_index == upper_index:
-        seg = pts[nppc * lower_index:nppc * (lower_index + 1)]
-        result.extend(_partial_bezier_points(seg, lower_residue, upper_residue))
-    else:
-        seg = pts[nppc * lower_index:nppc * (lower_index + 1)]
-        result.extend(_partial_bezier_points(seg, lower_residue, 1.0))
-        result.extend([list(p) for p in pts[nppc * (lower_index + 1):nppc * upper_index]])
-        seg = pts[nppc * upper_index:nppc * (upper_index + 1)]
-        result.extend(_partial_bezier_points(seg, 0.0, upper_residue))
-    return result
-
 
 DEFAULT_ANIMATION_RUN_TIME = 1.0
 DEFAULT_ANIMATION_LAG_RATIO = 0.0
@@ -201,7 +136,6 @@ class Animation:
         self.introducer = introducer
         self.start_time = 0.0
         self.finished = False
-        self._original_starting_mobject = None
 
     @property
     def run_time(self):
@@ -219,8 +153,6 @@ class Animation:
 
     def begin(self, t):
         self.start_time = t
-        if self.mobject is not None:
-            self._original_starting_mobject = self.create_starting_mobject()
 
     def finish(self):
         self.finished = True
@@ -233,9 +165,6 @@ class Animation:
         self.interpolate_mobject(alpha)
 
     def interpolate_mobject(self, alpha):
-        pass
-
-    def interpolate_submobject(self, submobject, starting_submobject, alpha):
         pass
 
     def get_sub_alpha(self, alpha, index, num_submobjects):
@@ -252,64 +181,10 @@ class Animation:
     def clean_up_from_scene(self, scene):
         pass
 
-    def create_starting_mobject(self):
-        return self.mobject
-
     def get_all_mobjects(self):
         if self.mobject is not None:
             return [self.mobject]
         return []
-
-    def get_all_families_zipped(self):
-        return []
-
-    def update_mobjects(self, dt):
-        pass
-
-    def get_all_mobjects_to_update(self):
-        return []
-
-    def copy(self):
-        return type(self)(
-            self.mobject,
-            lag_ratio=self.lag_ratio,
-            run_time=self._run_time,
-            rate_func=self.rate_func,
-            reverse_rate_function=self.reverse_rate_function,
-            name=self.name,
-            remover=self.remover,
-            introducer=self.introducer,
-        )
-
-    def set_run_time(self, run_time):
-        self._run_time = run_time
-        return self
-
-    def get_run_time(self):
-        return self._run_time
-
-    def set_rate_func(self, rate_func):
-        self.rate_func = rate_func
-        return self
-
-    def get_rate_func(self):
-        return self.rate_func
-
-    def set_name(self, name):
-        self.name = name
-        return self
-
-    def is_remover(self):
-        return self.remover
-
-    def is_introducer(self):
-        return self.introducer
-
-    @classmethod
-    def set_default(cls, **kwargs):
-        for key, value in kwargs.items():
-            if hasattr(cls, key):
-                setattr(cls, key, value)
 
 
 class Create(Animation):
@@ -332,11 +207,6 @@ class DrawBorderThenFill(Animation):
                          introducer=introducer, **kwargs)
         self.stroke_width = stroke_width
         self.stroke_color = stroke_color
-        self._starting_mobject = None
-
-    def get_outline(self):
-        outline = self.mobject
-        return outline
 
     def begin(self, t):
         super().begin(t)
@@ -459,26 +329,10 @@ class Wait(Animation):
     def __init__(
         self,
         run_time=1.0,
-        stop_condition=None,
-        frozen_frame=None,
         rate_func=None,
         **kwargs,
     ):
         super().__init__(None, run_time=run_time, rate_func=rate_func or _linear, **kwargs)
-        self.stop_condition = stop_condition
-        self.frozen_frame = frozen_frame
-
-    def begin(self, t):
-        super().begin(t)
-
-    def finish(self):
-        super().finish()
-
-    def clean_up_from_scene(self, scene):
-        pass
-
-    def update_mobjects(self, dt):
-        pass
 
     def interpolate(self, alpha):
         pass
@@ -488,18 +342,6 @@ class Add(Animation):
     def __init__(self, *mobjects, run_time=0.0, **kwargs):
         self.mobjects = list(mobjects)
         super().__init__(mobjects[0] if mobjects else None, run_time=run_time, **kwargs)
-
-    def begin(self, t):
-        super().begin(t)
-
-    def finish(self):
-        super().finish()
-
-    def clean_up_from_scene(self, scene):
-        pass
-
-    def update_mobjects(self, dt):
-        pass
 
     def interpolate(self, t):
         elapsed = t - self.start_time
@@ -641,15 +483,11 @@ class Rotating(Animation):
         self,
         mobject,
         angle=2 * math.pi,
-        about_point=None,
-        about_edge=None,
         run_time=5.0,
         rate_func=None,
         **kwargs,
     ):
         self.rot_angle = angle
-        self.about_point = about_point
-        self.about_edge = about_edge
         super().__init__(mobject, run_time=run_time, rate_func=rate_func or _linear, **kwargs)
 
     def begin(self, t):
@@ -671,15 +509,11 @@ class Rotate(Animation):
         self,
         mobject,
         angle=math.pi,
-        about_point=None,
-        about_edge=None,
         run_time=1.0,
         rate_func=None,
         **kwargs,
     ):
         self.rot_angle = angle
-        self.about_point = about_point
-        self.about_edge = about_edge
         super().__init__(mobject, run_time=run_time, rate_func=rate_func or _smooth, **kwargs)
 
     def begin(self, t):
@@ -841,17 +675,6 @@ class FadeTransform(Animation):
         return mobs
 
 
-def _normalize_points(pts):
-    if len(pts) == 0:
-        return ()
-    import numpy as _np
-    arr = _np.array(pts, dtype=float)
-    center = arr.mean(axis=0)
-    arr = arr - center
-    height = arr[:, 1].max() - arr[:, 1].min()
-    if height > 1e-6:
-        arr = arr / height
-    return tuple(tuple(round(c, 3) for c in row) for row in arr)
 
 
 class TransformMatchingAbstractBase(Animation):
@@ -1007,10 +830,6 @@ class TransformMatchingTex(TransformMatchingAbstractBase):
                                str(id(mobject))))
 
 
-def prepare_animation(anim):
-    if isinstance(anim, Animation):
-        return anim
-    raise TypeError(f"Expected Animation, got {type(anim)}")
 
 
 class VulkanRender:
@@ -1020,8 +839,6 @@ class VulkanRender:
         self.frame_count = 0
         self.scene = None
         self._active_anims = []
-        self.init_w = w
-        self.init_h = h
 
         base_dir = os.path.dirname(os.path.abspath(__file__))
         dll_path = os.path.normpath(os.path.join(base_dir, "..", "dist", "release", "vulkan_core.dll"))
@@ -1866,23 +1683,6 @@ class VulkanRender:
             1.0, show_stroke, show_fill, a,
         )
 
-    def _fill_quad_alpha(self, x0, y0, x1, y1, x2, y2, x3, y3, r, g, b, alpha):
-        w, h = self.win_w, self.win_h
-        corners = [(x0,y0),(x1,y1),(x2,y2),(x3,y3)]
-        flat = []
-        for i in range(4):
-            j = (i + 1) % 4
-            for _ in range(4):
-                sx, sy = manim_to_screen(corners[i][0], corners[i][1], w, h)
-                flat.extend([sx, sy, 0.0])
-        arr = (ctypes.c_float * len(flat))(*flat)
-        ri, gi, bi = int(r), int(g), int(b)
-        self.dll.AddBezierPath(
-            arr, 16,
-            ri, gi, bi, 0.0,
-            ri, gi, bi, 1.0,
-            1.0, 0, 1, alpha,
-        )
 
     def _color(self, mob, alpha=1.0):
         try:
@@ -2026,8 +1826,6 @@ class VulkanRender:
                             all_mobjects.append(sub.mobject)
                         if sub.target_mobject not in all_mobjects:
                             all_mobjects.append(sub.target_mobject)
-                        if hasattr(sub, '_fade_target_copy') and sub._fade_target_copy not in all_mobjects:
-                            all_mobjects.append(sub._fade_target_copy)
                         sub.mobject._transforming = True
                         for sub_anim in getattr(sub, '_anims', []):
                             if isinstance(sub_anim, (FadeIn, FadeOut)):

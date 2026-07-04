@@ -1,8 +1,6 @@
 #include "../draw_common.h"
 #include "../shared_types.h"
 #include <math.h>
-#include <string.h>
-#include <stdio.h>
 
 #define MAX_BEZIER_PATHS 512
 #define MAX_BEZIER_SEGMENTS 1024

@@ -93,7 +93,3 @@ Based on manim-vulkan, manteraction is an application with enhanced UI interface
 ##### 2.3 other features
 
 - AI vibe creating support
-
-## citation
-
-The Manim Community Developers. (2026). Manim – Mathematical Animation Framework (Version v0.20.1) [Computer software]. <https://www.manim.community/>
