@@ -668,7 +668,7 @@ class TransformMatchingAbstractBase(Animation):
             )
         elif self.fade_transform_mismatches:
             self._anims.append(
-                FadeTransformPieces(fade_source, fade_target, run_time=self.run_time)
+                FadeTransform(fade_source, fade_target, run_time=self.run_time)
             )
         else:
             self._anims.append(
