@@ -30,13 +30,13 @@ void BuildVerticesFromArcs(const ArcObj* arcs, int count) {
             float pnx = (-ddy / dlen) * hw;
             float pny = (ddx / dlen) * hw;
 
-            PushVertex(cx1 + pnx, cy1 + pny, nr, ng, nb);
-            PushVertex(cx1 - pnx, cy1 - pny, nr, ng, nb);
-            PushVertex(cx2 + pnx, cy2 + pny, nr, ng, nb);
+            PushVertex(cx1 + pnx, cy1 + pny, nr, ng, nb, a->alpha);
+            PushVertex(cx1 - pnx, cy1 - pny, nr, ng, nb, a->alpha);
+            PushVertex(cx2 + pnx, cy2 + pny, nr, ng, nb, a->alpha);
 
-            PushVertex(cx1 - pnx, cy1 - pny, nr, ng, nb);
-            PushVertex(cx2 - pnx, cy2 - pny, nr, ng, nb);
-            PushVertex(cx2 + pnx, cy2 + pny, nr, ng, nb);
+            PushVertex(cx1 - pnx, cy1 - pny, nr, ng, nb, a->alpha);
+            PushVertex(cx2 - pnx, cy2 - pny, nr, ng, nb, a->alpha);
+            PushVertex(cx2 + pnx, cy2 + pny, nr, ng, nb, a->alpha);
         }
     }
 }

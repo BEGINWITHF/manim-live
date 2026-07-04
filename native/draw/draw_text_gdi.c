@@ -165,12 +165,12 @@ void BuildVerticesFromTexts(const TextObj *texts, int count) {
                             float x1 = cursor_x + (float)run_end;
                             float y1 = y0 + 1.0f;
 
-                            PushVertex(x0, y0, cr, cg, cb);
-                            PushVertex(x1, y0, cr, cg, cb);
-                            PushVertex(x1, y1, cr, cg, cb);
-                            PushVertex(x0, y0, cr, cg, cb);
-                            PushVertex(x1, y1, cr, cg, cb);
-                            PushVertex(x0, y1, cr, cg, cb);
+                            PushVertex(x0, y0, cr, cg, cb, t->alpha);
+                            PushVertex(x1, y0, cr, cg, cb, t->alpha);
+                            PushVertex(x1, y1, cr, cg, cb, t->alpha);
+                            PushVertex(x0, y0, cr, cg, cb, t->alpha);
+                            PushVertex(x1, y1, cr, cg, cb, t->alpha);
+                            PushVertex(x0, y1, cr, cg, cb, t->alpha);
                         } else {
                             col++;
                         }

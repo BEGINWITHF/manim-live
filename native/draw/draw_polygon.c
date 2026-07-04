@@ -28,13 +28,13 @@ void BuildVerticesFromPolygons(const PolygonObj* polygons, int count) {
                 float nx = (-dy / len) * hw;
                 float ny = (dx / len) * hw;
 
-                PushVertex(x1 + nx, y1 + ny, fr, fg, fb);
-                PushVertex(x1 - nx, y1 - ny, fr, fg, fb);
-                PushVertex(x2 + nx, y2 + ny, fr, fg, fb);
+                PushVertex(x1 + nx, y1 + ny, fr, fg, fb, p->alpha);
+                PushVertex(x1 - nx, y1 - ny, fr, fg, fb, p->alpha);
+                PushVertex(x2 + nx, y2 + ny, fr, fg, fb, p->alpha);
 
-                PushVertex(x1 - nx, y1 - ny, fr, fg, fb);
-                PushVertex(x2 - nx, y2 - ny, fr, fg, fb);
-                PushVertex(x2 + nx, y2 + ny, fr, fg, fb);
+                PushVertex(x1 - nx, y1 - ny, fr, fg, fb, p->alpha);
+                PushVertex(x2 - nx, y2 - ny, fr, fg, fb, p->alpha);
+                PushVertex(x2 + nx, y2 + ny, fr, fg, fb, p->alpha);
             }
         }
 
@@ -42,9 +42,9 @@ void BuildVerticesFromPolygons(const PolygonObj* polygons, int count) {
         if (g_vertex_count + n * 3 > MAX_VERTICES) break;
         for (int j = 0; j < n; j++) {
             int j2 = (j + 1) % n;
-            PushVertex(p->x, p->y, fill_r, fill_g, fill_b);
-            PushVertex(p->verts[j * 2], p->verts[j * 2 + 1], fill_r, fill_g, fill_b);
-            PushVertex(p->verts[j2 * 2], p->verts[j2 * 2 + 1], fill_r, fill_g, fill_b);
+            PushVertex(p->x, p->y, fill_r, fill_g, fill_b, p->alpha);
+            PushVertex(p->verts[j * 2], p->verts[j * 2 + 1], fill_r, fill_g, fill_b, p->alpha);
+            PushVertex(p->verts[j2 * 2], p->verts[j2 * 2 + 1], fill_r, fill_g, fill_b, p->alpha);
         }
     }
 }

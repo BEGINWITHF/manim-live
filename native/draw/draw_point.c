@@ -16,9 +16,9 @@ void BuildVerticesFromPoints(const PointObj* points, int count) {
             float a1 = step * (float)j;
             float a2 = step * (float)(j + 1);
 
-            PushVertex(p->x, p->y, nr, ng, nb);
-            PushVertex(p->x + cosf(a1) * radius, p->y + sinf(a1) * radius, nr, ng, nb);
-            PushVertex(p->x + cosf(a2) * radius, p->y + sinf(a2) * radius, nr, ng, nb);
+            PushVertex(p->x, p->y, nr, ng, nb, p->alpha);
+            PushVertex(p->x + cosf(a1) * radius, p->y + sinf(a1) * radius, nr, ng, nb, p->alpha);
+            PushVertex(p->x + cosf(a2) * radius, p->y + sinf(a2) * radius, nr, ng, nb, p->alpha);
         }
     }
 }

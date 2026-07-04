@@ -35,13 +35,13 @@ void BuildVerticesFromDashedLines(const DashedLineObj* lines, int count) {
                     float pny = (ddx / dlen) * hw;
 
                     if (g_vertex_count + 6 <= MAX_VERTICES) {
-                        PushVertex(x1 + pnx, y1 + pny, nr, ng, nb);
-                        PushVertex(x1 - pnx, y1 - pny, nr, ng, nb);
-                        PushVertex(x2 + pnx, y2 + pny, nr, ng, nb);
+                        PushVertex(x1 + pnx, y1 + pny, nr, ng, nb, l->alpha);
+                        PushVertex(x1 - pnx, y1 - pny, nr, ng, nb, l->alpha);
+                        PushVertex(x2 + pnx, y2 + pny, nr, ng, nb, l->alpha);
 
-                        PushVertex(x1 - pnx, y1 - pny, nr, ng, nb);
-                        PushVertex(x2 - pnx, y2 - pny, nr, ng, nb);
-                        PushVertex(x2 + pnx, y2 + pny, nr, ng, nb);
+                        PushVertex(x1 - pnx, y1 - pny, nr, ng, nb, l->alpha);
+                        PushVertex(x2 - pnx, y2 - pny, nr, ng, nb, l->alpha);
+                        PushVertex(x2 + pnx, y2 + pny, nr, ng, nb, l->alpha);
                     }
                 }
             }

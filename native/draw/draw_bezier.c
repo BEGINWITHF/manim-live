@@ -26,6 +26,7 @@ typedef struct {
     int sub_count;
     int sub_seg_start[128];
     int sub_winding[128];
+    float alpha;
 } BezierPathObj;
 
 static BezierPathObj bezier_paths[MAX_BEZIER_PATHS];
@@ -36,7 +37,7 @@ __declspec(dllexport) void AddBezierPath(
     const float *points, int num_points,
     int sr, int sg, int sb, float stroke_width,
     int fr, int fg, int fb, float fill_opacity,
-    float progress, int show_stroke, int show_fill)
+    float progress, int show_stroke, int show_fill, float alpha)
 {
     if (bezier_path_count >= MAX_BEZIER_PATHS) return;
     if (num_points < 8) return;
@@ -52,6 +53,7 @@ __declspec(dllexport) void AddBezierPath(
     bp->progress = progress;
     bp->show_stroke = show_stroke;
     bp->show_fill = show_fill;
+    bp->alpha = alpha;
 
     for (int i = 0; i < num_segs; i++) {
         int off = i * 4 * 3;
@@ -175,9 +177,9 @@ static void tessellate_stroke(BezierPathObj *bp) {
                 float cnx = (-ty / tlen) * half_w * wind;
                 float cny = (tx / tlen) * half_w * wind;
                 if (g_vertex_count + 3 > MAX_VERTICES) return;
-                PushVertex(prev_x, prev_y, nr, ng, nb);
-                PushVertex(prev_x - prev_nx, prev_y - prev_ny, nr, ng, nb);
-                PushVertex(px - cnx, py - cny, nr, ng, nb);
+                PushVertex(prev_x, prev_y, nr, ng, nb, bp->alpha);
+                PushVertex(prev_x - prev_nx, prev_y - prev_ny, nr, ng, nb, bp->alpha);
+                PushVertex(px - cnx, py - cny, nr, ng, nb, bp->alpha);
                 prev_x = px; prev_y = py;
                 prev_nx = cnx; prev_ny = cny;
                 has_prev = 1;
@@ -189,13 +191,13 @@ static void tessellate_stroke(BezierPathObj *bp) {
 
             if (has_prev) {
                 if (g_vertex_count + 6 > MAX_VERTICES) return;
-                PushVertex(prev_x, prev_y, nr, ng, nb);
-                PushVertex(prev_x - prev_nx, prev_y - prev_ny, nr, ng, nb);
-                PushVertex(px, py, nr, ng, nb);
+                PushVertex(prev_x, prev_y, nr, ng, nb, bp->alpha);
+                PushVertex(prev_x - prev_nx, prev_y - prev_ny, nr, ng, nb, bp->alpha);
+                PushVertex(px, py, nr, ng, nb, bp->alpha);
 
-                PushVertex(prev_x - prev_nx, prev_y - prev_ny, nr, ng, nb);
-                PushVertex(px - nx, py - ny, nr, ng, nb);
-                PushVertex(px, py, nr, ng, nb);
+                PushVertex(prev_x - prev_nx, prev_y - prev_ny, nr, ng, nb, bp->alpha);
+                PushVertex(px - nx, py - ny, nr, ng, nb, bp->alpha);
+                PushVertex(px, py, nr, ng, nb, bp->alpha);
             }
 
             prev_x = px; prev_y = py;
@@ -313,13 +315,13 @@ done_sample_all:
                     float a_g = cg * coverage;
                     float a_b = cb * coverage;
                     if (g_vertex_count + 6 > MAX_VERTICES) return;
-                    PushVertex(seg_l, scan_y, a_r, a_g, a_b);
-                    PushVertex(seg_r, scan_y, a_r, a_g, a_b);
-                    PushVertex(seg_r, scan_y + 1.0f, a_r, a_g, a_b);
+                    PushVertex(seg_l, scan_y, a_r, a_g, a_b, bp->alpha);
+                    PushVertex(seg_r, scan_y, a_r, a_g, a_b, bp->alpha);
+                    PushVertex(seg_r, scan_y + 1.0f, a_r, a_g, a_b, bp->alpha);
 
-                    PushVertex(seg_l, scan_y, a_r, a_g, a_b);
-                    PushVertex(seg_r, scan_y + 1.0f, a_r, a_g, a_b);
-                    PushVertex(seg_l, scan_y + 1.0f, a_r, a_g, a_b);
+                    PushVertex(seg_l, scan_y, a_r, a_g, a_b, bp->alpha);
+                    PushVertex(seg_r, scan_y + 1.0f, a_r, a_g, a_b, bp->alpha);
+                    PushVertex(seg_l, scan_y + 1.0f, a_r, a_g, a_b, bp->alpha);
                 }
             }
         }

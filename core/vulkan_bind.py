@@ -1045,27 +1045,31 @@ class VulkanRender:
         self.dll.AddRect.argtypes = [
             ctypes.c_float, ctypes.c_float, ctypes.c_float,
             ctypes.c_float, ctypes.c_float,
-            ctypes.c_int, ctypes.c_int, ctypes.c_int
+            ctypes.c_int, ctypes.c_int, ctypes.c_int,
+            ctypes.c_float,
         ]
         self.dll.AddCircle.restype = None
         self.dll.AddCircle.argtypes = [
             ctypes.c_float, ctypes.c_float, ctypes.c_float,
             ctypes.c_int, ctypes.c_int, ctypes.c_int,
             ctypes.c_int, ctypes.c_int, ctypes.c_int,
-            ctypes.c_float, ctypes.c_float
+            ctypes.c_float, ctypes.c_float,
+            ctypes.c_float,
         ]
         self.dll.AddLine.restype = None
         self.dll.AddLine.argtypes = [
             ctypes.c_float, ctypes.c_float,
             ctypes.c_float, ctypes.c_float,
             ctypes.c_int, ctypes.c_int,
-            ctypes.c_int, ctypes.c_int
+            ctypes.c_int, ctypes.c_int,
+            ctypes.c_float,
         ]
         self.dll.AddEllipse.restype = None
         self.dll.AddEllipse.argtypes = [
             ctypes.c_float, ctypes.c_float,
             ctypes.c_float, ctypes.c_float,
-            ctypes.c_int, ctypes.c_int, ctypes.c_int
+            ctypes.c_int, ctypes.c_int, ctypes.c_int,
+            ctypes.c_float,
         ]
         self.dll.AddPolygon.restype = None
         self.dll.AddPolygon.argtypes = [
@@ -1073,7 +1077,8 @@ class VulkanRender:
             ctypes.c_int, ctypes.c_int, ctypes.c_int,
             ctypes.c_int, ctypes.c_int, ctypes.c_int,
             ctypes.c_float, ctypes.c_int,
-            ctypes.POINTER(ctypes.c_float)
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_float,
         ]
         self.dll.AddDashedLine.restype = None
         self.dll.AddDashedLine.argtypes = [
@@ -1081,19 +1086,22 @@ class VulkanRender:
             ctypes.c_float, ctypes.c_float,
             ctypes.c_int, ctypes.c_int,
             ctypes.c_int, ctypes.c_int,
-            ctypes.c_float, ctypes.c_float
+            ctypes.c_float, ctypes.c_float,
+            ctypes.c_float,
         ]
         self.dll.AddArc.restype = None
         self.dll.AddArc.argtypes = [
             ctypes.c_float, ctypes.c_float, ctypes.c_float,
             ctypes.c_float, ctypes.c_float,
             ctypes.c_int, ctypes.c_int, ctypes.c_int,
-            ctypes.c_float
+            ctypes.c_float,
+            ctypes.c_float,
         ]
         self.dll.AddPoint.restype = None
         self.dll.AddPoint.argtypes = [
             ctypes.c_float, ctypes.c_float,
-            ctypes.c_int, ctypes.c_int, ctypes.c_int
+            ctypes.c_int, ctypes.c_int, ctypes.c_int,
+            ctypes.c_float,
         ]
         self.dll.AddBezierPath.restype = None
         self.dll.AddBezierPath.argtypes = [
@@ -1101,6 +1109,7 @@ class VulkanRender:
             ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float,
             ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float,
             ctypes.c_float, ctypes.c_int, ctypes.c_int,
+            ctypes.c_float,
         ]
 
         self.dll.SaveScreenshot.restype = ctypes.c_int
@@ -1125,12 +1134,12 @@ class VulkanRender:
 
         if isinstance(mob, Text):
             if getattr(mob, '_letter_alphas', None) is not None and hasattr(mob, 'submobjects') and mob.submobjects:
-                self._send_text_write(mob, mob._letter_alphas, w, h)
+                self._send_text_write(mob, mob._letter_alphas, w, h, a)
             elif hasattr(mob, 'submobjects') and mob.submobjects:
                 if a < 1.0:
                     self._send_transformed_text(mob, w, h, alpha=a)
                 else:
-                    self._send_text_bitmap(mob, w, h)
+                    self._send_text_bitmap(mob, w, h, a)
 
         elif isinstance(mob, (VGroup, Group)):
             own_alpha = get_anim_opacity(mob)
@@ -1164,10 +1173,12 @@ class VulkanRender:
             if fo <= 0 and so <= 0:
                 return
             if fo <= 0:
+                if a < 1.0:
+                    return
                 sr, sg, sb = self._stroke_color(mob)
-                sr = int(sr * so * a)
-                sg = int(sg * so * a)
-                sb = int(sb * so * a)
+                sr = int(sr * so)
+                sg = int(sg * so)
+                sb = int(sb * so)
                 sw = max(1, round(self._stroke_width(mob)))
                 tl = self._rotate_point(sx - half, sy - half, sx, sy, rot)
                 tr = self._rotate_point(sx + half, sy - half, sx, sy, rot)
@@ -1186,40 +1197,40 @@ class VulkanRender:
                     if remaining <= 0:
                         break
                     if remaining >= length:
-                        self.dll.AddLine(x0, y0, x1, y1, sw, sr, sg, sb)
+                        self.dll.AddLine(x0, y0, x1, y1, sw, sr, sg, sb, a)
                         remaining -= length
                     else:
                         frac = remaining / length
                         ex = x0 + (x1 - x0) * frac
                         ey = y0 + (y1 - y0) * frac
-                        self.dll.AddLine(x0, y0, ex, ey, sw, sr, sg, sb)
+                        self.dll.AddLine(x0, y0, ex, ey, sw, sr, sg, sb, a)
                         remaining = 0
             else:
                 progress = getattr(mob, '_vulkan_progress', 1.0)
                 if progress >= 1.0:
                     r, g, b = self._color(mob, a)
-                    self.dll.AddRect(sx, sy, half, half, rot, r, g, b)
-                    if so > 0:
+                    self.dll.AddRect(sx, sy, half, half, rot, r, g, b, a)
+                    if so > 0 and a >= 1.0:
                         sr, sg, sb = self._stroke_color(mob)
-                        sr = int(sr * so * a)
-                        sg = int(sg * so * a)
-                        sb = int(sb * so * a)
+                        sr = int(sr * so)
+                        sg = int(sg * so)
+                        sb = int(sb * so)
                         sw = max(1, round(self._stroke_width(mob)))
                         tl = self._rotate_point(sx - half, sy - half, sx, sy, rot)
                         tr = self._rotate_point(sx + half, sy - half, sx, sy, rot)
                         br = self._rotate_point(sx + half, sy + half, sx, sy, rot)
                         bl = self._rotate_point(sx - half, sy + half, sx, sy, rot)
-                        self.dll.AddLine(tr[0], tr[1], tl[0], tl[1], sw, sr, sg, sb)
-                        self.dll.AddLine(tl[0], tl[1], bl[0], bl[1], sw, sr, sg, sb)
-                        self.dll.AddLine(bl[0], bl[1], br[0], br[1], sw, sr, sg, sb)
-                        self.dll.AddLine(br[0], br[1], tr[0], tr[1], sw, sr, sg, sb)
+                        self.dll.AddLine(tr[0], tr[1], tl[0], tl[1], sw, sr, sg, sb, a)
+                        self.dll.AddLine(tl[0], tl[1], bl[0], bl[1], sw, sr, sg, sb, a)
+                        self.dll.AddLine(bl[0], bl[1], br[0], br[1], sw, sr, sg, sb, a)
+                        self.dll.AddLine(br[0], br[1], tr[0], tr[1], sw, sr, sg, sb, a)
                 else:
                     stroke_progress = min(1.0, progress * 2.0)
-                    if stroke_progress > 0:
+                    if stroke_progress > 0 and a >= 1.0:
                         sr, sg, sb = self._stroke_color(mob)
-                        sr = int(sr * so * a)
-                        sg = int(sg * so * a)
-                        sb = int(sb * so * a)
+                        sr = int(sr * so)
+                        sg = int(sg * so)
+                        sb = int(sb * so)
                         sw = max(1, round(self._stroke_width(mob)))
                         tl = self._rotate_point(sx - half, sy - half, sx, sy, rot)
                         tr = self._rotate_point(sx + half, sy - half, sx, sy, rot)
@@ -1238,13 +1249,13 @@ class VulkanRender:
                             if remaining <= 0:
                                 break
                             if remaining >= length:
-                                self.dll.AddLine(x0, y0, x1, y1, sw, sr, sg, sb)
+                                self.dll.AddLine(x0, y0, x1, y1, sw, sr, sg, sb, a)
                                 remaining -= length
                             else:
                                 frac = remaining / length
                                 ex = x0 + (x1 - x0) * frac
                                 ey = y0 + (y1 - y0) * frac
-                                self.dll.AddLine(x0, y0, ex, ey, sw, sr, sg, sb)
+                                self.dll.AddLine(x0, y0, ex, ey, sw, sr, sg, sb, a)
                                 remaining = 0
                     if progress > 0.5:
                         fill_alpha = (progress - 0.5) * 2.0
@@ -1252,7 +1263,7 @@ class VulkanRender:
                         fr = int(r * fill_alpha)
                         fg = int(g * fill_alpha)
                         fb = int(b * fill_alpha)
-                        self.dll.AddRect(sx, sy, half, half, rot, fr, fg, fb)
+                        self.dll.AddRect(sx, sy, half, half, rot, fr, fg, fb, a)
 
         elif isinstance(mob, Rectangle):
             cx, cy, _ = mob.get_center()
@@ -1267,10 +1278,12 @@ class VulkanRender:
             if fo <= 0 and so <= 0:
                 return
             if fo <= 0:
+                if a < 1.0:
+                    return
                 sr, sg, sb = self._stroke_color(mob)
-                sr = int(sr * so * a)
-                sg = int(sg * so * a)
-                sb = int(sb * so * a)
+                sr = int(sr * so)
+                sg = int(sg * so)
+                sb = int(sb * so)
                 sw = max(1, round(self._stroke_width(mob)))
                 tl = self._rotate_point(sx - hw, sy - hh, sx, sy, rot)
                 tr = self._rotate_point(sx + hw, sy - hh, sx, sy, rot)
@@ -1289,26 +1302,26 @@ class VulkanRender:
                     if remaining <= 0:
                         break
                     if remaining >= length:
-                        self.dll.AddLine(x0, y0, x1, y1, sw, sr, sg, sb)
+                        self.dll.AddLine(x0, y0, x1, y1, sw, sr, sg, sb, a)
                         remaining -= length
                     else:
                         frac = remaining / length
                         ex = x0 + (x1 - x0) * frac
                         ey = y0 + (y1 - y0) * frac
-                        self.dll.AddLine(x0, y0, ex, ey, sw, sr, sg, sb)
+                        self.dll.AddLine(x0, y0, ex, ey, sw, sr, sg, sb, a)
                         remaining = 0
             else:
                 progress = getattr(mob, '_vulkan_progress', 1.0)
                 if progress >= 1.0:
                     r, g, b = self._color(mob, a)
-                    self.dll.AddRect(sx, sy, hw, hh, rot, r, g, b)
+                    self.dll.AddRect(sx, sy, hw, hh, rot, r, g, b, a)
                 else:
                     stroke_progress = min(1.0, progress * 2.0)
-                    if stroke_progress > 0:
+                    if stroke_progress > 0 and a >= 1.0:
                         sr, sg, sb = self._stroke_color(mob)
-                        sr = int(sr * so * a)
-                        sg = int(sg * so * a)
-                        sb = int(sb * so * a)
+                        sr = int(sr * so)
+                        sg = int(sg * so)
+                        sb = int(sb * so)
                         sw = max(1, round(self._stroke_width(mob)))
                         tl = self._rotate_point(sx - hw, sy - hh, sx, sy, rot)
                         tr = self._rotate_point(sx + hw, sy - hh, sx, sy, rot)
@@ -1327,13 +1340,13 @@ class VulkanRender:
                             if remaining <= 0:
                                 break
                             if remaining >= length:
-                                self.dll.AddLine(x0, y0, x1, y1, sw, sr, sg, sb)
+                                self.dll.AddLine(x0, y0, x1, y1, sw, sr, sg, sb, a)
                                 remaining -= length
                             else:
                                 frac = remaining / length
                                 ex = x0 + (x1 - x0) * frac
                                 ey = y0 + (y1 - y0) * frac
-                                self.dll.AddLine(x0, y0, ex, ey, sw, sr, sg, sb)
+                                self.dll.AddLine(x0, y0, ex, ey, sw, sr, sg, sb, a)
                                 remaining = 0
                     if progress > 0.5:
                         fill_opacity = (progress - 0.5) * 2.0
@@ -1341,7 +1354,7 @@ class VulkanRender:
                         r = int(r * fill_opacity)
                         g = int(g * fill_opacity)
                         b = int(b * fill_opacity)
-                        self.dll.AddRect(sx, sy, hw, hh, rot, r, g, b)
+                        self.dll.AddRect(sx, sy, hw, hh, rot, r, g, b, a)
 
         elif isinstance(mob, Ellipse):
             cx, cy, _ = mob.get_center()
@@ -1355,10 +1368,12 @@ class VulkanRender:
             if fo <= 0 and so <= 0:
                 return
             if fo <= 0:
+                if a < 1.0:
+                    return
                 sr, sg, sb = self._stroke_color(mob)
-                sr = int(sr * so * a)
-                sg = int(sg * so * a)
-                sb = int(sb * so * a)
+                sr = int(sr * so)
+                sg = int(sg * so)
+                sb = int(sb * so)
                 sw = max(1, round(self._stroke_width(mob)))
                 segs = 48
                 circumference = math.pi * (3 * (rx + ry) - math.sqrt((3 * rx + ry) * (rx + 3 * ry)))
@@ -1375,27 +1390,27 @@ class VulkanRender:
                     py = sy - math.sin(cur_angle_rad) * ry
                     seg_len = math.sqrt((px - prev_px) ** 2 + (py - prev_py) ** 2)
                     if accumulated + seg_len <= drawn:
-                        self.dll.AddLine(prev_px, prev_py, px, py, sw, sr, sg, sb)
+                        self.dll.AddLine(prev_px, prev_py, px, py, sw, sr, sg, sb, a)
                         accumulated += seg_len
                     else:
                         frac = (drawn - accumulated) / seg_len if seg_len > 0 else 0
                         ex = prev_px + (px - prev_px) * frac
                         ey = prev_py + (py - prev_py) * frac
-                        self.dll.AddLine(prev_px, prev_py, ex, ey, sw, sr, sg, sb)
+                        self.dll.AddLine(prev_px, prev_py, ex, ey, sw, sr, sg, sb, a)
                         accumulated = drawn
                     prev_px, prev_py = px, py
             else:
                 progress = getattr(mob, '_vulkan_progress', 1.0)
                 if progress >= 1.0:
                     r, g, b = self._color(mob, a)
-                    self.dll.AddEllipse(sx, sy, rx, ry, r, g, b)
+                    self.dll.AddEllipse(sx, sy, rx, ry, r, g, b, a)
                 else:
                     stroke_progress = min(1.0, progress * 2.0)
-                    if stroke_progress > 0:
+                    if stroke_progress > 0 and a >= 1.0:
                         sr2, sg2, sb2 = self._stroke_color(mob)
-                        sr2 = int(sr2 * so * a)
-                        sg2 = int(sg2 * so * a)
-                        sb2 = int(sb2 * so * a)
+                        sr2 = int(sr2 * so)
+                        sg2 = int(sg2 * so)
+                        sb2 = int(sb2 * so)
                         sw2 = max(1, round(self._stroke_width(mob)))
                         segs = 48
                         circumference = math.pi * (3 * (rx + ry) - math.sqrt((3 * rx + ry) * (rx + 3 * ry)))
@@ -1412,13 +1427,13 @@ class VulkanRender:
                             py = sy - math.sin(cur_angle_rad) * ry
                             seg_len = math.sqrt((px - prev_px) ** 2 + (py - prev_py) ** 2)
                             if accumulated + seg_len <= drawn:
-                                self.dll.AddLine(prev_px, prev_py, px, py, sw2, sr2, sg2, sb2)
+                                self.dll.AddLine(prev_px, prev_py, px, py, sw2, sr2, sg2, sb2, a)
                                 accumulated += seg_len
                             else:
                                 frac = (drawn - accumulated) / seg_len if seg_len > 0 else 0
                                 ex = prev_px + (px - prev_px) * frac
                                 ey = prev_py + (py - prev_py) * frac
-                                self.dll.AddLine(prev_px, prev_py, ex, ey, sw2, sr2, sg2, sb2)
+                                self.dll.AddLine(prev_px, prev_py, ex, ey, sw2, sr2, sg2, sb2, a)
                                 accumulated = drawn
                             prev_px, prev_py = px, py
                     if progress > 0.5:
@@ -1427,7 +1442,7 @@ class VulkanRender:
                         r = int(r * fill_opacity)
                         g = int(g * fill_opacity)
                         b = int(b * fill_opacity)
-                        self.dll.AddEllipse(sx, sy, rx, ry, r, g, b)
+                        self.dll.AddEllipse(sx, sy, rx, ry, r, g, b, a)
 
         elif isinstance(mob, Circle):
             cx, cy, _ = mob.get_center()
@@ -1440,10 +1455,12 @@ class VulkanRender:
             if fo <= 0 and so <= 0:
                 return
             if fo <= 0:
+                if a < 1.0:
+                    return
                 cr, cg, cb = self._stroke_color(mob)
-                cr = int(cr * so * a)
-                cg = int(cg * so * a)
-                cb = int(cb * so * a)
+                cr = int(cr * so)
+                cg = int(cg * so)
+                cb = int(cb * so)
                 sw = max(1, round(self._stroke_width(mob)))
                 segs = 48
                 circumference = 2.0 * math.pi * sr
@@ -1460,13 +1477,13 @@ class VulkanRender:
                     py = sy - math.sin(cur_angle_rad) * sr
                     seg_len = math.sqrt((px - prev_px) ** 2 + (py - prev_py) ** 2)
                     if accumulated + seg_len <= drawn:
-                        self.dll.AddLine(prev_px, prev_py, px, py, sw, cr, cg, cb)
+                        self.dll.AddLine(prev_px, prev_py, px, py, sw, cr, cg, cb, a)
                         accumulated += seg_len
                     else:
                         frac = (drawn - accumulated) / seg_len if seg_len > 0 else 0
                         ex = prev_px + (px - prev_px) * frac
                         ey = prev_py + (py - prev_py) * frac
-                        self.dll.AddLine(prev_px, prev_py, ex, ey, sw, cr, cg, cb)
+                        self.dll.AddLine(prev_px, prev_py, ex, ey, sw, cr, cg, cb, a)
                         accumulated = drawn
                     prev_px, prev_py = px, py
             else:
@@ -1475,14 +1492,14 @@ class VulkanRender:
                     fr, fg, fb = self._color(mob, a)
                     br, bg, bb = self._stroke_color(mob)
                     bw = self._stroke_width(mob)
-                    self.dll.AddCircle(sx, sy, sr, fr, fg, fb, br, bg, bb, bw, 1.0)
+                    self.dll.AddCircle(sx, sy, sr, fr, fg, fb, br, bg, bb, bw, 1.0, a)
                 else:
                     stroke_progress = min(1.0, progress * 2.0)
-                    if stroke_progress > 0:
+                    if stroke_progress > 0 and a >= 1.0:
                         cr2, cg2, cb2 = self._stroke_color(mob)
-                        cr2 = int(cr2 * so * a)
-                        cg2 = int(cg2 * so * a)
-                        cb2 = int(cb2 * so * a)
+                        cr2 = int(cr2 * so)
+                        cg2 = int(cg2 * so)
+                        cb2 = int(cb2 * so)
                         sw2 = max(1, round(self._stroke_width(mob)))
                         segs = 48
                         circumference = 2.0 * math.pi * sr
@@ -1499,13 +1516,13 @@ class VulkanRender:
                             py = sy - math.sin(cur_angle_rad) * sr
                             seg_len = math.sqrt((px - prev_px) ** 2 + (py - prev_py) ** 2)
                             if accumulated + seg_len <= drawn:
-                                self.dll.AddLine(prev_px, prev_py, px, py, sw2, cr2, cg2, cb2)
+                                self.dll.AddLine(prev_px, prev_py, px, py, sw2, cr2, cg2, cb2, a)
                                 accumulated += seg_len
                             else:
                                 frac = (drawn - accumulated) / seg_len if seg_len > 0 else 0
                                 ex = prev_px + (px - prev_px) * frac
                                 ey = prev_py + (py - prev_py) * frac
-                                self.dll.AddLine(prev_px, prev_py, ex, ey, sw2, cr2, cg2, cb2)
+                                self.dll.AddLine(prev_px, prev_py, ex, ey, sw2, cr2, cg2, cb2, a)
                                 accumulated = drawn
                             prev_px, prev_py = px, py
                     if progress > 0.5:
@@ -1513,7 +1530,7 @@ class VulkanRender:
                         fr, fg, fb = self._color(mob, a)
                         br2, bg2, bb2 = self._stroke_color(mob)
                         bw2 = self._stroke_width(mob) * (h / 8.0)
-                        self.dll.AddCircle(sx, sy, sr, fr, fg, fb, br2, bg2, bb2, bw2, fill_opacity)
+                        self.dll.AddCircle(sx, sy, sr, fr, fg, fb, br2, bg2, bb2, bw2, fill_opacity, a)
 
         elif isinstance(mob, Arrow):
             s = mob.get_start()
@@ -1526,7 +1543,7 @@ class VulkanRender:
             sx2, sy2 = self._rotate_point(sx2, sy2, scx, scy, rot)
             r, g, b = self._stroke_color(mob)
             sw = max(1, round(self._stroke_width(mob)))
-            self.dll.AddLine(sx1, sy1, sx2, sy2, sw, r, g, b)
+            self.dll.AddLine(sx1, sy1, sx2, sy2, sw, r, g, b, a)
             dx = sx2 - sx1
             dy = sy2 - sy1
             length = math.sqrt(dx * dx + dy * dy)
@@ -1541,8 +1558,8 @@ class VulkanRender:
                 hy1 = sy2 - uy * head_len + py * head_w
                 hx2 = sx2 - ux * head_len - px * head_w
                 hy2 = sy2 - uy * head_len - py * head_w
-                self.dll.AddLine(sx2, sy2, hx1, hy1, sw, r, g, b)
-                self.dll.AddLine(sx2, sy2, hx2, hy2, sw, r, g, b)
+                self.dll.AddLine(sx2, sy2, hx1, hy1, sw, r, g, b, a)
+                self.dll.AddLine(sx2, sy2, hx2, hy2, sw, r, g, b, a)
                 head_pts = [
                     sx2, sy2, 0.0,
                     sx2, sy2, 0.0,
@@ -1562,7 +1579,7 @@ class VulkanRender:
                     head_arr, 12,
                     r, g, b, float(sw),
                     r, g, b, 1.0,
-                    1.0, 1, 1,
+                    1.0, 1, 1, a,
                 )
 
         elif isinstance(mob, Line):
@@ -1576,7 +1593,7 @@ class VulkanRender:
             sx2, sy2 = self._rotate_point(sx2, sy2, scx, scy, rot)
             r, g, b = self._stroke_color(mob)
             sw = max(1, round(self._stroke_width(mob)))
-            self.dll.AddLine(sx1, sy1, sx2, sy2, sw, r, g, b)
+            self.dll.AddLine(sx1, sy1, sx2, sy2, sw, r, g, b, a)
 
         elif isinstance(mob, Dot):
             cx, cy, _ = mob.get_center()
@@ -1584,7 +1601,7 @@ class VulkanRender:
             scale_y = h / 8.0
             rad = mob.radius * scale_y if hasattr(mob, 'radius') else 6.0
             r, g, b = self._color(mob, a)
-            self.dll.AddCircle(sx, sy, rad, r, g, b, 0, 0, 0, 0.0, 1.0)
+            self.dll.AddCircle(sx, sy, rad, r, g, b, 0, 0, 0, 0.0, 1.0, a)
 
         elif isinstance(mob, DashedLine):
             s = mob.get_start()
@@ -1601,7 +1618,7 @@ class VulkanRender:
             gl_manim = dl_manim * (1.0 - ratio) / ratio
             dl = max(1.0, dl_manim * scale_x)
             gl = max(1.0, gl_manim * scale_x)
-            self.dll.AddDashedLine(sx1, sy1, sx2, sy2, sw, r, g, b, dl, gl)
+            self.dll.AddDashedLine(sx1, sy1, sx2, sy2, sw, r, g, b, dl, gl, a)
 
         elif isinstance(mob, Arc):
             cx, cy, _ = mob.get_center()
@@ -1612,7 +1629,7 @@ class VulkanRender:
             ang = mob.angle if hasattr(mob, 'angle') else math.pi
             r, g, b = self._stroke_color(mob)
             sw = max(1, round(self._stroke_width(mob)))
-            self.dll.AddArc(sx, sy, rad, sa, ang, r, g, b, sw)
+            self.dll.AddArc(sx, sy, rad, sa, ang, r, g, b, sw, a)
 
         elif isinstance(mob, Polygon):
             verts = mob.get_vertices()
@@ -1626,7 +1643,7 @@ class VulkanRender:
             pos = mob.get_location()
             sx, sy = manim_to_screen(pos[0], pos[1], w, h)
             r, g, b = self._color(mob, a)
-            self.dll.AddPoint(sx, sy, r, g, b)
+            self.dll.AddPoint(sx, sy, r, g, b, a)
 
         else:
             try:
@@ -1655,7 +1672,7 @@ class VulkanRender:
         arr = (ctypes.c_float * len(flat))(*flat)
         self.dll.AddPolygon(
             sx, sy, fr, fg, fb, br, bg, bb, bw,
-            len(verts), arr
+            len(verts), arr, alpha
         )
 
     def _send_transformed_text(self, mob, w, h, alpha=1.0):
@@ -1694,12 +1711,12 @@ class VulkanRender:
                     arr, num_segs * 4,
                     sr, sg, sb, 0.7,
                     sr, sg, sb, 1.0,
-                    1.0, 1, 1,
+                    1.0, 1, 1, alpha,
                 )
             except Exception:
                 pass
 
-    def _send_text_write(self, mob, letter_alphas, w, h):
+    def _send_text_write(self, mob, letter_alphas, w, h, alpha=1.0):
         try:
             c = mob.get_color()
             base_r, base_g, base_b = round(float(c[0]) * 255), round(float(c[1]) * 255), round(float(c[2]) * 255)
@@ -1739,10 +1756,10 @@ class VulkanRender:
                 arr, n,
                 sr, sg, sb, 0.7,
                 base_r, base_g, base_b, fill_alpha,
-                stroke_progress, 1, 1 if fill_alpha > 0 else 0,
+                stroke_progress, 1, 1 if fill_alpha > 0 else 0, alpha,
             )
 
-    def _send_text_bitmap(self, mob, w, h):
+    def _send_text_bitmap(self, mob, w, h, alpha=1.0):
         try:
             c = mob.get_color()
             base_r, base_g, base_b = int(c[0] * 255), int(c[1] * 255), int(c[2] * 255)
@@ -1776,7 +1793,7 @@ class VulkanRender:
                 arr, n,
                 base_r, base_g, base_b, 0.7,
                 base_r, base_g, base_b, 1.0,
-                progress, 1, 1,
+                progress, 1, 1, alpha,
             )
 
     def _send_vmobject(self, mob, a, w, h, parent_offset=None):
@@ -1846,7 +1863,25 @@ class VulkanRender:
             arr, n,
             sri, sgi, sbi, stroke_w,
             fri, fgi, fbi, fill_alpha,
-            1.0, show_stroke, show_fill,
+            1.0, show_stroke, show_fill, a,
+        )
+
+    def _fill_quad_alpha(self, x0, y0, x1, y1, x2, y2, x3, y3, r, g, b, alpha):
+        w, h = self.win_w, self.win_h
+        corners = [(x0,y0),(x1,y1),(x2,y2),(x3,y3)]
+        flat = []
+        for i in range(4):
+            j = (i + 1) % 4
+            for _ in range(4):
+                sx, sy = manim_to_screen(corners[i][0], corners[i][1], w, h)
+                flat.extend([sx, sy, 0.0])
+        arr = (ctypes.c_float * len(flat))(*flat)
+        ri, gi, bi = int(r), int(g), int(b)
+        self.dll.AddBezierPath(
+            arr, 16,
+            ri, gi, bi, 0.0,
+            ri, gi, bi, 1.0,
+            1.0, 0, 1, alpha,
         )
 
     def _color(self, mob, alpha=1.0):
@@ -1920,6 +1955,8 @@ class VulkanRender:
     def play(self, *animations, **kwargs):
         if not self.scene:
             return
+
+        screenshot_at = kwargs.get('screenshot_at', None)
 
         add_mobs = []
         for anim in animations:
@@ -2054,6 +2091,18 @@ class VulkanRender:
             if not self.tick():
                 break
             self.sync(self.scene)
+
+            if screenshot_at:
+                for a in self._active_anims:
+                    if a in screenshot_at:
+                        alpha = (now - a.start_time) / a.run_time if a.run_time > 0 else 1.0
+                        alpha = max(0.0, min(1.0, alpha))
+                        alpha = a.rate_func(alpha)
+                        for threshold, path in screenshot_at[a]:
+                            if abs(alpha - threshold) < 0.02:
+                                self.screenshot(path)
+                                del screenshot_at[a][screenshot_at[a].index((threshold, path))]
+                                break
 
             if all_done:
                 break

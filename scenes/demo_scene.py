@@ -83,10 +83,20 @@ class TestFadeTransform(Scene):
             Add(sq), Add(circ),
             Write(Text("FadeTransform", font_size=28).shift(UP * 2.5)),
         )
-        render.play(Wait(0.5))
+        render.screenshot(r"C:\Users\begin\Desktop\our_ft_before.png")
 
-        render.play(FadeTransform(sq, circ, run_time=2.0))
+        ft = FadeTransform(sq, circ, run_time=2.0)
+        render.play(
+            ft,
+            screenshot_at={
+                ft: [
+                    (0.25, r"C:\Users\begin\Desktop\our_ft_25.png"),
+                    (0.50, r"C:\Users\begin\Desktop\our_ft_50.png"),
+                    (0.75, r"C:\Users\begin\Desktop\our_ft_75.png"),
+                ]
+            }
+        )
+        render.screenshot(r"C:\Users\begin\Desktop\our_ft_after.png")
+
         render.play(Wait(1.0))
-
-        render.play(Wait(2.0))
         render.close()

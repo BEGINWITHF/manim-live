@@ -33,9 +33,9 @@ void BuildVerticesFromCircles(const Circle *circles, int count) {
                 float x2 = c->x + cosf(a2) * fill_radius;
                 float y2 = c->y + sinf(a2) * fill_radius;
 
-                PushVertex(start_x, start_y, nr, ng, nb);
-                PushVertex(x1, y1, nr, ng, nb);
-                PushVertex(x2, y2, nr, ng, nb);
+                PushVertex(start_x, start_y, nr, ng, nb, c->alpha);
+                PushVertex(x1, y1, nr, ng, nb, c->alpha);
+                PushVertex(x2, y2, nr, ng, nb, c->alpha);
             }
         }
 
@@ -53,13 +53,13 @@ void BuildVerticesFromCircles(const Circle *circles, int count) {
                 float a1 = step * (float)j;
                 float a2 = step * (float)(j + 1);
 
-                PushVertex(c->x + cosf(a1) * inner_r, c->y + sinf(a1) * inner_r, bn, bg, bb);
-                PushVertex(c->x + cosf(a1) * outer_r, c->y + sinf(a1) * outer_r, bn, bg, bb);
-                PushVertex(c->x + cosf(a2) * inner_r, c->y + sinf(a2) * inner_r, bn, bg, bb);
+                PushVertex(c->x + cosf(a1) * inner_r, c->y + sinf(a1) * inner_r, bn, bg, bb, c->alpha);
+                PushVertex(c->x + cosf(a1) * outer_r, c->y + sinf(a1) * outer_r, bn, bg, bb, c->alpha);
+                PushVertex(c->x + cosf(a2) * inner_r, c->y + sinf(a2) * inner_r, bn, bg, bb, c->alpha);
 
-                PushVertex(c->x + cosf(a1) * outer_r, c->y + sinf(a1) * outer_r, bn, bg, bb);
-                PushVertex(c->x + cosf(a2) * outer_r, c->y + sinf(a2) * outer_r, bn, bg, bb);
-                PushVertex(c->x + cosf(a2) * inner_r, c->y + sinf(a2) * inner_r, bn, bg, bb);
+                PushVertex(c->x + cosf(a1) * outer_r, c->y + sinf(a1) * outer_r, bn, bg, bb, c->alpha);
+                PushVertex(c->x + cosf(a2) * outer_r, c->y + sinf(a2) * outer_r, bn, bg, bb, c->alpha);
+                PushVertex(c->x + cosf(a2) * inner_r, c->y + sinf(a2) * inner_r, bn, bg, bb, c->alpha);
             }
         }
     }

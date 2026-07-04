@@ -18,12 +18,12 @@ void BuildVerticesFromRects(const Rect *rects, int count) {
             rot[j][1] = r->y + corners[j][0]*sin_a + corners[j][1]*cos_a;
         }
 
-        PushVertex(rot[0][0], rot[0][1], nr, ng, nb);
-        PushVertex(rot[1][0], rot[1][1], nr, ng, nb);
-        PushVertex(rot[2][0], rot[2][1], nr, ng, nb);
+        PushVertex(rot[0][0], rot[0][1], nr, ng, nb, r->alpha);
+        PushVertex(rot[1][0], rot[1][1], nr, ng, nb, r->alpha);
+        PushVertex(rot[2][0], rot[2][1], nr, ng, nb, r->alpha);
 
-        PushVertex(rot[0][0], rot[0][1], nr, ng, nb);
-        PushVertex(rot[2][0], rot[2][1], nr, ng, nb);
-        PushVertex(rot[3][0], rot[3][1], nr, ng, nb);
+        PushVertex(rot[0][0], rot[0][1], nr, ng, nb, r->alpha);
+        PushVertex(rot[2][0], rot[2][1], nr, ng, nb, r->alpha);
+        PushVertex(rot[3][0], rot[3][1], nr, ng, nb, r->alpha);
     }
 }

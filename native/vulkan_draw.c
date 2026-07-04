@@ -2,7 +2,7 @@
 #include "vulkan_render.h"
 #include "draw_common.h"
 
-float g_vertices[MAX_VERTICES * 5];
+float g_vertices[MAX_VERTICES * 6];
 uint32_t g_vertex_count = 0;
 
 void BuildVerticesFromRects(const Rect *rects, int count);
@@ -58,7 +58,7 @@ void Render_DrawScene(const Rect* rects, int rect_count,
     BuildVerticesFromBezierPaths();
 
     if (g_vertex_count > 0) {
-        update_vertex_buffer(g_vertices, g_vertex_count * 5 * sizeof(float));
+        update_vertex_buffer(g_vertices, g_vertex_count * 6 * sizeof(float));
     }
 }
 

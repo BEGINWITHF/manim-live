@@ -18,9 +18,9 @@ void BuildVerticesFromEllipses(const EllipseObj* ellipses, int count) {
             float x2 = e->x + cosf(a2) * e->rx;
             float y2 = e->y + sinf(a2) * e->ry;
 
-            PushVertex(e->x, e->y, nr, ng, nb);
-            PushVertex(x1, y1, nr, ng, nb);
-            PushVertex(x2, y2, nr, ng, nb);
+            PushVertex(e->x, e->y, nr, ng, nb, e->alpha);
+            PushVertex(x1, y1, nr, ng, nb, e->alpha);
+            PushVertex(x2, y2, nr, ng, nb, e->alpha);
         }
     }
 }
