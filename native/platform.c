@@ -127,9 +127,9 @@ __declspec(dllexport) int Vulkan_Init(int w, int h) {
     return 1;
 }
 
-__declspec(dllexport) void AddRect(float x, float y, float hw, float hh, float rot, int r, int g, int b, float alpha) {
+__declspec(dllexport) void AddRect(float x, float y, float hw, float hh, float rot, int r, int g, int b, int border_r, int border_g, int border_b, float border_width, float stroke_progress, float alpha) {
     if (g_rect_count < MAX_SHAPES) {
-        g_rects[g_rect_count++] = (Rect){ x, y, hw, hh, rot, r, g, b, alpha };
+        g_rects[g_rect_count++] = (Rect){ x, y, hw, hh, rot, r, g, b, border_r, border_g, border_b, border_width, stroke_progress, alpha };
     }
 }
 
@@ -145,13 +145,13 @@ __declspec(dllexport) void AddLine(float x1, float y1, float x2, float y2, int w
     }
 }
 
-__declspec(dllexport) void AddEllipse(float x, float y, float rx, float ry, int r, int g, int b, float alpha) {
+__declspec(dllexport) void AddEllipse(float x, float y, float rx, float ry, int r, int g, int b, int border_r, int border_g, int border_b, float border_width, float stroke_progress, float alpha) {
     if (g_ellipse_count < MAX_SHAPES) {
-        g_ellipses[g_ellipse_count++] = (EllipseObj){ x, y, rx, ry, r, g, b, alpha };
+        g_ellipses[g_ellipse_count++] = (EllipseObj){ x, y, rx, ry, r, g, b, border_r, border_g, border_b, border_width, stroke_progress, alpha };
     }
 }
 
-__declspec(dllexport) void AddPolygon(float x, float y, int r, int g, int b, int border_r, int border_g, int border_b, float border_width, int vert_count, const float* verts, float alpha) {
+__declspec(dllexport) void AddPolygon(float x, float y, int r, int g, int b, int border_r, int border_g, int border_b, float border_width, int vert_count, const float* verts, float stroke_progress, float alpha, int close_path) {
     if (g_polygon_count < MAX_SHAPES && vert_count <= MAX_POLYGON_VERTS) {
         PolygonObj* p = &g_polygons[g_polygon_count++];
         p->x = x; p->y = y;
@@ -159,7 +159,9 @@ __declspec(dllexport) void AddPolygon(float x, float y, int r, int g, int b, int
         p->border_r = border_r; p->border_g = border_g; p->border_b = border_b;
         p->border_width = border_width;
         p->vert_count = vert_count;
+        p->stroke_progress = stroke_progress;
         p->alpha = alpha;
+        p->close_path = close_path;
         memcpy(p->verts, verts, sizeof(float) * vert_count * 2);
     }
 }

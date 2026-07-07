@@ -679,7 +679,7 @@ static void CreateSyncObjects(void) {
 
 static void CreateVertexBuffer(void) {
 
-    VkDeviceSize buf_size = sizeof(float) * 5 * MAX_VERTICES;
+    VkDeviceSize buf_size = sizeof(float) * 6 * MAX_VERTICES;
 
     CreateBuffer(buf_size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
 

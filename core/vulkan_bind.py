@@ -62,6 +62,8 @@ class VulkanRender(ShapeMixin, TextMixin):
             ctypes.c_float, ctypes.c_float, ctypes.c_float,
             ctypes.c_float, ctypes.c_float,
             ctypes.c_int, ctypes.c_int, ctypes.c_int,
+            ctypes.c_int, ctypes.c_int, ctypes.c_int,
+            ctypes.c_float, ctypes.c_float,
             ctypes.c_float,
         ]
         self.dll.AddCircle.restype = None
@@ -85,6 +87,8 @@ class VulkanRender(ShapeMixin, TextMixin):
             ctypes.c_float, ctypes.c_float,
             ctypes.c_float, ctypes.c_float,
             ctypes.c_int, ctypes.c_int, ctypes.c_int,
+            ctypes.c_int, ctypes.c_int, ctypes.c_int,
+            ctypes.c_float, ctypes.c_float,
             ctypes.c_float,
         ]
         self.dll.AddPolygon.restype = None
@@ -94,7 +98,8 @@ class VulkanRender(ShapeMixin, TextMixin):
             ctypes.c_int, ctypes.c_int, ctypes.c_int,
             ctypes.c_float, ctypes.c_int,
             ctypes.POINTER(ctypes.c_float),
-            ctypes.c_float,
+            ctypes.c_float, ctypes.c_float,
+            ctypes.c_int,
         ]
         self.dll.AddDashedLine.restype = None
         self.dll.AddDashedLine.argtypes = [
@@ -187,12 +192,12 @@ class VulkanRender(ShapeMixin, TextMixin):
             self._send_circle(mob, a, w, h, rot)
         elif isinstance(mob, Arrow):
             self._send_arrow(mob, a, w, h, rot)
+        elif isinstance(mob, DashedLine):
+            self._send_dashed_line(mob, a, w, h)
         elif isinstance(mob, Line):
             self._send_line(mob, a, w, h, rot)
         elif isinstance(mob, Dot):
             self._send_dot(mob, a, w, h)
-        elif isinstance(mob, DashedLine):
-            self._send_dashed_line(mob, a, w, h)
         elif isinstance(mob, Arc):
             self._send_arc(mob, a, w, h)
         elif isinstance(mob, Polygon):
@@ -335,6 +340,14 @@ class VulkanRender(ShapeMixin, TextMixin):
                     set_anim_opacity(mob, 1.0)
 
         real_anims = [a for a in animations if not isinstance(a, Add)]
+
+        if 'run_time' in kwargs:
+            shared_rt = kwargs['run_time']
+            for a in real_anims:
+                if isinstance(a, (Wait, Succession)):
+                    continue
+                if hasattr(a, '_run_time') and abs(a._run_time - 1.0) < 0.01:
+                    a._run_time = shared_rt
 
         for a in real_anims:
             a.begin(time.time())

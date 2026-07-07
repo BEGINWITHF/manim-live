@@ -12,6 +12,9 @@
 typedef struct {
     float x, y, hw, hh, rot;
     int r, g, b;
+    int border_r, border_g, border_b;
+    float border_width;
+    float stroke_progress;
     float alpha;
 } Rect;
 
@@ -33,6 +36,9 @@ typedef struct {
 typedef struct {
     float x, y, rx, ry;
     int r, g, b;
+    int border_r, border_g, border_b;
+    float border_width;
+    float stroke_progress;
     float alpha;
 } EllipseObj;
 
@@ -43,7 +49,9 @@ typedef struct {
     float border_width;
     int vert_count;
     float verts[MAX_POLYGON_VERTS * 2];
+    float stroke_progress;
     float alpha;
+    int close_path;
 } PolygonObj;
 
 typedef struct {

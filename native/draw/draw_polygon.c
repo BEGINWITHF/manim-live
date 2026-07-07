@@ -7,44 +7,94 @@ void BuildVerticesFromPolygons(const PolygonObj* polygons, int count) {
         int n = p->vert_count;
         if (n < 3) continue;
 
-        float fr = p->border_r / 255.0f, fg = p->border_g / 255.0f, fb = p->border_b / 255.0f;
         float fill_r = p->r / 255.0f, fill_g = p->g / 255.0f, fill_b = p->b / 255.0f;
+        float br = p->border_r / 255.0f, bg = p->border_g / 255.0f, bb = p->border_b / 255.0f;
 
-        /* Outline: n line segments as thin quads */
-        if (p->border_width > 0.0f) {
-            if (g_vertex_count + n * 6 > MAX_VERTICES) break;
+        float sp = p->stroke_progress;
+        if (sp > 1.0f) sp = 1.0f;
+        if (sp < 0.0f) sp = 0.0f;
+
+        float edge_lens[64];
+        float perimeter = 0.0f;
+        for (int j = 0; j < n; j++) {
+            int j2 = (j + 1) % n;
+            float dx = p->verts[j2 * 2] - p->verts[j * 2];
+            float dy = p->verts[j2 * 2 + 1] - p->verts[j * 2 + 1];
+            edge_lens[j] = sqrtf(dx * dx + dy * dy);
+            perimeter += edge_lens[j];
+        }
+
+        float drawn = perimeter * sp;
+
+        /* Fill: triangle fan from first vertex, progressive along edges */
+        if (p->r != 0 || p->g != 0 || p->b != 0) {
+            float fan_x = p->verts[0];
+            float fan_y = p->verts[1];
+            float cum = 0.0f;
             for (int j = 0; j < n; j++) {
                 int j2 = (j + 1) % n;
-                float x1 = p->verts[j * 2];
-                float y1 = p->verts[j * 2 + 1];
-                float x2 = p->verts[j2 * 2];
-                float y2 = p->verts[j2 * 2 + 1];
+                float el = edge_lens[j];
+                if (cum >= drawn) break;
 
-                float dx = x2 - x1;
-                float dy = y2 - y1;
+                float x0 = p->verts[j * 2], y0 = p->verts[j * 2 + 1];
+                float x1, y1;
+
+                if (cum + el <= drawn) {
+                    x1 = p->verts[j2 * 2];
+                    y1 = p->verts[j2 * 2 + 1];
+                    cum += el;
+                } else {
+                    float frac = (drawn - cum) / el;
+                    x1 = x0 + (p->verts[j2 * 2] - x0) * frac;
+                    y1 = y0 + (p->verts[j2 * 2 + 1] - y0) * frac;
+                    cum = drawn;
+                }
+
+                if (g_vertex_count + 3 > MAX_VERTICES) break;
+                PushVertex(fan_x, fan_y, fill_r, fill_g, fill_b, p->alpha);
+                PushVertex(x0, y0, fill_r, fill_g, fill_b, p->alpha);
+                PushVertex(x1, y1, fill_r, fill_g, fill_b, p->alpha);
+            }
+        }
+
+        /* Border: progressive line segments */
+        if (p->border_width > 0.0f) {
+            float cum = 0.0f;
+            for (int j = 0; j < n; j++) {
+                if (cum >= drawn) break;
+                int j2 = (j + 1) % n;
+                float el = edge_lens[j];
+
+                float x0 = p->verts[j * 2], y0 = p->verts[j * 2 + 1];
+                float ex, ey;
+
+                if (cum + el <= drawn) {
+                    ex = p->verts[j2 * 2];
+                    ey = p->verts[j2 * 2 + 1];
+                    cum += el;
+                } else {
+                    float frac = (drawn - cum) / el;
+                    ex = x0 + (p->verts[j2 * 2] - x0) * frac;
+                    ey = y0 + (p->verts[j2 * 2 + 1] - y0) * frac;
+                    cum = drawn;
+                }
+
+                float dx = ex - x0, dy = ey - y0;
                 float len = sqrtf(dx * dx + dy * dy);
                 if (len < 0.0001f) continue;
                 float hw = p->border_width * 0.5f;
                 float nx = (-dy / len) * hw;
                 float ny = (dx / len) * hw;
 
-                PushVertex(x1 + nx, y1 + ny, fr, fg, fb, p->alpha);
-                PushVertex(x1 - nx, y1 - ny, fr, fg, fb, p->alpha);
-                PushVertex(x2 + nx, y2 + ny, fr, fg, fb, p->alpha);
+                if (g_vertex_count + 6 > MAX_VERTICES) break;
+                PushVertex(x0 + nx, y0 + ny, br, bg, bb, p->alpha);
+                PushVertex(x0 - nx, y0 - ny, br, bg, bb, p->alpha);
+                PushVertex(ex + nx, ey + ny, br, bg, bb, p->alpha);
 
-                PushVertex(x1 - nx, y1 - ny, fr, fg, fb, p->alpha);
-                PushVertex(x2 - nx, y2 - ny, fr, fg, fb, p->alpha);
-                PushVertex(x2 + nx, y2 + ny, fr, fg, fb, p->alpha);
+                PushVertex(x0 - nx, y0 - ny, br, bg, bb, p->alpha);
+                PushVertex(ex - nx, ey - ny, br, bg, bb, p->alpha);
+                PushVertex(ex + nx, ey + ny, br, bg, bb, p->alpha);
             }
-        }
-
-        /* Fill: triangle fan from centroid */
-        if (g_vertex_count + n * 3 > MAX_VERTICES) break;
-        for (int j = 0; j < n; j++) {
-            int j2 = (j + 1) % n;
-            PushVertex(p->x, p->y, fill_r, fill_g, fill_b, p->alpha);
-            PushVertex(p->verts[j * 2], p->verts[j * 2 + 1], fill_r, fill_g, fill_b, p->alpha);
-            PushVertex(p->verts[j2 * 2], p->verts[j2 * 2 + 1], fill_r, fill_g, fill_b, p->alpha);
         }
     }
 }

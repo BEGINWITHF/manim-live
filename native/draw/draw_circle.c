@@ -3,7 +3,7 @@
 
 void BuildVerticesFromCircles(const Circle *circles, int count) {
     const int segs = 36;
-    float step = 2.0f * 3.14159265f / (float)segs;
+    float step = -2.0f * 3.14159265f / (float)segs;
 
     for (int i = 0; i < count; i++) {
         const Circle *c = &circles[i];

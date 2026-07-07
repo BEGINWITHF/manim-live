@@ -1,21 +1,55 @@
 import sys
-from scenes.demo_scene import TestTransform, TestTransformMatchingShapes, TestFadeTransform
+from scenes.demo_scene import (
+    DemoCreate, DemoWriteUnwrite, DemoTransform, DemoReplacementTransform,
+    DemoFadeInFadeOut, DemoFadeTransform, DemoRotating,
+    DemoTransformMatchingShapes, DemoVGroup, DemoAllShapes,
+    DemoSuccession, DemoFadeInShift, DemoTextFeatures, DemoCombined,
+)
 
-SCENES = {
-    "1": TestTransform,
-    "2": TestTransformMatchingShapes,
-    "3": TestFadeTransform,
-}
+SCENES = [
+    ("1",  "Create - draw shapes",                    DemoCreate),
+    ("2",  "Write / Unwrite - text",                  DemoWriteUnwrite),
+    ("3",  "Transform - morph shapes",                DemoTransform),
+    ("4",  "ReplacementTransform - replace in scene", DemoReplacementTransform),
+    ("5",  "FadeIn / FadeOut",                        DemoFadeInFadeOut),
+    ("6",  "FadeTransform - crossfade shapes",        DemoFadeTransform),
+    ("7",  "Rotating / Rotate",                       DemoRotating),
+    ("8",  "TransformMatchingShapes",                 DemoTransformMatchingShapes),
+    ("9",  "VGroup - grouped animations",             DemoVGroup),
+    ("10", "All supported shapes",                    DemoAllShapes),
+    ("11", "Succession - chained animations",         DemoSuccession),
+    ("12", "FadeIn with shift/scale",                 DemoFadeInShift),
+    ("13", "Text rendering - all styles",             DemoTextFeatures),
+    ("14", "Combined demo",                           DemoCombined),
+]
+
+
+def show_menu():
+    print("\n" + "=" * 50)
+    print("  Manim Vulkan Renderer - Demo Menu")
+    print("=" * 50)
+    for num, desc, _ in SCENES:
+        print(f"  {num:>3}. {desc}")
+    print("=" * 50)
+
 
 def main():
-    num = sys.argv[1] if len(sys.argv) > 1 else "1"
-    cls = SCENES.get(num)
-    if cls is None:
-        print(f"Usage: python run.py <1|2|3>")
-        sys.exit(1)
-    print(f"Running: {cls.__name__}")
-    scene = cls()
-    scene.construct()
+    if len(sys.argv) > 1:
+        num = sys.argv[1]
+    else:
+        show_menu()
+        num = input("\nEnter number: ").strip()
+
+    for n, desc, cls in SCENES:
+        if n == num:
+            print(f"Running: {desc}")
+            scene = cls()
+            scene.construct()
+            return
+
+    print(f"Invalid option: {num}")
+    sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

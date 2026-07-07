@@ -223,7 +223,6 @@ static void tessellate_fill(BezierPathObj *bp) {
         int start = bp->sub_seg_start[s];
         int end = (s < bp->sub_count - 1) ? bp->sub_seg_start[s + 1] : bp->num_segs;
 
-        int sub_start = total_pts;
         for (int si = start; si < end; si++) {
             const CubicSeg *seg = &bp->segs[si];
             for (int i = 0; i < BEZIER_SAMPLES; i++) {
@@ -257,7 +256,6 @@ done_sample_all:
                 j = i + 1;
             } else {
                 int s = g_pt_sub[i];
-                int sub_seg_end = (s < bp->sub_count - 1) ? bp->sub_seg_start[s + 1] : bp->num_segs;
                 int sub_start_idx = 0;
                 for (int k = 0; k < total_pts; k++) {
                     if (g_pt_sub[k] == s) { sub_start_idx = k; break; }

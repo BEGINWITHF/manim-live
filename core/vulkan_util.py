@@ -40,6 +40,24 @@ def get_fill_rgb(mob, alpha=1.0):
     return int(255 * alpha), int(255 * alpha), int(255 * alpha)
 
 
+def get_fill_rgb_raw(mob):
+    try:
+        rgbas = mob.get_fill_rgbas()
+        if len(rgbas) > 0:
+            r, g, b, _ = rgbas[0]
+            return int(r * 255), int(g * 255), int(b * 255)
+    except Exception:
+        pass
+    try:
+        rgbas = mob.get_stroke_rgbas()
+        if len(rgbas) > 0:
+            r, g, b, _ = rgbas[0]
+            return int(r * 255), int(g * 255), int(b * 255)
+    except Exception:
+        pass
+    return 255, 255, 255
+
+
 def get_stroke_rgb(mob):
     try:
         rgbas = mob.get_stroke_rgbas()
