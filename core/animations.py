@@ -220,23 +220,28 @@ class Succession(Animation):
         self.animations = list(animations)
         total = sum(a.run_time for a in self.animations)
         super().__init__(run_time=total, rate_func=rate_func, **kwargs)
+        self._begun = set()
 
     def begin(self, t):
         super().begin(t)
-        cumulative = 0.0
-        for a in self.animations:
-            a.begin(t + cumulative)
-            cumulative += a.run_time
+        self._begun = set()
 
     def interpolate(self, t):
         elapsed = t - self.start_time
         cumulative = 0.0
-        for a in self.animations:
+        for i, a in enumerate(self.animations):
             if elapsed < cumulative + a.run_time:
+                if i not in self._begun:
+                    a.begin(t)
+                    self._begun.add(i)
                 a.interpolate(t)
                 return
             cumulative += a.run_time
         if self.animations:
+            last_idx = len(self.animations) - 1
+            if last_idx not in self._begun:
+                self.animations[-1].begin(t)
+                self._begun.add(last_idx)
             self.animations[-1].interpolate(t)
 
     def finish(self):
@@ -305,9 +310,15 @@ class FadeIn(Animation):
     def begin(self, t):
         super().begin(t)
         self._start_positions = []
+        self._orig_radius = {}
+        self._orig_stroke_width = {}
         for mob in self.mobjects:
             set_anim_opacity(mob, 0.0)
             self._start_positions.append(mob.get_center().copy())
+            if hasattr(mob, 'radius'):
+                self._orig_radius[id(mob)] = mob.radius
+            if hasattr(mob, 'stroke_width'):
+                self._orig_stroke_width[id(mob)] = mob.stroke_width
 
     def interpolate(self, t):
         alpha = (t - self.start_time) / self.run_time if self.run_time > 0 else 1.0
@@ -320,9 +331,11 @@ class FadeIn(Animation):
             set_anim_opacity(mob, alpha)
 
             if self.fade_scale != 1.0:
-                scale_factor = self.fade_scale + (1.0 - self.fade_scale) * alpha
-                mob.scale(scale_factor / getattr(mob, '_last_fade_scale', self.fade_scale))
-                mob._last_fade_scale = scale_factor
+                target_scale = self.fade_scale + (1.0 - self.fade_scale) * alpha
+                if id(mob) in self._orig_radius:
+                    mob.radius = self._orig_radius[id(mob)] * target_scale
+                if id(mob) in self._orig_stroke_width:
+                    mob.stroke_width = self._orig_stroke_width[id(mob)] * target_scale
 
             if self.fade_shift is not None and alpha < 1.0:
                 mob.move_to(self._start_positions[i] + self.fade_shift * (1.0 - alpha))
@@ -365,8 +378,14 @@ class FadeOut(Animation):
     def begin(self, t):
         super().begin(t)
         self._start_positions = []
+        self._orig_radius = {}
+        self._orig_stroke_width = {}
         for mob in self.mobjects:
             self._start_positions.append(mob.get_center().copy())
+            if hasattr(mob, 'radius'):
+                self._orig_radius[id(mob)] = mob.radius
+            if hasattr(mob, 'stroke_width'):
+                self._orig_stroke_width[id(mob)] = mob.stroke_width
 
     def interpolate(self, t):
         alpha = (t - self.start_time) / self.run_time if self.run_time > 0 else 1.0
@@ -381,9 +400,11 @@ class FadeOut(Animation):
             set_anim_opacity(mob, opacity)
 
             if self.fade_scale != 1.0:
-                scale_factor = 1.0 + (self.fade_scale - 1.0) * alpha
-                mob.scale(scale_factor / getattr(mob, '_last_fade_scale', 1.0))
-                mob._last_fade_scale = scale_factor
+                target_scale = 1.0 + (self.fade_scale - 1.0) * alpha
+                if id(mob) in self._orig_radius:
+                    mob.radius = self._orig_radius[id(mob)] * target_scale
+                if id(mob) in self._orig_stroke_width:
+                    mob.stroke_width = self._orig_stroke_width[id(mob)] * target_scale
 
             if self.fade_shift is not None and alpha > 0.0:
                 mob.move_to(self._start_positions[i] + self.fade_shift * alpha)
@@ -432,7 +453,7 @@ class Rotating(Animation):
         if self.reverse_rate_function:
             alpha = 1.0 - alpha
         alpha = self.rate_func(alpha)
-        current = self._start_rotation + self.rot_angle * alpha
+        current = self._start_rotation - self.rot_angle * alpha
         set_anim_rotation(self.mobject, current)
 
 
@@ -458,7 +479,7 @@ class Rotate(Animation):
         if self.reverse_rate_function:
             alpha = 1.0 - alpha
         alpha = self.rate_func(alpha)
-        current = self._start_rotation + self.rot_angle * alpha
+        current = self._start_rotation - self.rot_angle * alpha
         set_anim_rotation(self.mobject, current)
 
 
@@ -473,6 +494,7 @@ class Transform(Animation):
         self._starting_mobject = self.mobject.copy()
         self._target_copy = self.target_mobject.copy()
         try:
+            self._starting_mobject.align_data(self._target_copy)
             self.mobject.align_data(self._target_copy)
         except Exception:
             pass

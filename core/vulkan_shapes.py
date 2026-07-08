@@ -45,10 +45,10 @@ class ShapeMixin:
             sg = int(sg * so)
             sb = int(sb * so)
             sw = max(1, round(self._stroke_width(mob)))
-            tl = (sx - half, sy - half)
-            tr = (sx + half, sy - half)
-            br = (sx + half, sy + half)
-            bl = (sx - half, sy + half)
+            tl = self._rotate_point(sx - half, sy - half, sx, sy, rot)
+            tr = self._rotate_point(sx + half, sy - half, sx, sy, rot)
+            br = self._rotate_point(sx + half, sy + half, sx, sy, rot)
+            bl = self._rotate_point(sx - half, sy + half, sx, sy, rot)
             perimeter = 8.0 * half
             drawn = perimeter * progress
             edges = [
@@ -74,35 +74,35 @@ class ShapeMixin:
             fr, fg, fb = self._fill_color(mob)
             self.dll.AddRect(sx, sy, half, half, rot, fr, fg, fb, 0, 0, 0, 0.0, progress, a * fo)
             if so > 0:
-                br, bg, bb = self._stroke_color(mob)
-                br = int(br * so)
-                bg = int(bg * so)
-                bb = int(bb * so)
+                cr, cg, cb = self._stroke_color(mob)
+                cr = int(cr * so)
+                cg = int(cg * so)
+                cb = int(cb * so)
                 sw = max(1, round(self._stroke_width(mob)))
-                tl = (sx - half, sy - half)
-                tr = (sx + half, sy - half)
-                br2 = (sx + half, sy + half)
-                bl = (sx - half, sy + half)
+                tl = self._rotate_point(sx - half, sy - half, sx, sy, rot)
+                tr = self._rotate_point(sx + half, sy - half, sx, sy, rot)
+                brc = self._rotate_point(sx + half, sy + half, sx, sy, rot)
+                bl = self._rotate_point(sx - half, sy + half, sx, sy, rot)
                 perimeter = 8.0 * half
                 drawn = perimeter * progress
                 edges = [
                     (tr, tl, 2.0 * half),
                     (tl, bl, 2.0 * half),
-                    (bl, br2, 2.0 * half),
-                    (br2, tr, 2.0 * half),
+                    (bl, brc, 2.0 * half),
+                    (brc, tr, 2.0 * half),
                 ]
                 remaining = drawn
                 for (x0, y0), (x1, y1), length in edges:
                     if remaining <= 0:
                         break
                     if remaining >= length:
-                        self.dll.AddLine(x0, y0, x1, y1, sw, br, bg, bb, a)
+                        self.dll.AddLine(x0, y0, x1, y1, sw, cr, cg, cb, a)
                         remaining -= length
                     else:
                         frac = remaining / length
                         ex = x0 + (x1 - x0) * frac
                         ey = y0 + (y1 - y0) * frac
-                        self.dll.AddLine(x0, y0, ex, ey, sw, br, bg, bb, a)
+                        self.dll.AddLine(x0, y0, ex, ey, sw, cr, cg, cb, a)
                         remaining = 0
 
     def _send_rectangle(self, mob, a, w, h, rot):
@@ -125,10 +125,10 @@ class ShapeMixin:
             sg = int(sg * so)
             sb = int(sb * so)
             sw = max(1, round(self._stroke_width(mob)))
-            tl = (sx - hw, sy - hh)
-            tr = (sx + hw, sy - hh)
-            br = (sx + hw, sy + hh)
-            bl = (sx - hw, sy + hh)
+            tl = self._rotate_point(sx - hw, sy - hh, sx, sy, rot)
+            tr = self._rotate_point(sx + hw, sy - hh, sx, sy, rot)
+            br = self._rotate_point(sx + hw, sy + hh, sx, sy, rot)
+            bl = self._rotate_point(sx - hw, sy + hh, sx, sy, rot)
             perimeter = 2.0 * (2.0 * hw + 2.0 * hh)
             drawn = perimeter * progress
             edges = [
@@ -154,20 +154,20 @@ class ShapeMixin:
             fr, fg, fb = self._fill_color(mob)
             self.dll.AddRect(sx, sy, hw, hh, rot, fr, fg, fb, 0, 0, 0, 0.0, progress, a * fo)
             if so > 0:
-                br, bg, bb = self._stroke_color(mob)
-                br = int(br * so)
-                bg = int(bg * so)
-                bb = int(bb * so)
+                cr, cg, cb = self._stroke_color(mob)
+                cr = int(cr * so)
+                cg = int(cg * so)
+                cb = int(cb * so)
                 sw = max(1, round(self._stroke_width(mob)))
-                tl = (sx - hw, sy - hh)
-                tr = (sx + hw, sy - hh)
-                br2 = (sx + hw, sy + hh)
-                bl = (sx - hw, sy + hh)
+                tl = self._rotate_point(sx - hw, sy - hh, sx, sy, rot)
+                tr = self._rotate_point(sx + hw, sy - hh, sx, sy, rot)
+                brc = self._rotate_point(sx + hw, sy + hh, sx, sy, rot)
+                bl = self._rotate_point(sx - hw, sy + hh, sx, sy, rot)
                 edges = [
                     (tr, tl, 2.0 * hw),
                     (tl, bl, 2.0 * hh),
-                    (bl, br2, 2.0 * hw),
-                    (br2, tr, 2.0 * hh),
+                    (bl, brc, 2.0 * hw),
+                    (brc, tr, 2.0 * hh),
                 ]
                 perimeter = 2.0 * (2.0 * hw + 2.0 * hh)
                 drawn = perimeter * progress
@@ -176,13 +176,13 @@ class ShapeMixin:
                     if remaining <= 0:
                         break
                     if remaining >= length:
-                        self.dll.AddLine(x0, y0, x1, y1, sw, br, bg, bb, a)
+                        self.dll.AddLine(x0, y0, x1, y1, sw, cr, cg, cb, a)
                         remaining -= length
                     else:
                         frac = remaining / length
                         ex = x0 + (x1 - x0) * frac
                         ey = y0 + (y1 - y0) * frac
-                        self.dll.AddLine(x0, y0, ex, ey, sw, br, bg, bb, a)
+                        self.dll.AddLine(x0, y0, ex, ey, sw, cr, cg, cb, a)
                         remaining = 0
 
     def _send_ellipse(self, mob, a, w, h, rot):

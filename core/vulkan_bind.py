@@ -166,6 +166,8 @@ class VulkanRender(ShapeMixin, TextMixin):
             effective_alpha = parent_alpha * own_alpha
             if effective_alpha <= 0:
                 return
+            vgroup_progress = getattr(mob, '_vulkan_progress', 1.0)
+            num_subs = len(list(mob)) if hasattr(mob, '__len__') else 0
             vgroup_center = np.array(mob.get_center(), dtype=float)
             try:
                 original_center = np.array(mob.get_points().mean(axis=0) if len(mob.get_points()) > 0 else mob.get_center(), dtype=float)
@@ -174,7 +176,15 @@ class VulkanRender(ShapeMixin, TextMixin):
             offset = vgroup_center - original_center
             if parent_offset is not None:
                 offset = offset + parent_offset
-            for sub in mob:
+            for i, sub in enumerate(mob):
+                if vgroup_progress < 1.0 and num_subs > 1:
+                    full_length = (num_subs - 1) * 1.0 + 1
+                    value = vgroup_progress * full_length
+                    lower = i * 1.0
+                    sub_progress = max(0.0, min(1.0, value - lower))
+                    sub._vulkan_progress = sub_progress
+                elif vgroup_progress < 1.0:
+                    sub._vulkan_progress = vgroup_progress
                 self._send(sub, angle, parent_alpha=effective_alpha, parent_offset=offset)
             return
 
