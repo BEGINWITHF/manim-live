@@ -344,7 +344,7 @@ class ShapeMixin:
             hy1 = sy2 - uy * head_len + py * head_w
             hx2 = sx2 - ux * head_len - px * head_w
             hy2 = sy2 - uy * head_len - py * head_w
-            head_verts = (ctypes.c_float * 6)(sx2, sy2, hx1, hy1, hx2, hy2)
+            head_verts = (ctypes.c_float * 6)(sx2, sy2, hx2, hy2, hx1, hy1)
             self.dll.AddPolygon(
                 sx2, sy2, r, g, b, r, g, b, float(sw),
                 3, head_verts, progress, a, 1,

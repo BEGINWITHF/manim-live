@@ -92,10 +92,7 @@ class Animation:
         value = alpha * full_length
         lower = index * lag_ratio
         raw_sub_alpha = max(0.0, min(1.0, value - lower))
-        if self.reverse_rate_function:
-            return self.rate_func(1.0 - raw_sub_alpha)
-        else:
-            return self.rate_func(raw_sub_alpha)
+        return self.rate_func(raw_sub_alpha)
 
     def clean_up_from_scene(self, scene):
         pass
@@ -191,7 +188,23 @@ class Write(DrawBorderThenFill):
 
 class Unwrite(Write):
     def __init__(self, mobject, rate_func=_linear, reverse=True, run_time=1.0, **kwargs):
-        super().__init__(mobject, rate_func=rate_func, reverse=reverse, run_time=run_time, **kwargs)
+        super().__init__(mobject, rate_func=rate_func, reverse=False, run_time=run_time, **kwargs)
+
+    def begin(self, t):
+        super(Write, self).begin(t)
+
+    def _apply_to_submobjects(self, alpha):
+        mob = self.mobject
+        if not hasattr(mob, 'submobjects') or not mob.submobjects:
+            mob._vulkan_progress = self.rate_func(1.0 - alpha)
+            return
+        num_subs = len(mob.submobjects)
+        letter_alphas = {}
+        for i in range(num_subs):
+            rev_i = num_subs - 1 - i
+            sub_alpha = self.get_sub_alpha(alpha, rev_i, num_subs)
+            letter_alphas[i] = self.rate_func(1.0 - sub_alpha)
+        mob._letter_alphas = letter_alphas
 
     def finish(self):
         Animation.finish(self)
