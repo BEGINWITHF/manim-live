@@ -5,6 +5,7 @@ from scenes.demo_scene import (
     DemoTransformMatchingShapes, DemoVGroup, DemoAllShapes,
     DemoSuccession, DemoFadeInShift, DemoTextFeatures, DemoCombined,
     DemoDefaultAdd, DemoAddWithRunTime, DemoLagRatios, DemoChangeDefaultAnimation,
+    DemoAnimatedBoundary,
 )
 
 SCENES = [
@@ -26,6 +27,7 @@ SCENES = [
     ("16", "Add with run_time - grid of circles",     DemoAddWithRunTime),
     ("17", "LagRatios - staggered animations",        DemoLagRatios),
     ("18", "ChangeDefaultAnimation",                   DemoChangeDefaultAnimation),
+    ("19", "AnimatedBoundary - shiny text",            DemoAnimatedBoundary),
 ]
 
 

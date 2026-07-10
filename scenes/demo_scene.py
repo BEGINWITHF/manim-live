@@ -477,3 +477,16 @@ class DemoChangeDefaultAnimation(Scene):
         Indicate.set_default()
         render.play(Wait(0.5))
         render.close()
+
+
+class DemoAnimatedBoundary(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+
+        text = Text("So shiny!")
+        boundary = AnimatedBoundary(text, colors=[RED, GREEN, BLUE],
+                                    cycle_rate=3)
+        self.add(text, boundary)
+        render.play(Wait(2.0))
+        render.close()

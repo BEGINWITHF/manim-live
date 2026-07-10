@@ -194,3 +194,12 @@ class TextMixin:
             fri, fgi, fbi, fill_alpha,
             1.0, show_stroke, show_fill, a,
         )
+
+    def _send_text_stroke(self, mob, a, w, h, parent_offset=None):
+        if not hasattr(mob, 'family_members_with_points'):
+            return
+        for fm in mob.family_members_with_points():
+            sw_attr = fm.get_stroke_width() if hasattr(fm, 'get_stroke_width') else 0
+            if sw_attr <= 0:
+                continue
+            self._send_vmobject(fm, a, w, h, parent_offset)

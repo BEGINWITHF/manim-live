@@ -154,7 +154,16 @@ class VulkanRender(ShapeMixin, TextMixin):
         rot = get_anim_rotation(mob) + angle
 
         if isinstance(mob, Text):
-            if getattr(mob, '_letter_alphas', None) is not None and hasattr(mob, 'submobjects') and mob.submobjects:
+            has_stroke = False
+            if hasattr(mob, 'family_members_with_points'):
+                for fm in mob.family_members_with_points():
+                    sw = fm.get_stroke_width() if hasattr(fm, 'get_stroke_width') else 0
+                    if sw > 0:
+                        has_stroke = True
+                        break
+            if has_stroke:
+                self._send_text_stroke(mob, a, w, h, parent_offset)
+            elif getattr(mob, '_letter_alphas', None) is not None and hasattr(mob, 'submobjects') and mob.submobjects:
                 self._send_text_write(mob, mob._letter_alphas, w, h, a)
             elif hasattr(mob, 'submobjects') and mob.submobjects:
                 if a < 1.0:
@@ -411,10 +420,13 @@ class VulkanRender(ShapeMixin, TextMixin):
                             self.scene.add(sub_anim.target_mobject)
 
         self._active_anims = real_anims
+        self._last_frame_time = time.time()
 
         while True:
             frame_start = time.time()
             now = frame_start
+            dt = now - self._last_frame_time
+            self._last_frame_time = now
             all_done = True
             for a in self._active_anims:
                 is_manim = type(a).__module__.startswith('manim')
@@ -432,6 +444,11 @@ class VulkanRender(ShapeMixin, TextMixin):
                         a.finish()
                 if not getattr(a, 'finished', False):
                     all_done = False
+
+            for mob in self.scene.mobjects:
+                if hasattr(mob, 'updaters') and mob.updaters:
+                    for updater in mob.updaters:
+                        updater(mob, dt)
 
             if not self.tick():
                 break
