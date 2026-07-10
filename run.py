@@ -4,7 +4,7 @@ from scenes.demo_scene import (
     DemoFadeInFadeOut, DemoFadeTransform, DemoRotating,
     DemoTransformMatchingShapes, DemoVGroup, DemoAllShapes,
     DemoSuccession, DemoFadeInShift, DemoTextFeatures, DemoCombined,
-    DemoDefaultAdd, DemoAddWithRunTime,
+    DemoDefaultAdd, DemoAddWithRunTime, DemoLagRatios, DemoChangeDefaultAnimation,
 )
 
 SCENES = [
@@ -24,6 +24,8 @@ SCENES = [
     ("14", "Combined demo",                           DemoCombined),
     ("15", "Add - DefaultAddScene",                   DemoDefaultAdd),
     ("16", "Add with run_time - grid of circles",     DemoAddWithRunTime),
+    ("17", "LagRatios - staggered animations",        DemoLagRatios),
+    ("18", "ChangeDefaultAnimation",                   DemoChangeDefaultAnimation),
 ]
 
 

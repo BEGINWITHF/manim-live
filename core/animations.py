@@ -1,8 +1,9 @@
 import math
 import numpy as np
+from functools import partialmethod
 from manim import VGroup, Group
 from core.rate_functions import (
-    _smooth, _linear, _double_smooth,
+    _smooth, _linear, _double_smooth, _there_and_back,
 )
 
 DEFAULT_ANIMATION_RUN_TIME = 1.0
@@ -31,6 +32,8 @@ def get_anim_rotation(mob):
 
 
 class Animation:
+    _original__init__ = None
+
     def __init__(
         self,
         mobject=None,
@@ -55,6 +58,20 @@ class Animation:
         self.introducer = introducer
         self.start_time = 0.0
         self.finished = False
+
+    @classmethod
+    def set_default(cls, **kwargs):
+        if cls._original__init__ is None:
+            cls._original__init__ = cls.__init__
+        if kwargs:
+            cls.__init__ = partialmethod(cls.__init__, **kwargs)
+        else:
+            cls.__init__ = cls._original__init__
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        if '_original__init__' not in cls.__dict__:
+            cls._original__init__ = cls.__init__
 
     @property
     def run_time(self):
@@ -564,6 +581,98 @@ class ReplacementTransform(Transform):
     def __init__(self, mobject, target_mobject, **kwargs):
         kwargs['replace_mobject_with_target_in_scene'] = True
         super().__init__(mobject, target_mobject, **kwargs)
+
+
+class MoveToTarget(Transform):
+    def __init__(self, mobject, **kwargs):
+        target = mobject.target if hasattr(mobject, 'target') else mobject.copy()
+        super().__init__(mobject, target, **kwargs)
+
+
+class Indicate(Transform):
+    def __init__(self, mobject, scale_factor=1.2, color=None, rate_func=None, **kwargs):
+        self.scale_factor = scale_factor
+        self.color = color
+        target = mobject.copy()
+        target.scale(scale_factor)
+        if color is not None:
+            target.set_color(color)
+        super().__init__(mobject, target, run_time=1.0, rate_func=rate_func or _there_and_back, **kwargs)
+
+    def finish(self):
+        super().finish()
+        set_anim_opacity(self.mobject, 1.0)
+        self._set_transforming(self.mobject, False)
+
+
+class AnimationGroup(Animation):
+    def __init__(self, *animations, **kwargs):
+        from manim.mobject.mobject import _AnimationBuilder
+        resolved = []
+        for a in animations:
+            if isinstance(a, _AnimationBuilder):
+                resolved.append(a.build())
+            else:
+                resolved.append(a)
+        self.animations = resolved
+        total = max((a.run_time for a in self.animations), default=0)
+        super().__init__(run_time=total, **kwargs)
+        self._begun = set()
+
+    def begin(self, t):
+        super().begin(t)
+        self._begun = set()
+
+    def interpolate(self, t):
+        elapsed = t - self.start_time
+        total = self.run_time
+        if total > 0:
+            raw_alpha = max(0.0, min(1.0, elapsed / total))
+            mapped_alpha = self.rate_func(raw_alpha)
+            group_time = mapped_alpha * total
+        else:
+            group_time = elapsed
+
+        for i, a in enumerate(self.animations):
+            a_start = getattr(a, '_group_start', 0.0)
+            a_end = a_start + a.run_time
+            is_manim = type(a).__module__.startswith('manim')
+
+            if group_time >= a_start and group_time < a_end:
+                if i not in self._begun:
+                    if is_manim:
+                        a.begin()
+                    else:
+                        a.begin(t)
+                    self._begun.add(i)
+                sub_alpha = (group_time - a_start) / a.run_time if a.run_time > 0 else 1.0
+                sub_alpha = max(0.0, min(1.0, sub_alpha))
+                a.interpolate(sub_alpha)
+            elif group_time >= a_end:
+                if i not in self._begun:
+                    if is_manim:
+                        a.begin()
+                    else:
+                        a.begin(t)
+                    self._begun.add(i)
+                a.interpolate(1.0)
+
+    def finish(self):
+        super().finish()
+        for a in self.animations:
+            a.finish()
+
+    def get_all_mobjects(self):
+        mobs = []
+        for a in self.animations:
+            mobs.extend(a.get_all_mobjects())
+        return mobs
+
+    def get_all_families_zipped(self):
+        families = []
+        for a in self.animations:
+            families.extend(a.get_all_families_zipped())
+        return families
 
 
 class FadeTransform(Animation):

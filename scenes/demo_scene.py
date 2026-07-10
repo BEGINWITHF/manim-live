@@ -433,3 +433,47 @@ class DemoAddWithRunTime(Scene):
         )
         render.play(Wait(2.0))
         render.close()
+
+
+class DemoLagRatios(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+
+        ratios = [0, 0.1, 0.5, 1, 2]
+
+        group = VGroup(*[Dot() for _ in range(4)]).arrange_submobjects()
+        groups = VGroup(*[group.copy() for _ in ratios]).arrange_submobjects(buff=1)
+        self.add(groups)
+
+        self.add(Text("lag_ratio = ", font_size=36).next_to(groups, UP, buff=1.5))
+        for grp, ratio in zip(groups, ratios):
+            self.add(Text(str(ratio), font_size=36).next_to(grp, UP))
+
+        render.play(AnimationGroup(*[
+            grp.animate(lag_ratio=ratio, run_time=1.5).shift(DOWN * 2)
+            for grp, ratio in zip(groups, ratios)
+        ]))
+
+        render.play(groups.animate(run_time=1, lag_ratio=0.1).shift(UP * 2))
+        render.play(Wait(1.0))
+        render.close()
+
+
+class DemoChangeDefaultAnimation(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+
+        Rotate.set_default(run_time=2, rate_func=rate_functions.linear)
+        Indicate.set_default(color=None)
+
+        S = Square(color=BLUE, fill_color=BLUE, fill_opacity=0.25)
+        self.add(S)
+        render.play(Rotate(S, PI))
+        render.play(Indicate(S))
+
+        Rotate.set_default()
+        Indicate.set_default()
+        render.play(Wait(0.5))
+        render.close()

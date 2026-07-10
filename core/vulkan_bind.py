@@ -17,7 +17,7 @@ from core.rate_functions import (
 )
 from core.animations import (
     Animation, Create, DrawBorderThenFill, Write, Unwrite,
-    Succession, Wait, Add,
+    Succession, Wait, Add, AnimationGroup, MoveToTarget, Indicate,
     FadeIn, FadeOut, FadeTransform,
     Rotating, Rotate,
     Transform, ReplacementTransform,
@@ -240,6 +240,9 @@ class VulkanRender(ShapeMixin, TextMixin):
         elif isinstance(anim, Succession):
             for sub in anim.animations:
                 mobjects.extend(self._extract_add_mobjects(sub))
+        elif isinstance(anim, AnimationGroup):
+            for sub in anim.animations:
+                mobjects.extend(self._extract_add_mobjects(sub))
         return mobjects
 
     def play(self, *animations, **kwargs):
@@ -247,6 +250,24 @@ class VulkanRender(ShapeMixin, TextMixin):
             return
 
         screenshot_at = kwargs.get('screenshot_at', None)
+
+        resolved = []
+        for anim in animations:
+            from manim.mobject.mobject import _AnimationBuilder
+            if isinstance(anim, _AnimationBuilder):
+                resolved.append(anim.build())
+            elif isinstance(anim, AnimationGroup):
+                sub_resolved = []
+                for sub in anim.animations:
+                    if isinstance(sub, _AnimationBuilder):
+                        sub_resolved.append(sub.build())
+                    else:
+                        sub_resolved.append(sub)
+                anim.animations = sub_resolved
+                resolved.append(anim)
+            else:
+                resolved.append(anim)
+        animations = tuple(resolved)
 
         add_mobs = []
         for anim in animations:
@@ -337,6 +358,19 @@ class VulkanRender(ShapeMixin, TextMixin):
                         ghost = getattr(sub, '_ghost', None)
                         if ghost is not None and ghost not in all_mobjects:
                             all_mobjects.append(ghost)
+            elif isinstance(anim, AnimationGroup):
+                for sub in anim.animations:
+                    if isinstance(sub, (Create, Write, FadeIn, Rotating, Rotate)) and sub.mobject:
+                        if isinstance(sub, Create):
+                            sub.mobject._vulkan_progress = 0.0
+                        if sub.mobject not in all_mobjects:
+                            all_mobjects.append(sub.mobject)
+                    elif isinstance(sub, Transform):
+                        if sub.mobject not in all_mobjects:
+                            all_mobjects.append(sub.mobject)
+                        if sub.target_mobject not in all_mobjects:
+                            all_mobjects.append(sub.target_mobject)
+                        sub.mobject._transforming = True
 
         for mob in all_mobjects:
             if mob not in self.scene.mobjects:
@@ -360,7 +394,12 @@ class VulkanRender(ShapeMixin, TextMixin):
                     a._run_time = shared_rt
 
         for a in real_anims:
-            a.begin(time.time())
+            is_manim = type(a).__module__.startswith('manim')
+            if is_manim:
+                a.start_time = time.time()
+                a.begin()
+            else:
+                a.begin(time.time())
 
         for a in real_anims:
             if isinstance(a, TransformMatchingAbstractBase):
@@ -378,10 +417,20 @@ class VulkanRender(ShapeMixin, TextMixin):
             now = frame_start
             all_done = True
             for a in self._active_anims:
-                a.interpolate(now)
-                if not a.finished and (now - a.start_time) >= a.run_time:
-                    a.finish()
-                if not a.finished:
+                is_manim = type(a).__module__.startswith('manim')
+                if is_manim:
+                    elapsed = now - a.start_time
+                    alpha = elapsed / a.run_time if a.run_time > 0 else 1.0
+                    alpha = max(0.0, min(1.0, alpha))
+                    a.interpolate(alpha)
+                    if not getattr(a, 'finished', False) and elapsed >= a.run_time:
+                        a.finish()
+                        a.finished = True
+                else:
+                    a.interpolate(now)
+                    if not a.finished and (now - a.start_time) >= a.run_time:
+                        a.finish()
+                if not getattr(a, 'finished', False):
                     all_done = False
 
             if not self.tick():
