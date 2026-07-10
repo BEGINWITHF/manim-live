@@ -4,6 +4,7 @@ from scenes.demo_scene import (
     DemoFadeInFadeOut, DemoFadeTransform, DemoRotating,
     DemoTransformMatchingShapes, DemoVGroup, DemoAllShapes,
     DemoSuccession, DemoFadeInShift, DemoTextFeatures, DemoCombined,
+    DemoDefaultAdd, DemoAddWithRunTime,
 )
 
 SCENES = [
@@ -21,6 +22,8 @@ SCENES = [
     ("12", "FadeIn with shift/scale",                 DemoFadeInShift),
     ("13", "Text rendering - all styles",             DemoTextFeatures),
     ("14", "Combined demo",                           DemoCombined),
+    ("15", "Add - DefaultAddScene",                   DemoDefaultAdd),
+    ("16", "Add with run_time - grid of circles",     DemoAddWithRunTime),
 ]
 
 

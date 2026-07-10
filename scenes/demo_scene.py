@@ -390,3 +390,46 @@ class DemoCombined(Scene):
         render.play(FadeOut(sq), FadeOut(circ), run_time=1.0)
         render.play(Wait(0.5))
         render.close()
+
+
+class DemoDefaultAdd(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+
+        text_1 = Text("I was added with Add!")
+        text_2 = Text("Me too!")
+        text_3 = Text("And me!")
+        texts = VGroup(text_1, text_2, text_3).arrange(DOWN)
+        rect = SurroundingRectangle(texts, buff=0.5)
+
+        render.play(
+            Create(rect, run_time=3.0),
+            Succession(
+                Wait(1.0),
+                Add(text_1),
+                Wait(1.0),
+                Add(text_2, text_3),
+            ),
+        )
+        render.play(Wait(2.0))
+        render.close()
+
+
+class DemoAddWithRunTime(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+
+        circles = VGroup(
+            *[Circle(radius=0.5) for _ in range(25)]
+        ).arrange_in_grid(5, 5)
+
+        render.play(
+            Succession(
+                *[Add(circle, run_time=0.2) for circle in circles],
+                rate_func=smooth,
+            ),
+        )
+        render.play(Wait(2.0))
+        render.close()

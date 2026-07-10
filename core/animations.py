@@ -228,15 +228,25 @@ class Succession(Animation):
 
     def interpolate(self, t):
         elapsed = t - self.start_time
+        total = self.run_time
+        if total > 0:
+            raw_alpha = max(0.0, min(1.0, elapsed / total))
+            mapped_alpha = self.rate_func(raw_alpha)
+            elapsed = mapped_alpha * total
         cumulative = 0.0
         for i, a in enumerate(self.animations):
-            if elapsed < cumulative + a.run_time:
+            end = cumulative + a.run_time
+            if a.run_time > 0:
+                active = elapsed >= cumulative and elapsed < end
+            else:
+                active = elapsed >= cumulative and i not in self._begun
+            if active:
                 if i not in self._begun:
                     a.begin(t)
                     self._begun.add(i)
                 a.interpolate(t)
                 return
-            cumulative += a.run_time
+            cumulative = end
         if self.animations:
             last_idx = len(self.animations) - 1
             if last_idx not in self._begun:
