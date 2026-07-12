@@ -6,6 +6,7 @@ from scenes.demo_scene import (
     DemoSuccession, DemoFadeInShift, DemoTextFeatures, DemoCombined,
     DemoDefaultAdd, DemoAddWithRunTime, DemoLagRatios, DemoChangeDefaultAnimation,
     DemoAnimatedBoundary, DemoTracedPath, DemoDissipatingPath, DemoLaggedStart,
+    DemoLaggedStartMap,
 )
 
 SCENES = [
@@ -31,6 +32,7 @@ SCENES = [
     ("20", "TracedPath - rolling circle trace",        DemoTracedPath),
     ("21", "DissipatingPath - fading trace",           DemoDissipatingPath),
     ("22", "LaggedStart - staggered dot animation",    DemoLaggedStart),
+    ("23", "LaggedStartMap - ripple effect on grid",   DemoLaggedStartMap),
 ]
 
 

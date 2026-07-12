@@ -540,6 +540,29 @@ class DemoDissipatingPath(Scene):
         render.close()
 
 
+class DemoLaggedStartMap(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+
+        title = Text("LaggedStartMap").to_edge(UP, buff=LARGE_BUFF)
+        dots = VGroup(
+            *[Dot(radius=0.16) for _ in range(35)]
+            ).arrange_in_grid(rows=5, cols=7, buff=MED_LARGE_BUFF)
+        self.add(dots, title)
+
+        for mob in dots, title:
+            render.play(LaggedStartMap(
+                ApplyMethod, mob,
+                lambda m: (m.set_color, YELLOW),
+                lag_ratio=0.1,
+                rate_func=there_and_back,
+                run_time=2
+            ))
+        render.play(Wait(0.5))
+        render.close()
+
+
 class DemoLaggedStart(Scene):
     def construct(self):
         render = VulkanRender(1920, 1080)
