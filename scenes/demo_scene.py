@@ -1,3 +1,5 @@
+import time
+import numpy as np
 from manim import *
 from core.vulkan_bind import (
     VulkanRender, Write, Wait, Add,
@@ -489,4 +491,50 @@ class DemoAnimatedBoundary(Scene):
                                     cycle_rate=3)
         self.add(text, boundary)
         render.play(Wait(2.0))
+        render.close()
+
+
+class DemoTracedPath(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+
+        circ = Circle(color=RED).shift(4 * LEFT)
+        circ.rotate(-PI / 4)
+        dot = Dot(color=RED).move_to(circ.get_start())
+        rolling_circle = VGroup(circ, dot)
+        trace = TracedPath(circ.get_start)
+        self.add(trace, rolling_circle)
+
+        rot_speed = -9.0
+        t_elapsed = [0.0]
+        total_time = 4.0
+
+        def combined_updater(m, dt=0):
+            t_elapsed[0] += dt
+            progress = min(1.0, t_elapsed[0] / total_time)
+            target_center = LEFT * 4 + progress * 8 * RIGHT
+            circ.move_to(target_center)
+            angle = rot_speed * dt
+            circ.rotate(angle, about_point=circ.get_center())
+            dot.move_to(circ.get_start())
+
+        rolling_circle.add_updater(combined_updater)
+        render.play(Wait(total_time))
+        rolling_circle.clear_updaters()
+        render.play(Wait(0.5))
+        render.close()
+
+
+class DemoDissipatingPath(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+
+        a = Dot(RIGHT * 2)
+        b = TracedPath(a.get_center, dissipating_time=0.5, stroke_opacity=[0, 1])
+        self.add(a, b)
+        render.play(a.animate(path_arc=PI / 4).shift(LEFT * 2))
+        render.play(a.animate(path_arc=-PI / 4).shift(LEFT * 2))
+        render.play(Wait(1.0))
         render.close()

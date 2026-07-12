@@ -5,7 +5,7 @@ from scenes.demo_scene import (
     DemoTransformMatchingShapes, DemoVGroup, DemoAllShapes,
     DemoSuccession, DemoFadeInShift, DemoTextFeatures, DemoCombined,
     DemoDefaultAdd, DemoAddWithRunTime, DemoLagRatios, DemoChangeDefaultAnimation,
-    DemoAnimatedBoundary,
+    DemoAnimatedBoundary, DemoTracedPath, DemoDissipatingPath,
 )
 
 SCENES = [
@@ -28,6 +28,8 @@ SCENES = [
     ("17", "LagRatios - staggered animations",        DemoLagRatios),
     ("18", "ChangeDefaultAnimation",                   DemoChangeDefaultAnimation),
     ("19", "AnimatedBoundary - shiny text",            DemoAnimatedBoundary),
+    ("20", "TracedPath - rolling circle trace",        DemoTracedPath),
+    ("21", "DissipatingPath - fading trace",           DemoDissipatingPath),
 ]
 
 

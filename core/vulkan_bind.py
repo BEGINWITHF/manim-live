@@ -82,6 +82,15 @@ class VulkanRender(ShapeMixin, TextMixin):
             ctypes.c_int, ctypes.c_int,
             ctypes.c_float,
         ]
+        self.dll.AddLineStrip.restype = None
+        self.dll.AddLineStrip.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_int,
+            ctypes.c_int, ctypes.c_int,
+            ctypes.c_int, ctypes.c_int,
+            ctypes.c_float,
+        ]
         self.dll.AddEllipse.restype = None
         self.dll.AddEllipse.argtypes = [
             ctypes.c_float, ctypes.c_float,
@@ -445,10 +454,14 @@ class VulkanRender(ShapeMixin, TextMixin):
                 if not getattr(a, 'finished', False):
                     all_done = False
 
-            for mob in self.scene.mobjects:
+            for mob in reversed(self.scene.mobjects):
                 if hasattr(mob, 'updaters') and mob.updaters:
                     for updater in mob.updaters:
-                        updater(mob, dt)
+                        import inspect
+                        if len(inspect.signature(updater).parameters) == 1:
+                            updater(mob)
+                        else:
+                            updater(mob, dt)
 
             if not self.tick():
                 break
