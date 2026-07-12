@@ -611,3 +611,15 @@ class DemoSuccessionDots(Scene):
         ))
         render.play(Wait(0.5))
         render.close()
+
+
+class DemoCreateSquare(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+
+        sq = Square()
+        self.add(sq)
+        render.play(Create(sq))
+        render.play(Wait(1.0))
+        render.close()
