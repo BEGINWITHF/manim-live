@@ -10,6 +10,21 @@ void Render_Init(HWND hwnd, int width, int height, HINSTANCE hinst);
 
 int Render_IsReady(void);
 
+#define CMD_RECT 0
+#define CMD_CIRCLE 1
+#define CMD_LINE 2
+#define CMD_ELLIPSE 3
+#define CMD_POLYGON 4
+#define CMD_DASHED_LINE 5
+#define CMD_ARC 6
+#define CMD_POINT 7
+#define CMD_TEXT 8
+
+typedef struct {
+    int type;
+    int index;
+} DrawCmd;
+
 void Render_DrawScene(const Rect* rects, int rect_count,
                       const Circle* circles, int circle_count,
                       const LineObj* lines, int line_count,
@@ -18,7 +33,8 @@ void Render_DrawScene(const Rect* rects, int rect_count,
                       const DashedLineObj* dashed_lines, int dashed_line_count,
                       const ArcObj* arcs, int arc_count,
                       const PointObj* points, int point_count,
-                      const TextObj* texts, int text_count);
+                      const TextObj* texts, int text_count,
+                      const DrawCmd* cmds, int cmd_count);
 
 void Render_Cleanup(void);
 

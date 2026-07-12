@@ -234,7 +234,14 @@ class Unwrite(Write):
 
 class Succession(Animation):
     def __init__(self, *animations, rate_func=None, **kwargs):
-        self.animations = list(animations)
+        from manim.mobject.mobject import _AnimationBuilder
+        resolved = []
+        for a in animations:
+            if isinstance(a, _AnimationBuilder):
+                resolved.append(a.build())
+            else:
+                resolved.append(a)
+        self.animations = resolved
         total = sum(a.run_time for a in self.animations)
         super().__init__(run_time=total, rate_func=rate_func, **kwargs)
         self._begun = set()
@@ -253,23 +260,40 @@ class Succession(Animation):
         cumulative = 0.0
         for i, a in enumerate(self.animations):
             end = cumulative + a.run_time
+            is_manim = type(a).__module__.startswith('manim')
             if a.run_time > 0:
                 active = elapsed >= cumulative and elapsed < end
             else:
                 active = elapsed >= cumulative and i not in self._begun
             if active:
                 if i not in self._begun:
-                    a.begin(t)
+                    if is_manim:
+                        a.begin()
+                    else:
+                        a.begin(t)
                     self._begun.add(i)
-                a.interpolate(t)
+                if is_manim:
+                    sub_alpha = (elapsed - cumulative) / a.run_time if a.run_time > 0 else 1.0
+                    sub_alpha = max(0.0, min(1.0, sub_alpha))
+                    a.interpolate(sub_alpha)
+                else:
+                    a.interpolate(t)
                 return
             cumulative = end
         if self.animations:
             last_idx = len(self.animations) - 1
             if last_idx not in self._begun:
-                self.animations[-1].begin(t)
+                is_manim = type(self.animations[last_idx]).__module__.startswith('manim')
+                if is_manim:
+                    self.animations[last_idx].begin()
+                else:
+                    self.animations[last_idx].begin(t)
                 self._begun.add(last_idx)
-            self.animations[-1].interpolate(t)
+            is_manim = type(self.animations[last_idx]).__module__.startswith('manim')
+            if is_manim:
+                self.animations[last_idx].interpolate(1.0)
+            else:
+                self.animations[last_idx].interpolate(t)
 
     def finish(self):
         super().finish()

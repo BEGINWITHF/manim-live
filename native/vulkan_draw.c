@@ -25,36 +25,43 @@ void Render_DrawScene(const Rect* rects, int rect_count,
                       const DashedLineObj* dashed_lines, int dashed_line_count,
                       const ArcObj* arcs, int arc_count,
                       const PointObj* points, int point_count,
-                      const TextObj* texts, int text_count) {
+                      const TextObj* texts, int text_count,
+                      const DrawCmd* cmds, int cmd_count) {
 
     g_vertex_count = 0;
 
-    if (rects && rect_count > 0)
-        BuildVerticesFromRects(rects, rect_count);
-
-    if (circles && circle_count > 0)
-        BuildVerticesFromCircles(circles, circle_count);
-
-    if (lines && line_count > 0)
-        BuildVerticesFromLines(lines, line_count);
-
-    if (ellipses && ellipse_count > 0)
-        BuildVerticesFromEllipses(ellipses, ellipse_count);
-
-    if (polygons && polygon_count > 0)
-        BuildVerticesFromPolygons(polygons, polygon_count);
-
-    if (dashed_lines && dashed_line_count > 0)
-        BuildVerticesFromDashedLines(dashed_lines, dashed_line_count);
-
-    if (arcs && arc_count > 0)
-        BuildVerticesFromArcs(arcs, arc_count);
-
-    if (points && point_count > 0)
-        BuildVerticesFromPoints(points, point_count);
-
-    if (texts && text_count > 0)
-        BuildVerticesFromTexts(texts, text_count);
+    for (int i = 0; i < cmd_count; i++) {
+        int idx = cmds[i].index;
+        switch (cmds[i].type) {
+            case CMD_RECT:
+                if (idx < rect_count) BuildVerticesFromRects(&rects[idx], 1);
+                break;
+            case CMD_CIRCLE:
+                if (idx < circle_count) BuildVerticesFromCircles(&circles[idx], 1);
+                break;
+            case CMD_LINE:
+                if (idx < line_count) BuildVerticesFromLines(&lines[idx], 1);
+                break;
+            case CMD_ELLIPSE:
+                if (idx < ellipse_count) BuildVerticesFromEllipses(&ellipses[idx], 1);
+                break;
+            case CMD_POLYGON:
+                if (idx < polygon_count) BuildVerticesFromPolygons(&polygons[idx], 1);
+                break;
+            case CMD_DASHED_LINE:
+                if (idx < dashed_line_count) BuildVerticesFromDashedLines(&dashed_lines[idx], 1);
+                break;
+            case CMD_ARC:
+                if (idx < arc_count) BuildVerticesFromArcs(&arcs[idx], 1);
+                break;
+            case CMD_POINT:
+                if (idx < point_count) BuildVerticesFromPoints(&points[idx], 1);
+                break;
+            case CMD_TEXT:
+                if (idx < text_count) BuildVerticesFromTexts(&texts[idx], 1);
+                break;
+        }
+    }
 
     BuildVerticesFromBezierPaths();
     BuildVerticesFromLineStrips();
