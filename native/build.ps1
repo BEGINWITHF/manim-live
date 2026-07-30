@@ -36,8 +36,97 @@ if (Test-Path $vulkanBase) {
         exit 1
     }
 } else {
-    Write-Host "[ERROR] Vulkan SDK not found at $vulkanBase" -ForegroundColor Red
-    exit 1
+    Write-Host "[WARNING] Vulkan SDK not found at $vulkanBase" -ForegroundColor Yellow
+    $download = Read-Host "Download and install Vulkan SDK now? (Y/n)"
+    if ($download -eq 'n' -or $download -eq 'N') {
+        Write-Host "[ERROR] Vulkan SDK is required. Exiting." -ForegroundColor Red
+        exit 1
+    }
+
+    Write-Host "[INFO] Downloading Vulkan SDK installer..." -ForegroundColor Cyan
+    $sdkUrl = "https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.exe"
+    $installerPath = Join-Path $env:TEMP "vulkan-sdk-installer.exe"
+
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        Invoke-WebRequest -Uri $sdkUrl -OutFile $installerPath -UseBasicParsing
+        Write-Host "[SUCCESS] Downloaded installer to $installerPath" -ForegroundColor Green
+    } catch {
+        Write-Host "[ERROR] Failed to download Vulkan SDK: $_" -ForegroundColor Red
+        exit 1
+    }
+
+    Write-Host "[INFO] Running Vulkan SDK installer (silent mode)..." -ForegroundColor Cyan
+    Write-Host "[INFO] A UAC prompt may appear - please approve it." -ForegroundColor Yellow
+    Start-Process -FilePath $installerPath -ArgumentList "--accept-licenses", "--default-answer", "yes", "--confirm-command", "install" -Wait -NoNewWindow
+
+    if (!(Test-Path $vulkanBase)) {
+        Write-Host "[ERROR] Installation completed but SDK still not found at $vulkanBase" -ForegroundColor Red
+        Write-Host "[INFO] Try running the installer manually: $installerPath" -ForegroundColor Yellow
+        exit 1
+    }
+
+    $latestVersion = Get-ChildItem -Path $vulkanBase -Directory | 
+                     Where-Object { $_.Name -match '^\d+(\.\d+){2,3}$' } | 
+                     Sort-Object Name -Descending | 
+                     Select-Object -First 1
+    
+    if ($latestVersion) {
+        $env:VULKAN_SDK = $latestVersion.FullName
+        Write-Host "[SUCCESS] Vulkan SDK installed: $env:VULKAN_SDK" -ForegroundColor Green
+    } else {
+        Write-Host "[ERROR] No valid SDK version found under $vulkanBase after install" -ForegroundColor Red
+        exit 1
+    }
+}
+
+# Check for GCC
+$gccExists = Get-Command gcc -ErrorAction SilentlyContinue
+$tempGccCheck = Join-Path $env:TEMP "mingw64\bin\gcc.exe"
+if (!$gccExists -and !(Test-Path $tempGccCheck)) {
+    Write-Host "[WARNING] GCC not found" -ForegroundColor Yellow
+    $download = Read-Host "Download MinGW-w64 (provides gcc) now? (Y/n)"
+    if ($download -eq 'n' -or $download -eq 'N') {
+        Write-Host "[ERROR] GCC is required. Exiting." -ForegroundColor Red
+        exit 1
+    }
+
+    Write-Host "[INFO] Downloading MinGW-w64..." -ForegroundColor Cyan
+    $mingwUrl = "https://github.com/niXman/mingw-builds-binaries/releases/download/13.2.0-rt_v11-rev1/x86_64-13.2.0-release-posix-seh-ucrt-rt_v11-rev1.tar.xz"
+    $mingwArchive = Join-Path $env:TEMP "mingw64.tar.xz"
+    $mingwDir = Join-Path $env:TEMP "mingw64"
+
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        Invoke-WebRequest -Uri $mingwUrl -OutFile $mingwArchive -UseBasicParsing
+        Write-Host "[SUCCESS] Downloaded MinGW-w64" -ForegroundColor Green
+    } catch {
+        Write-Host "[ERROR] Failed to download MinGW-w64: $_" -ForegroundColor Red
+        exit 1
+    }
+
+    Write-Host "[INFO] Extracting MinGW-w64 (built-in tar)..." -ForegroundColor Cyan
+    tar -xf $mingwArchive -C $env:TEMP 2>&1 | Out-Null
+
+    $gccPath = Join-Path $mingwDir "bin\gcc.exe"
+    if (Test-Path $gccPath) {
+        $env:PATH = (Join-Path $mingwDir "bin") + ";$env:PATH"
+        Write-Host "[SUCCESS] MinGW-w64 installed at: $mingwDir" -ForegroundColor Green
+    } else {
+        Write-Host "[ERROR] gcc.exe not found after extraction at: $gccPath" -ForegroundColor Red
+        exit 1
+    }
+}
+
+# Set gcc executable path
+$GCC = "gcc"
+$gccCheck = Get-Command gcc -ErrorAction SilentlyContinue
+if (!$gccCheck) {
+    $tempGcc = Join-Path $env:TEMP "mingw64\bin\gcc.exe"
+    if (Test-Path $tempGcc) {
+        $GCC = $tempGcc
+        $env:PATH = (Join-Path $env:TEMP "mingw64\bin") + ";$env:PATH"
+    }
 }
 
 $CommonFlags = "-shared -m64"
@@ -78,9 +167,8 @@ foreach ($src in $SourceFiles) {
         $objPath = Join-Path $ObjDir $objName
         $ObjectFiles += $objPath
 
-        $CompileCmd = "gcc -c $CompilerFlags -o `"$objPath`" `"$src`" -I`"$env:VULKAN_SDK/Include`""
-        Write-Host "[CMD] $CompileCmd" -ForegroundColor DarkGray
-        Invoke-Expression $CompileCmd
+        Write-Host "[CMD] $GCC -c $CompilerFlags -o $objPath $src -I$env:VULKAN_SDK/Include" -ForegroundColor DarkGray
+        & $GCC -c $CompilerFlags.Split(' ') -o $objPath $src -I"$env:VULKAN_SDK/Include"
 
         if ($LASTEXITCODE -ne 0) {
             Write-Host "[ERROR] Compilation failed for $src" -ForegroundColor Red
@@ -93,14 +181,8 @@ foreach ($src in $SourceFiles) {
 }
 
 Write-Host "[INFO] Linking object files to DLL..." -ForegroundColor Cyan
-$LinkCmd = "gcc $CompilerFlags -o `"$OutputPath`""
-foreach ($obj in $ObjectFiles) {
-    $LinkCmd += " `"$obj`""
-}
-$LinkCmd += " -L`"$env:VULKAN_SDK/Lib`" -lvulkan-1 -luser32 -lgdi32"
-
-Write-Host "[CMD] $LinkCmd" -ForegroundColor DarkGray
-Invoke-Expression $LinkCmd
+Write-Host "[CMD] $GCC $CompilerFlags -o $OutputPath ..." -ForegroundColor DarkGray
+& $GCC $CompilerFlags.Split(' ') -o $OutputPath $ObjectFiles -L"$env:VULKAN_SDK/Lib" -lvulkan-1 -luser32 -lgdi32
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "[SUCCESS] Compilation successful!" -ForegroundColor Green

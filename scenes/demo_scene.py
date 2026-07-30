@@ -3,12 +3,14 @@ import numpy as np
 from manim import *
 from core.vulkan_bind import (
     VulkanRender, Write, Wait, Add,
-    Create, Unwrite,
+    Create, Uncreate, Unwrite,
     FadeIn, FadeOut, FadeTransform,
     Transform, ReplacementTransform,
     Rotating, Rotate,
     TransformMatchingShapes, TransformMatchingTex,
-    Animation, Succession,
+    Animation, Succession, DrawBorderThenFill,
+    ShowIncreasingSubsets, SpiralIn,
+    Blink, TypeWithCursor,
 )
 
 
@@ -21,6 +23,7 @@ class DemoCreate(Scene):
     def construct(self):
         render = VulkanRender(1920, 1080)
         render.scene = self
+        render.play(Wait(2.0))
         _title(render, "Create - draw shapes")
 
         sq = Square(side_length=1.5, color=BLUE)
@@ -47,6 +50,7 @@ class DemoWriteUnwrite(Scene):
     def construct(self):
         render = VulkanRender(1920, 1080)
         render.scene = self
+        render.play(Wait(2.0))
         _title(render, "Write / Unwrite - text")
 
         t1 = Text("Hello World", font_size=60).shift(UP * 1)
@@ -65,6 +69,7 @@ class DemoTransform(Scene):
     def construct(self):
         render = VulkanRender(1920, 1080)
         render.scene = self
+        render.play(Wait(2.0))
         _title(render, "Transform - morph shapes")
 
         sq = Square(side_length=1.5, color=BLUE)
@@ -89,6 +94,7 @@ class DemoReplacementTransform(Scene):
     def construct(self):
         render = VulkanRender(1920, 1080)
         render.scene = self
+        render.play(Wait(2.0))
         _title(render, "ReplacementTransform - replace in scene")
 
         sq = Square(side_length=1.5, color=BLUE)
@@ -112,6 +118,7 @@ class DemoFadeInFadeOut(Scene):
     def construct(self):
         render = VulkanRender(1920, 1080)
         render.scene = self
+        render.play(Wait(2.0))
         _title(render, "FadeIn / FadeOut")
 
         sq = Square(side_length=1.2, color=BLUE)
@@ -140,6 +147,7 @@ class DemoFadeTransform(Scene):
     def construct(self):
         render = VulkanRender(1920, 1080)
         render.scene = self
+        render.play(Wait(2.0))
         _title(render, "FadeTransform - crossfade shapes")
 
         sq = Square(side_length=1.5, color=BLUE)
@@ -164,6 +172,7 @@ class DemoRotating(Scene):
     def construct(self):
         render = VulkanRender(1920, 1080)
         render.scene = self
+        render.play(Wait(2.0))
         _title(render, "Rotating / Rotate")
 
         sq = Square(side_length=1.2, color=BLUE)
@@ -195,6 +204,7 @@ class DemoTransformMatchingShapes(Scene):
     def construct(self):
         render = VulkanRender(1920, 1080)
         render.scene = self
+        render.play(Wait(2.0))
         _title(render, "TransformMatchingShapes")
 
         src = Text("abc", font_size=72)
@@ -216,13 +226,14 @@ class DemoVGroup(Scene):
     def construct(self):
         render = VulkanRender(1920, 1080)
         render.scene = self
+        render.play(Wait(2.0))
         _title(render, "VGroup - grouped animations")
 
         squares = VGroup()
         for i in range(5):
             sq = Square(side_length=0.8, color=[BLUE, GREEN, YELLOW, ORANGE, RED][i])
             sq.set_fill(opacity=0.7)
-            sq.set_stroke(width=3)
+            sq.set_stroke(width=4)
             sq.shift(LEFT * 4 + RIGHT * 2 * i)
             squares.add(sq)
 
@@ -237,26 +248,27 @@ class DemoAllShapes(Scene):
     def construct(self):
         render = VulkanRender(1920, 1080)
         render.scene = self
+        render.play(Wait(2.0))
         _title(render, "All supported shapes")
 
         sq = Square(side_length=1.0, color=BLUE)
         sq.set_fill(BLUE, opacity=0.6)
-        sq.set_stroke(width=3)
+        sq.set_stroke(width=4)
         sq.shift(LEFT * 5 + UP * 1.5)
 
         rect = Rectangle(width=1.6, height=0.9, color=GREEN)
         rect.set_fill(GREEN, opacity=0.6)
-        rect.set_stroke(width=3)
+        rect.set_stroke(width=4)
         rect.shift(LEFT * 2 + UP * 1.5)
 
         circ = Circle(radius=0.5, color=RED)
         circ.set_fill(RED, opacity=0.6)
-        circ.set_stroke(width=3)
+        circ.set_stroke(width=4)
         circ.shift(RIGHT * 1 + UP * 1.5)
 
         tri = Triangle(color=YELLOW)
         tri.set_fill(YELLOW, opacity=0.6)
-        tri.set_stroke(width=3)
+        tri.set_stroke(width=4)
         tri.scale(0.6)
         tri.shift(RIGHT * 4 + UP * 1.5)
 
@@ -269,7 +281,7 @@ class DemoAllShapes(Scene):
         arrow.shift(DOWN * 1)
 
         dash = DashedLine(LEFT * 5 + DOWN * 2.5, RIGHT * 4 + DOWN * 2.5, color=TEAL)
-        dash.set_stroke(width=3)
+        dash.set_stroke(width=4)
 
         render.play(
             Create(sq), Create(rect), Create(circ), Create(tri),
@@ -284,6 +296,7 @@ class DemoSuccession(Scene):
     def construct(self):
         render = VulkanRender(1920, 1080)
         render.scene = self
+        render.play(Wait(2.0))
         _title(render, "Succession - chained animations")
 
         sq = Square(side_length=1.0, color=BLUE)
@@ -316,6 +329,7 @@ class DemoFadeInShift(Scene):
     def construct(self):
         render = VulkanRender(1920, 1080)
         render.scene = self
+        render.play(Wait(2.0))
         _title(render, "FadeIn with shift/scale")
 
         sq = Square(side_length=1.0, color=BLUE)
@@ -354,6 +368,7 @@ class DemoTextFeatures(Scene):
     def construct(self):
         render = VulkanRender(1920, 1080)
         render.scene = self
+        render.play(Wait(2.0))
         _title(render, "Text rendering")
 
         render.play(Write(Text("Hello World", font_size=60).shift(UP * 1.5)), run_time=2.0)
@@ -369,6 +384,7 @@ class DemoCombined(Scene):
     def construct(self):
         render = VulkanRender(1920, 1080)
         render.scene = self
+        render.play(Wait(2.0))
         _title(render, "Combined demo")
 
         sq = Square(side_length=1.2, color=BLUE)
@@ -398,6 +414,7 @@ class DemoDefaultAdd(Scene):
     def construct(self):
         render = VulkanRender(1920, 1080)
         render.scene = self
+        render.play(Wait(2.0))
 
         text_1 = Text("I was added with Add!")
         text_2 = Text("Me too!")
@@ -422,6 +439,7 @@ class DemoAddWithRunTime(Scene):
     def construct(self):
         render = VulkanRender(1920, 1080)
         render.scene = self
+        render.play(Wait(2.0))
 
         circles = VGroup(
             *[Circle(radius=0.5) for _ in range(25)]
@@ -441,6 +459,7 @@ class DemoLagRatios(Scene):
     def construct(self):
         render = VulkanRender(1920, 1080)
         render.scene = self
+        render.play(Wait(2.0))
 
         ratios = [0, 0.1, 0.5, 1, 2]
 
@@ -466,6 +485,7 @@ class DemoChangeDefaultAnimation(Scene):
     def construct(self):
         render = VulkanRender(1920, 1080)
         render.scene = self
+        render.play(Wait(2.0))
 
         Rotate.set_default(run_time=2, rate_func=rate_functions.linear)
         Indicate.set_default(color=None)
@@ -485,6 +505,7 @@ class DemoAnimatedBoundary(Scene):
     def construct(self):
         render = VulkanRender(1920, 1080)
         render.scene = self
+        render.play(Wait(2.0))
 
         text = Text("So shiny!")
         boundary = AnimatedBoundary(text, colors=[RED, GREEN, BLUE],
@@ -494,42 +515,26 @@ class DemoAnimatedBoundary(Scene):
         render.close()
 
 
+# you are not allowed to change any code here --TT Noted
 class DemoTracedPath(Scene):
     def construct(self):
         render = VulkanRender(1920, 1080)
         render.scene = self
-
+        render.play(Wait(2.0))
         circ = Circle(color=RED).shift(4 * LEFT)
-        circ.rotate(-PI / 4)
         dot = Dot(color=RED).move_to(circ.get_start())
         rolling_circle = VGroup(circ, dot)
         trace = TracedPath(circ.get_start)
+        rolling_circle.add_updater(lambda m: m.rotate(-0.3))
         self.add(trace, rolling_circle)
-
-        rot_speed = -9.0
-        t_elapsed = [0.0]
-        total_time = 4.0
-
-        def combined_updater(m, dt=0):
-            t_elapsed[0] += dt
-            progress = min(1.0, t_elapsed[0] / total_time)
-            target_center = LEFT * 4 + progress * 8 * RIGHT
-            circ.move_to(target_center)
-            angle = rot_speed * dt
-            circ.rotate(angle, about_point=circ.get_center())
-            dot.move_to(circ.get_start())
-
-        rolling_circle.add_updater(combined_updater)
-        render.play(Wait(total_time))
-        rolling_circle.clear_updaters()
-        render.play(Wait(0.5))
-        render.close()
+        render.play(rolling_circle.animate.shift(8 * RIGHT), run_time=4, rate_func=linear)
 
 
 class DemoDissipatingPath(Scene):
     def construct(self):
         render = VulkanRender(1920, 1080)
         render.scene = self
+        render.play(Wait(2.0))
 
         a = Dot(RIGHT * 2)
         b = TracedPath(a.get_center, dissipating_time=0.5, stroke_opacity=[0, 1])
@@ -544,6 +549,7 @@ class DemoLaggedStartMap(Scene):
     def construct(self):
         render = VulkanRender(1920, 1080)
         render.scene = self
+        render.play(Wait(2.0))
 
         title = Text("LaggedStartMap").to_edge(UP, buff=LARGE_BUFF)
         dots = VGroup(
@@ -567,6 +573,7 @@ class DemoLaggedStart(Scene):
     def construct(self):
         render = VulkanRender(1920, 1080)
         render.scene = self
+        render.play(Wait(2.0))
 
         title = Text("lag_ratio = 0.25").to_edge(UP)
 
@@ -596,6 +603,7 @@ class DemoSuccessionDots(Scene):
     def construct(self):
         render = VulkanRender(1920, 1080)
         render.scene = self
+        render.play(Wait(2.0))
 
         dot1 = Dot(point=LEFT * 2 + UP * 2, radius=0.16, color=BLUE)
         dot2 = Dot(point=LEFT * 2 + DOWN * 2, radius=0.16, color=MAROON)
@@ -617,9 +625,95 @@ class DemoCreateSquare(Scene):
     def construct(self):
         render = VulkanRender(1920, 1080)
         render.scene = self
+        render.play(Wait(2.0))
 
         sq = Square()
         self.add(sq)
         render.play(Create(sq))
         render.play(Wait(1.0))
+        render.close()
+
+# you are not allowed to change any code here --TT Noted
+class DemoDrawBorderThenFill(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "DrawBorderThenFill")
+
+        sq = Square(fill_opacity=1, fill_color=ORANGE)
+        sq.set_stroke(width=4)
+
+        render.play(DrawBorderThenFill(sq, run_time=2.0))
+        render.play(Wait(1.5))
+        render.close()
+
+
+class DemoShowIncreasingSubsets(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "ShowIncreasingSubsets")
+
+        p = VGroup(Dot(), Square(), Triangle())
+        self.add(p)
+        render.play(ShowIncreasingSubsets(p, run_time=2.0))
+        render.play(Wait(1.5))
+        render.close()
+
+
+class DemoSpiralIn(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "SpiralIn")
+
+        circle = Circle(color=GREEN_C, fill_opacity=1).shift(LEFT)
+        square = Square(color=BLUE_D, fill_opacity=1).shift(UP)
+        shapes = VGroup(circle, square)
+        self.add(shapes)
+        render.play(SpiralIn(shapes))
+        render.play(Wait(1.5))
+        render.close()
+
+
+class DemoTypeWithCursor(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "TypeWithCursor + Blink")
+
+        text = Text("Inserting", color=PURPLE).scale(1.5).to_edge(LEFT)
+        cursor = Rectangle(
+            color=GREY_A,
+            fill_color=GREY_A,
+            fill_opacity=1.0,
+            height=1.1,
+            width=0.5,
+        ).move_to(text[0])
+
+        render.play(TypeWithCursor(text, cursor, time_per_char=0.15, run_time=2.5))
+        render.play(Blink(cursor, blinks=2, time_on=0.4, time_off=0.4, run_time=2.0))
+        render.play(Wait(0.5))
+        render.close()
+
+
+class DemoUncreate(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "Uncreate - reverse of Create")
+
+        sq = Square(side_length=1.5, color=BLUE)
+        sq.set_fill(BLUE, opacity=0.7)
+        sq.set_stroke(width=4)
+
+        render.play(Create(sq, run_time=1.0))
+        render.play(Wait(0.5))
+        render.play(Uncreate(sq, run_time=1.5))
+        render.play(Wait(0.5))
         render.close()

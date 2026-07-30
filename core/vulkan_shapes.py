@@ -32,78 +32,52 @@ class ShapeMixin:
         sx, sy = manim_to_screen(cx, cy, w, h)
         scale_x = w / 14.0
         half = mob.side_length / 2.0 * scale_x
-        fo = mob.get_fill_opacity() if hasattr(mob, 'get_fill_opacity') else 1.0
-        so = mob.get_stroke_opacity() if hasattr(mob, 'get_stroke_opacity') else 1.0
+        try:
+            fo = float(mob.fill_rgbas[:, 3].max())
+        except Exception:
+            fo = mob.get_fill_opacity() if hasattr(mob, 'get_fill_opacity') else 1.0
+        try:
+            so = float(mob.stroke_rgbas[:, 3].max())
+        except Exception:
+            so = mob.get_stroke_opacity() if hasattr(mob, 'get_stroke_opacity') else 1.0
         progress = getattr(mob, '_vulkan_progress', 1.0)
         if fo <= 0 and so <= 0:
             return
         if progress <= 0:
             return
-        if fo <= 0:
-            sr, sg, sb = self._stroke_color(mob)
-            sr = int(sr * so)
-            sg = int(sg * so)
-            sb = int(sb * so)
+        fr, fg, fb = self._fill_color(mob)
+        self.dll.AddRect(sx, sy, half, half, rot, fr, fg, fb, 0, 0, 0, 0.0, progress, a * fo)
+        if so > 0:
+            cr, cg, cb = self._stroke_color(mob)
+            cr = int(cr * so)
+            cg = int(cg * so)
+            cb = int(cb * so)
             sw = max(1, round(self._stroke_width(mob)))
             tl = self._rotate_point(sx - half, sy - half, sx, sy, rot)
             tr = self._rotate_point(sx + half, sy - half, sx, sy, rot)
-            br = self._rotate_point(sx + half, sy + half, sx, sy, rot)
+            brc = self._rotate_point(sx + half, sy + half, sx, sy, rot)
             bl = self._rotate_point(sx - half, sy + half, sx, sy, rot)
             perimeter = 8.0 * half
             drawn = perimeter * progress
             edges = [
                 (tr, tl, 2.0 * half),
                 (tl, bl, 2.0 * half),
-                (bl, br, 2.0 * half),
-                (br, tr, 2.0 * half),
+                (bl, brc, 2.0 * half),
+                (brc, tr, 2.0 * half),
             ]
             remaining = drawn
             for (x0, y0), (x1, y1), length in edges:
                 if remaining <= 0:
                     break
                 if remaining >= length:
-                    self.dll.AddLine(x0, y0, x1, y1, sw, sr, sg, sb, a)
+                    self.dll.AddLine(x0, y0, x1, y1, sw, cr, cg, cb, a)
                     remaining -= length
                 else:
                     frac = remaining / length
                     ex = x0 + (x1 - x0) * frac
                     ey = y0 + (y1 - y0) * frac
-                    self.dll.AddLine(x0, y0, ex, ey, sw, sr, sg, sb, a)
+                    self.dll.AddLine(x0, y0, ex, ey, sw, cr, cg, cb, a)
                     remaining = 0
-        else:
-            fr, fg, fb = self._fill_color(mob)
-            self.dll.AddRect(sx, sy, half, half, rot, fr, fg, fb, 0, 0, 0, 0.0, progress, a * fo)
-            if so > 0:
-                cr, cg, cb = self._stroke_color(mob)
-                cr = int(cr * so)
-                cg = int(cg * so)
-                cb = int(cb * so)
-                sw = max(1, round(self._stroke_width(mob)))
-                tl = self._rotate_point(sx - half, sy - half, sx, sy, rot)
-                tr = self._rotate_point(sx + half, sy - half, sx, sy, rot)
-                brc = self._rotate_point(sx + half, sy + half, sx, sy, rot)
-                bl = self._rotate_point(sx - half, sy + half, sx, sy, rot)
-                perimeter = 8.0 * half
-                drawn = perimeter * progress
-                edges = [
-                    (tr, tl, 2.0 * half),
-                    (tl, bl, 2.0 * half),
-                    (bl, brc, 2.0 * half),
-                    (brc, tr, 2.0 * half),
-                ]
-                remaining = drawn
-                for (x0, y0), (x1, y1), length in edges:
-                    if remaining <= 0:
-                        break
-                    if remaining >= length:
-                        self.dll.AddLine(x0, y0, x1, y1, sw, cr, cg, cb, a)
-                        remaining -= length
-                    else:
-                        frac = remaining / length
-                        ex = x0 + (x1 - x0) * frac
-                        ey = y0 + (y1 - y0) * frac
-                        self.dll.AddLine(x0, y0, ex, ey, sw, cr, cg, cb, a)
-                        remaining = 0
 
     def _send_rectangle(self, mob, a, w, h, rot):
         cx, cy, _ = mob.get_center()
@@ -112,78 +86,52 @@ class ShapeMixin:
         scale_y = h / 8.0
         hw = mob.width / 2.0 * scale_x
         hh = mob.height / 2.0 * scale_y
-        fo = mob.get_fill_opacity() if hasattr(mob, 'get_fill_opacity') else 1.0
-        so = mob.get_stroke_opacity() if hasattr(mob, 'get_stroke_opacity') else 1.0
+        try:
+            fo = float(mob.fill_rgbas[:, 3].max())
+        except Exception:
+            fo = mob.get_fill_opacity() if hasattr(mob, 'get_fill_opacity') else 1.0
+        try:
+            so = float(mob.stroke_rgbas[:, 3].max())
+        except Exception:
+            so = mob.get_stroke_opacity() if hasattr(mob, 'get_stroke_opacity') else 1.0
         progress = getattr(mob, '_vulkan_progress', 1.0)
         if fo <= 0 and so <= 0:
             return
         if progress <= 0:
             return
-        if fo <= 0:
-            sr, sg, sb = self._stroke_color(mob)
-            sr = int(sr * so)
-            sg = int(sg * so)
-            sb = int(sb * so)
+        fr, fg, fb = self._fill_color(mob)
+        self.dll.AddRect(sx, sy, hw, hh, rot, fr, fg, fb, 0, 0, 0, 0.0, progress, a * fo)
+        if so > 0:
+            cr, cg, cb = self._stroke_color(mob)
+            cr = int(cr * so)
+            cg = int(cg * so)
+            cb = int(cb * so)
             sw = max(1, round(self._stroke_width(mob)))
             tl = self._rotate_point(sx - hw, sy - hh, sx, sy, rot)
             tr = self._rotate_point(sx + hw, sy - hh, sx, sy, rot)
-            br = self._rotate_point(sx + hw, sy + hh, sx, sy, rot)
+            brc = self._rotate_point(sx + hw, sy + hh, sx, sy, rot)
             bl = self._rotate_point(sx - hw, sy + hh, sx, sy, rot)
-            perimeter = 2.0 * (2.0 * hw + 2.0 * hh)
-            drawn = perimeter * progress
             edges = [
                 (tr, tl, 2.0 * hw),
                 (tl, bl, 2.0 * hh),
-                (bl, br, 2.0 * hw),
-                (br, tr, 2.0 * hh),
+                (bl, brc, 2.0 * hw),
+                (brc, tr, 2.0 * hh),
             ]
+            perimeter = 2.0 * (2.0 * hw + 2.0 * hh)
+            drawn = perimeter * progress
             remaining = drawn
             for (x0, y0), (x1, y1), length in edges:
                 if remaining <= 0:
                     break
                 if remaining >= length:
-                    self.dll.AddLine(x0, y0, x1, y1, sw, sr, sg, sb, a)
+                    self.dll.AddLine(x0, y0, x1, y1, sw, cr, cg, cb, a)
                     remaining -= length
                 else:
                     frac = remaining / length
                     ex = x0 + (x1 - x0) * frac
                     ey = y0 + (y1 - y0) * frac
-                    self.dll.AddLine(x0, y0, ex, ey, sw, sr, sg, sb, a)
+                    self.dll.AddLine(x0, y0, ex, ey, sw, cr, cg, cb, a)
                     remaining = 0
-        else:
-            fr, fg, fb = self._fill_color(mob)
-            self.dll.AddRect(sx, sy, hw, hh, rot, fr, fg, fb, 0, 0, 0, 0.0, progress, a * fo)
-            if so > 0:
-                cr, cg, cb = self._stroke_color(mob)
-                cr = int(cr * so)
-                cg = int(cg * so)
-                cb = int(cb * so)
-                sw = max(1, round(self._stroke_width(mob)))
-                tl = self._rotate_point(sx - hw, sy - hh, sx, sy, rot)
-                tr = self._rotate_point(sx + hw, sy - hh, sx, sy, rot)
-                brc = self._rotate_point(sx + hw, sy + hh, sx, sy, rot)
-                bl = self._rotate_point(sx - hw, sy + hh, sx, sy, rot)
-                edges = [
-                    (tr, tl, 2.0 * hw),
-                    (tl, bl, 2.0 * hh),
-                    (bl, brc, 2.0 * hw),
-                    (brc, tr, 2.0 * hh),
-                ]
-                perimeter = 2.0 * (2.0 * hw + 2.0 * hh)
-                drawn = perimeter * progress
-                remaining = drawn
-                for (x0, y0), (x1, y1), length in edges:
-                    if remaining <= 0:
-                        break
-                    if remaining >= length:
-                        self.dll.AddLine(x0, y0, x1, y1, sw, cr, cg, cb, a)
-                        remaining -= length
-                    else:
-                        frac = remaining / length
-                        ex = x0 + (x1 - x0) * frac
-                        ey = y0 + (y1 - y0) * frac
-                        self.dll.AddLine(x0, y0, ex, ey, sw, cr, cg, cb, a)
-                        remaining = 0
 
     def _send_ellipse(self, mob, a, w, h, rot):
         cx, cy, _ = mob.get_center()
@@ -191,18 +139,26 @@ class ShapeMixin:
         scale = w / 14.0
         rx = mob.width / 2.0 * scale
         ry = mob.height / 2.0 * scale
-        fo = mob.get_fill_opacity() if hasattr(mob, 'get_fill_opacity') else 1.0
-        so = mob.get_stroke_opacity() if hasattr(mob, 'get_stroke_opacity') else 1.0
+        try:
+            fo = float(mob.fill_rgbas[:, 3].max())
+        except Exception:
+            fo = mob.get_fill_opacity() if hasattr(mob, 'get_fill_opacity') else 1.0
+        try:
+            so = float(mob.stroke_rgbas[:, 3].max())
+        except Exception:
+            so = mob.get_stroke_opacity() if hasattr(mob, 'get_stroke_opacity') else 1.0
         progress = getattr(mob, '_vulkan_progress', 1.0)
         if fo <= 0 and so <= 0:
             return
         if progress <= 0:
             return
-        if fo <= 0:
-            sr, sg, sb = self._stroke_color(mob)
-            sr = int(sr * so)
-            sg = int(sg * so)
-            sb = int(sb * so)
+        fr, fg, fb = self._fill_color(mob)
+        self.dll.AddEllipse(float(sx), float(sy), float(rx), float(ry), fr, fg, fb, 0, 0, 0, 0.0, progress, a * fo)
+        if so > 0:
+            cr, cg, cb = self._stroke_color(mob)
+            cr = int(cr * so)
+            cg = int(cg * so)
+            cb = int(cb * so)
             sw = max(1, round(self._stroke_width(mob)))
             segs = 48
             circumference = math.pi * (3 * (rx + ry) - math.sqrt((3 * rx + ry) * (rx + 3 * ry)))
@@ -219,66 +175,36 @@ class ShapeMixin:
                 py = sy - math.sin(cur_angle_rad) * ry
                 seg_len = math.sqrt((px - prev_px) ** 2 + (py - prev_py) ** 2)
                 if accumulated + seg_len <= drawn:
-                    self.dll.AddLine(prev_px, prev_py, px, py, sw, sr, sg, sb, a)
+                    self.dll.AddLine(prev_px, prev_py, px, py, sw, cr, cg, cb, a)
                     accumulated += seg_len
                 else:
                     frac = (drawn - accumulated) / seg_len if seg_len > 0 else 0
                     ex = prev_px + (px - prev_px) * frac
                     ey = prev_py + (py - prev_py) * frac
-                    self.dll.AddLine(prev_px, prev_py, ex, ey, sw, sr, sg, sb, a)
+                    self.dll.AddLine(prev_px, prev_py, ex, ey, sw, cr, cg, cb, a)
                     accumulated = drawn
                 prev_px, prev_py = px, py
-        else:
-            fr, fg, fb = self._fill_color(mob)
-            self.dll.AddEllipse(float(sx), float(sy), float(rx), float(ry), fr, fg, fb, 0, 0, 0, 0.0, progress, a * fo)
-            if so > 0:
-                cr, cg, cb = self._stroke_color(mob)
-                cr = int(cr * so)
-                cg = int(cg * so)
-                cb = int(cb * so)
-                sw = max(1, round(self._stroke_width(mob)))
-                segs = 48
-                circumference = math.pi * (3 * (rx + ry) - math.sqrt((3 * rx + ry) * (rx + 3 * ry)))
-                drawn = circumference * progress
-                accumulated = 0.0
-                prev_angle_rad = rot
-                prev_px = sx + math.cos(prev_angle_rad) * rx
-                prev_py = sy - math.sin(prev_angle_rad) * ry
-                for j in range(1, segs + 1):
-                    if accumulated >= drawn:
-                        break
-                    cur_angle_rad = rot + 2.0 * math.pi * j / segs
-                    px = sx + math.cos(cur_angle_rad) * rx
-                    py = sy - math.sin(cur_angle_rad) * ry
-                    seg_len = math.sqrt((px - prev_px) ** 2 + (py - prev_py) ** 2)
-                    if accumulated + seg_len <= drawn:
-                        self.dll.AddLine(prev_px, prev_py, px, py, sw, cr, cg, cb, a)
-                        accumulated += seg_len
-                    else:
-                        frac = (drawn - accumulated) / seg_len if seg_len > 0 else 0
-                        ex = prev_px + (px - prev_px) * frac
-                        ey = prev_py + (py - prev_py) * frac
-                        self.dll.AddLine(prev_px, prev_py, ex, ey, sw, cr, cg, cb, a)
-                        accumulated = drawn
-                    prev_px, prev_py = px, py
 
     def _send_circle(self, mob, a, w, h, rot):
         cx, cy, _ = mob.get_center()
         sx, sy = manim_to_screen(cx, cy, w, h)
         scale_y = h / 8.0
         sr = mob.radius * scale_y
-        fo = mob.get_fill_opacity() if hasattr(mob, 'get_fill_opacity') else 1.0
-        so = mob.get_stroke_opacity() if hasattr(mob, 'get_stroke_opacity') else 1.0
+        try:
+            fo = float(mob.fill_rgbas[:, 3].max())
+        except Exception:
+            fo = mob.get_fill_opacity() if hasattr(mob, 'get_fill_opacity') else 1.0
+        try:
+            so = float(mob.stroke_rgbas[:, 3].max())
+        except Exception:
+            so = mob.get_stroke_opacity() if hasattr(mob, 'get_stroke_opacity') else 1.0
         progress = getattr(mob, '_vulkan_progress', 1.0)
         if fo <= 0 and so <= 0:
             return
         if progress <= 0:
             return
-        # Draw fill (if any) via AddCircle with border_width=0
-        if fo > 0:
-            fr, fg, fb = self._fill_color(mob)
-            self.dll.AddCircle(float(sx), float(sy), float(sr), fr, fg, fb, 0, 0, 0, 0.0, progress, a * fo)
-        # Draw border as separate AddLine segments (always, respects stroke_opacity)
+        fr, fg, fb = self._fill_color(mob)
+        self.dll.AddCircle(float(sx), float(sy), float(sr), fr, fg, fb, 0, 0, 0, 0.0, progress, a * fo)
         if so > 0:
             cr, cg, cb = self._stroke_color(mob)
             cr = int(cr * so)
@@ -423,7 +349,10 @@ class ShapeMixin:
         bw = self._stroke_width(mob)
         rot = get_anim_rotation(mob)
         progress = getattr(mob, '_vulkan_progress', 1.0)
-        fo = mob.get_fill_opacity() if hasattr(mob, 'get_fill_opacity') else 1.0
+        try:
+            fo = float(mob.fill_rgbas[:, 3].max())
+        except Exception:
+            fo = mob.get_fill_opacity() if hasattr(mob, 'get_fill_opacity') else 1.0
         if progress <= 0:
             return
         if fo <= 0:
