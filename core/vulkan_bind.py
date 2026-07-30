@@ -6,7 +6,7 @@ import numpy as np
 from manim import (
     Square, Circle, Line, Rectangle, Polygon, Polygram,
     Arrow, Dot, DashedLine,
-    Arc, Ellipse, Point, Text, VGroup, Group
+    Arc, Ellipse, Point, Text, VGroup, Group, OUT, ORIGIN
 )
 
 from core.rate_functions import (
@@ -16,7 +16,9 @@ from core.rate_functions import (
     _squish_rate_func, _sigmoid,
 )
 from core.animations import (
-    Animation, Create, DrawBorderThenFill, Write, Unwrite,
+    Animation, Create, Uncreate, DrawBorderThenFill, Write, Unwrite,
+    ShowIncreasingSubsets, SpiralIn,
+    Blink, TypeWithCursor,
     Succession, Wait, Add, AnimationGroup, MoveToTarget, Indicate,
     FadeIn, FadeOut, FadeTransform,
     Rotating, Rotate,
@@ -24,6 +26,7 @@ from core.animations import (
     TransformMatchingAbstractBase, TransformMatchingShapes, TransformMatchingTex,
     set_anim_opacity, get_anim_opacity,
     set_anim_rotation, get_anim_rotation,
+    set_anim_rotation_delta, get_anim_rotation_delta, clear_anim_rotation_delta,
     TARGET_FPS, FRAME_DURATION,
 )
 from core.vulkan_util import manim_to_screen, rotate_point, get_fill_rgb, get_stroke_rgb, get_stroke_w
@@ -168,8 +171,13 @@ class VulkanRender(ShapeMixin, TextMixin):
                 for fm in mob.family_members_with_points():
                     sw = fm.get_stroke_width() if hasattr(fm, 'get_stroke_width') else 0
                     if sw > 0:
-                        has_stroke = True
-                        break
+                        try:
+                            sa = float(fm.stroke_rgbas[:, 3].max())
+                        except Exception:
+                            sa = 1.0
+                        if sa > 0:
+                            has_stroke = True
+                            break
             if has_stroke:
                 self._send_text_stroke(mob, a, w, h, parent_offset)
             elif getattr(mob, '_letter_alphas', None) is not None and hasattr(mob, 'submobjects') and mob.submobjects:
@@ -194,6 +202,11 @@ class VulkanRender(ShapeMixin, TextMixin):
             offset = vgroup_center - original_center
             if parent_offset is not None:
                 offset = offset + parent_offset
+            if not hasattr(self, '_vgroup_debug_logged'):
+                self._vgroup_debug_logged = True
+                print(f"[VGroup] vgroup_center={vgroup_center} original_center={original_center} offset={offset}")
+                for i, sub in enumerate(mob):
+                    print(f"[VGroup] sub[{i}] center={sub.get_center()} type={type(sub).__name__}")
             for i, sub in enumerate(mob):
                 if vgroup_progress < 1.0 and num_subs > 1:
                     full_length = (num_subs - 1) * 1.0 + 1
@@ -203,11 +216,13 @@ class VulkanRender(ShapeMixin, TextMixin):
                     sub._vulkan_progress = sub_progress
                 elif vgroup_progress < 1.0:
                     sub._vulkan_progress = vgroup_progress
-                self._send(sub, angle, parent_alpha=effective_alpha, parent_offset=offset)
+                self._send(sub, rot, parent_alpha=effective_alpha, parent_offset=offset)
             return
 
         if getattr(mob, '_transforming', False):
-            self._send_vmobject(mob, a, w, h, parent_offset)
+            # Points already have the cumulative rotation applied by the
+            # correction + updater, so pass rot=0 to avoid double rotation.
+            self._send_vmobject(mob, a, w, h, parent_offset, 0.0)
             return
 
         if isinstance(mob, Square):
@@ -237,8 +252,8 @@ class VulkanRender(ShapeMixin, TextMixin):
         else:
             try:
                 pts = mob.get_points()
-                if len(pts) >= 4:
-                    self._send_vmobject(mob, a, w, h, parent_offset)
+                if len(pts) >= 2:
+                    self._send_vmobject(mob, a, w, h, parent_offset, rot)
             except Exception:
                 pass
 
@@ -273,12 +288,16 @@ class VulkanRender(ShapeMixin, TextMixin):
         for anim in animations:
             from manim.mobject.mobject import _AnimationBuilder
             if isinstance(anim, _AnimationBuilder):
-                resolved.append(anim.build())
+                anim.anim_args['suspend_mobject_updating'] = False
+                built = anim.build()
+                resolved.append(built)
             elif isinstance(anim, AnimationGroup):
                 sub_resolved = []
                 for sub in anim.animations:
                     if isinstance(sub, _AnimationBuilder):
-                        sub_resolved.append(sub.build())
+                        sub.anim_args['suspend_mobject_updating'] = False
+                        built = sub.build()
+                        sub_resolved.append(built)
                     else:
                         sub_resolved.append(sub)
                 anim.animations = sub_resolved
@@ -293,8 +312,8 @@ class VulkanRender(ShapeMixin, TextMixin):
 
         all_mobjects = list(add_mobs)
         for anim in animations:
-            if isinstance(anim, (Create, Write, FadeIn, Rotating, Rotate)) and anim.mobject:
-                if isinstance(anim, Create):
+            if isinstance(anim, (Create, Write, DrawBorderThenFill, FadeIn, Rotating, Rotate)) and anim.mobject:
+                if isinstance(anim, (Create, DrawBorderThenFill)):
                     anim.mobject._vulkan_progress = 0.0
                 if anim.mobject not in all_mobjects:
                     all_mobjects.append(anim.mobject)
@@ -339,8 +358,8 @@ class VulkanRender(ShapeMixin, TextMixin):
                     all_mobjects.append(ghost)
             elif isinstance(anim, Succession):
                 for sub in anim.animations:
-                    if isinstance(sub, (Create, Write, FadeIn, Rotating, Rotate)) and sub.mobject:
-                        if isinstance(sub, Create):
+                    if isinstance(sub, (Create, Write, DrawBorderThenFill, FadeIn, Rotating, Rotate)) and sub.mobject:
+                        if isinstance(sub, (Create, DrawBorderThenFill)):
                             sub.mobject._vulkan_progress = 0.0
                         if sub.mobject not in all_mobjects:
                             all_mobjects.append(sub.mobject)
@@ -378,8 +397,8 @@ class VulkanRender(ShapeMixin, TextMixin):
                             all_mobjects.append(ghost)
             elif isinstance(anim, AnimationGroup):
                 for sub in anim.animations:
-                    if isinstance(sub, (Create, Write, FadeIn, Rotating, Rotate)) and sub.mobject:
-                        if isinstance(sub, Create):
+                    if isinstance(sub, (Create, Write, DrawBorderThenFill, FadeIn, Rotating, Rotate)) and sub.mobject:
+                        if isinstance(sub, (Create, DrawBorderThenFill)):
                             sub.mobject._vulkan_progress = 0.0
                         if sub.mobject not in all_mobjects:
                             all_mobjects.append(sub.mobject)
@@ -393,6 +412,15 @@ class VulkanRender(ShapeMixin, TextMixin):
         for mob in all_mobjects:
             if mob not in self.scene.mobjects:
                 self.scene.add(mob)
+
+        for anim in animations:
+            if hasattr(anim, 'mobject') and anim.mobject is not None:
+                if anim.mobject not in self.scene.mobjects:
+                    self.scene.mobjects.append(anim.mobject)
+            cursor = getattr(anim, 'cursor', None)
+            if cursor is not None and cursor not in self.scene.mobjects:
+                self.scene.mobjects.append(cursor)
+
         for mob in add_mobs:
             set_anim_opacity(mob, 0.0)
 
@@ -408,8 +436,13 @@ class VulkanRender(ShapeMixin, TextMixin):
             for a in real_anims:
                 if isinstance(a, (Wait, Succession)):
                     continue
-                if hasattr(a, '_run_time') and abs(a._run_time - 1.0) < 0.01:
-                    a._run_time = shared_rt
+                a.run_time = shared_rt
+        if 'rate_func' in kwargs:
+            shared_rf = kwargs['rate_func']
+            for a in real_anims:
+                if isinstance(a, (Wait, Succession)):
+                    continue
+                a.rate_func = shared_rf
 
         for a in real_anims:
             is_manim = type(a).__module__.startswith('manim')
@@ -429,14 +462,63 @@ class VulkanRender(ShapeMixin, TextMixin):
                             self.scene.add(sub_anim.target_mobject)
 
         self._active_anims = real_anims
-        self._last_frame_time = time.time()
+        self._last_frame_time = time.time() - (1.0 / 30.0)
+        _orig_vgroup_rotate = {}
 
+        def _rotation_pivot(vg):
+            if len(vg) > 0 and hasattr(vg[0], 'get_center'):
+                return vg[0].get_center()
+            return vg.get_center()
+
+        def _patch_vgroup(vg):
+            if id(vg) in _orig_vgroup_rotate:
+                return
+            _orig_vgroup_rotate[id(vg)] = vg.rotate
+            def _propagating_rotate(angle, axis=OUT, about_point=None, about_edge=None, **kwargs):
+                alpha = _anim_alpha[0]
+                effective = angle * alpha
+                pivot = _rotation_pivot(vg)
+                for m in vg.family_members_with_points():
+                    if hasattr(m, 'points') and len(m.points) > 0:
+                        c, s = np.cos(effective), np.sin(effective)
+                        rot_matrix = np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
+                        m.points = (m.points - pivot) @ rot_matrix.T + pivot
+                current = get_anim_rotation(vg)
+                set_anim_rotation(vg, current + effective)
+                return vg
+            vg.rotate = _propagating_rotate
+
+        def _unpatch_vgroup(vg):
+            if id(vg) in _orig_vgroup_rotate:
+                vg.rotate = _orig_vgroup_rotate.pop(id(vg))
+
+        frame_count = 0
+        # Mutable container so _patch_vgroup's closure reads the latest alpha
+        _anim_alpha = [1.0]
         while True:
             frame_start = time.time()
             now = frame_start
             dt = now - self._last_frame_time
             self._last_frame_time = now
             all_done = True
+
+            # Time-based rotation: original manim uses -0.3 rad/frame at 30fps
+            # which is -9 rad/s.  current_alpha = dt * 30 gives:
+            #   30fps → 1.0, 60fps → 0.5, etc.
+            current_alpha = dt * 30
+            _anim_alpha[0] = current_alpha
+
+            # Check BEFORE the animation loop whether any point-modifying
+            # animation will run its interpolate on this frame.  We do this
+            # before the loop because finish() sets a.finished = True right
+            # after interpolate(1), and we still need to re-apply rotation
+            # on that final frame.
+            interpolate_will_run = any(
+                not isinstance(a, (Wait, Succession, AnimationGroup))
+                and not getattr(a, 'finished', False)
+                for a in self._active_anims
+            )
+
             for a in self._active_anims:
                 is_manim = type(a).__module__.startswith('manim')
                 if is_manim:
@@ -444,9 +526,13 @@ class VulkanRender(ShapeMixin, TextMixin):
                     alpha = elapsed / a.run_time if a.run_time > 0 else 1.0
                     alpha = max(0.0, min(1.0, alpha))
                     a.interpolate(alpha)
+
                     if not getattr(a, 'finished', False) and elapsed >= a.run_time:
                         a.finish()
                         a.finished = True
+                        mob = getattr(a, 'mobject', None)
+                        if mob:
+                            mob.resume_updating()
                 else:
                     a.interpolate(now)
                     if not a.finished and (now - a.start_time) >= a.run_time:
@@ -454,18 +540,53 @@ class VulkanRender(ShapeMixin, TextMixin):
                 if not getattr(a, 'finished', False):
                     all_done = False
 
+            # Re-apply cumulative rotation after interpolate resets points.
+            if interpolate_will_run:
+                for mob in self.scene.mobjects:
+                    if isinstance(mob, (VGroup, Group)):
+                        vg_rot = get_anim_rotation(mob)
+                        if vg_rot != 0.0:
+                            pivot = _rotation_pivot(mob)
+                            for sub in mob.family_members_with_points():
+                                if hasattr(sub, 'points') and len(sub.points) > 0:
+                                    c, s = np.cos(vg_rot), np.sin(vg_rot)
+                                    rot_matrix = np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
+                                    sub.points = (sub.points - pivot) @ rot_matrix.T + pivot
+
+            for mob in self.scene.mobjects:
+                if isinstance(mob, (VGroup, Group)) and getattr(mob, 'updaters', None):
+                    _patch_vgroup(mob)
+
             for mob in reversed(self.scene.mobjects):
-                if hasattr(mob, 'updaters') and mob.updaters:
+                if hasattr(mob, 'updaters') and mob.updaters and not getattr(mob, 'updating_suspended', False):
                     for updater in mob.updaters:
                         import inspect
-                        if len(inspect.signature(updater).parameters) == 1:
+                        nparams = len(inspect.signature(updater).parameters)
+                        if nparams == 0:
+                            updater()
+                        elif nparams == 1:
                             updater(mob)
                         else:
                             updater(mob, dt)
 
+            clear_anim_rotation_delta()
+
+            # DEBUG: record dot position every frame
+            for mob in self.scene.mobjects:
+                if isinstance(mob, (VGroup, Group)) and getattr(mob, 'updaters', None):
+                    if len(mob) >= 2:
+                        dot_pos = mob[1].get_center()
+                        print(f"  frame={frame_count} dot=({dot_pos[0]:.4f}, {dot_pos[1]:.4f})")
+
+            for mob in self.scene.mobjects:
+                if isinstance(mob, (VGroup, Group)) and id(mob) in _orig_vgroup_rotate:
+                    _unpatch_vgroup(mob)
+
             if not self.tick():
                 break
             self.sync(self.scene)
+
+            frame_count += 1
 
             if screenshot_at:
                 for a in self._active_anims:

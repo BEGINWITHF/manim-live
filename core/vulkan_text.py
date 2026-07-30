@@ -1,4 +1,5 @@
 import ctypes
+import math
 from core.vulkan_util import manim_to_screen, get_fill_rgb
 from core.animations import get_anim_opacity
 
@@ -89,18 +90,48 @@ class TextMixin:
             )
 
     def _send_text_bitmap(self, mob, w, h, alpha=1.0):
+        base_r, base_g, base_b = 255, 255, 255
         try:
             c = mob.get_color()
-            base_r, base_g, base_b = int(c[0] * 255), int(c[1] * 255), int(c[2] * 255)
+            r, g, b = int(c[0] * 255), int(c[1] * 255), int(c[2] * 255)
+            if r > 0 or g > 0 or b > 0:
+                base_r, base_g, base_b = r, g, b
         except Exception:
-            base_r, base_g, base_b = 255, 255, 255
+            pass
+        if base_r == 255 and base_g == 255 and base_b == 255:
+            try:
+                for fm in mob.family_members_with_points():
+                    srgba = fm.stroke_rgbas
+                    if len(srgba) > 0:
+                        sr, sg, sb = float(srgba[0][0]), float(srgba[0][1]), float(srgba[0][2])
+                        if sr > 0 or sg > 0 or sb > 0:
+                            base_r, base_g, base_b = int(sr * 255), int(sg * 255), int(sb * 255)
+                            break
+            except Exception:
+                pass
+        if base_r == 0 and base_g == 0 and base_b == 0:
+            try:
+                srgbas = mob.get_stroke_rgbas()
+                if len(srgbas) > 0:
+                    sr, sg, sb = float(srgbas[0][0]), float(srgbas[0][1]), float(srgbas[0][2])
+                    base_r, base_g, base_b = int(sr * 255), int(sg * 255), int(sb * 255)
+            except Exception:
+                pass
+        if base_r == 0 and base_g == 0 and base_b == 0:
+            try:
+                frgbas = mob.get_fill_rgbas()
+                if len(frgbas) > 0:
+                    fr, fg, fb = float(frgbas[0][0]), float(frgbas[0][1]), float(frgbas[0][2])
+                    base_r, base_g, base_b = int(fr * 255), int(fg * 255), int(fb * 255)
+            except Exception:
+                pass
         if base_r == 0 and base_g == 0 and base_b == 0:
             base_r, base_g, base_b = 255, 255, 255
-        fo = mob.get_fill_opacity() if hasattr(mob, 'get_fill_opacity') else 1.0
-        if fo <= 0:
-            return
         progress = getattr(mob, '_vulkan_progress', 1.0)
         for sub in mob.submobjects:
+            sub_a = get_anim_opacity(sub)
+            if sub_a <= 0:
+                continue
             try:
                 pts = sub.get_points()
             except Exception:
@@ -122,10 +153,10 @@ class TextMixin:
                 arr, n,
                 base_r, base_g, base_b, 0.7,
                 base_r, base_g, base_b, 1.0,
-                progress, 1, 1, alpha,
+                progress, 1, 1, alpha * sub_a,
             )
 
-    def _send_vmobject(self, mob, a, w, h, parent_offset=None):
+    def _send_vmobject(self, mob, a, w, h, parent_offset=None, rot=0.0):
         try:
             pts = mob.get_points()
         except Exception:
@@ -135,6 +166,7 @@ class TextMixin:
         is_polyline = isinstance(mob, TracedPath)
 
         if is_polyline and len(pts) >= 2:
+            cx, cy, _ = mob.get_center()
             sr, sg, sb, sa = 1, 1, 1, 1
             try:
                 srgbas = mob.get_stroke_rgbas()
@@ -156,8 +188,14 @@ class TextMixin:
             sw = max(1, int(round(sw_manim * 0.01 * (h / 8.0))))
 
             raw_pts = []
+            cos_a = math.cos(rot)
+            sin_a = math.sin(rot)
             for i in range(len(pts)):
-                raw_pts.append((float(pts[i][0]), float(pts[i][1])))
+                px, py = float(pts[i][0]), float(pts[i][1])
+                dx, dy = px - cx, py - cy
+                rx = dx * cos_a - dy * sin_a + cx
+                ry = dx * sin_a + dy * cos_a + cy
+                raw_pts.append((rx, ry))
 
             so_attr = getattr(mob, 'stroke_opacity', 1.0)
             if isinstance(so_attr, (list, tuple)) and len(so_attr) == 2:
@@ -215,9 +253,15 @@ class TextMixin:
         else:
             if len(pts) < 4:
                 return
+            cx, cy, _ = mob.get_center()
+            cos_a = math.cos(rot)
+            sin_a = math.sin(rot)
             flat = []
             for p in pts:
                 px, py = p[0], p[1]
+                dx, dy = px - cx, py - cy
+                px = dx * cos_a - dy * sin_a + cx
+                py = dx * sin_a + dy * cos_a + cy
                 if parent_offset is not None:
                     px += parent_offset[0]
                     py += parent_offset[1]
@@ -229,7 +273,6 @@ class TextMixin:
         n = len(flat) // 3
         if n < 8:
             return
-        arr = (ctypes.c_float * len(flat))(*flat)
 
         fr, fg, fb, fa = 0, 0, 0, 0
         try:
@@ -255,8 +298,33 @@ class TextMixin:
         except Exception:
             sr, sg, sb = fr, fg, fb
             sa = 1.0
+        if sr == 0 and sg == 0 and sb == 0:
+            sr, sg, sb = fr, fg, fb
+        if sa <= 0:
+            try:
+                for fm in mob.family_members_with_points():
+                    srgba = fm.stroke_rgbas
+                    if len(srgba) > 0:
+                        s = float(srgba[0][3])
+                        if s > sa:
+                            sa = s
+            except Exception:
+                pass
+        if sa <= 0:
+            sa = 1.0
 
-        so = mob.get_stroke_opacity() if hasattr(mob, 'get_stroke_opacity') else 1.0
+        try:
+            so = float(mob.stroke_rgbas[:, 3].max())
+        except Exception:
+            so = mob.get_stroke_opacity() if hasattr(mob, 'get_stroke_opacity') else 1.0
+        if so <= 0:
+            try:
+                for fm in mob.family_members_with_points():
+                    s = float(fm.stroke_rgbas[:, 3].max())
+                    if s > so:
+                        so = s
+            except Exception:
+                pass
         sw = self._stroke_width(mob)
         fill_alpha = min(1.0, fa * a)
         stroke_alpha = min(1.0, sa * so * a)
@@ -270,14 +338,42 @@ class TextMixin:
         fbi = round(fb * 255)
 
         show_fill = 1 if fill_alpha > 0.01 else 0
-        show_stroke = 1 if (stroke_alpha > 0.01 and stroke_w > 0) else 0
+        do_stroke = stroke_alpha > 0.01 and stroke_w > 0
 
+        if not hasattr(self, '_ts_debug'):
+            self._ts_debug = True
+            try:
+                c = mob.get_color()
+                print(f"[TextStroke] get_color={c} fr,fg,fb=({fr:.2f},{fg:.2f},{fb:.2f}) fa={fa:.2f} sr,sg,sb=({sr:.2f},{sg:.2f},{sb:.2f}) sa={sa:.2f} so={so:.2f} a={a:.2f}")
+                print(f"  fill_alpha={fill_alpha:.2f} stroke_alpha={stroke_alpha:.2f} show_fill={show_fill} do_stroke={do_stroke}")
+            except Exception:
+                pass
+
+        arr = (ctypes.c_float * len(flat))(*flat)
         self.dll.AddBezierPath(
             arr, n,
             sri, sgi, sbi, stroke_w,
             fri, fgi, fbi, fill_alpha,
-            1.0, show_stroke, show_fill, a,
+            1.0, 0, show_fill, a,
         )
+
+        if do_stroke:
+            seg_count = n // 4
+            samples_per_seg = 8
+            for si in range(seg_count):
+                idx = si * 4
+                p0x, p0y = flat[idx*3], flat[idx*3+1]
+                p1x, p1y = flat[(idx+1)*3], flat[(idx+1)*3+1]
+                p2x, p2y = flat[(idx+2)*3], flat[(idx+2)*3+1]
+                p3x, p3y = flat[(idx+3)*3], flat[(idx+3)*3+1]
+                prev_x, prev_y = p0x, p0y
+                for s in range(1, samples_per_seg + 1):
+                    t = s / samples_per_seg
+                    u = 1.0 - t
+                    bx = u*u*u*p0x + 3*u*u*t*p1x + 3*u*t*t*p2x + t*t*t*p3x
+                    by = u*u*u*p0y + 3*u*u*t*p1y + 3*u*t*t*p2y + t*t*t*p3y
+                    self.dll.AddLine(prev_x, prev_y, bx, by, int(stroke_w), sri, sgi, sbi, a)
+                    prev_x, prev_y = bx, by
 
     def _send_text_stroke(self, mob, a, w, h, parent_offset=None):
         if not hasattr(mob, 'family_members_with_points'):

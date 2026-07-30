@@ -7,6 +7,8 @@ from scenes.demo_scene import (
     DemoDefaultAdd, DemoAddWithRunTime, DemoLagRatios, DemoChangeDefaultAnimation,
     DemoAnimatedBoundary, DemoTracedPath, DemoDissipatingPath, DemoLaggedStart,
     DemoLaggedStartMap, DemoSuccessionDots, DemoCreateSquare,
+    DemoDrawBorderThenFill, DemoShowIncreasingSubsets, DemoSpiralIn,
+    DemoTypeWithCursor, DemoUncreate,
 )
 
 SCENES = [
@@ -35,6 +37,11 @@ SCENES = [
     ("23", "LaggedStartMap - ripple effect on grid",   DemoLaggedStartMap),
     ("24", "Succession - dots chase each other",       DemoSuccessionDots),
     ("25", "Create(Square) - basic create",            DemoCreateSquare),
+    ("26", "DrawBorderThenFill - fill animation",      DemoDrawBorderThenFill),
+    ("27", "ShowIncreasingSubsets - reveal submobjects", DemoShowIncreasingSubsets),
+    ("28", "SpiralIn - shapes fly in on spiral",          DemoSpiralIn),
+    ("29", "TypeWithCursor + Blink - typing effect",       DemoTypeWithCursor),
+    ("30", "Uncreate - reverse of Create",                  DemoUncreate),
 ]
 
 
