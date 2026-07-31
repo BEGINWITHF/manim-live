@@ -11,7 +11,9 @@ from scenes.demo_scene import (
     DemoTypeWithCursor, DemoUncreate, DemoUntypeWithCursor,
     DemoUnwriteReverseTrue, DemoUnwriteReverseFalse, DemoShowWrite, DemoShowWriteReversed,
     DemoFadeInExample, DemoFadeOutExample, DemoGrowFromCenter, DemoGrowArrow, DemoGrowFromEdge,
-    DemoGrowFromPoint, DemoSpinInFromNothing,
+    DemoGrowFromPoint, DemoSpinInFromNothing,     DemoApplyingWaves, DemoBlinking, DemoCircumscribe,
+    DemoUsingFlash, DemoFlashOnCircle, DemoFocusOn, DemoUsingIndicate,
+    DemoTimeWidthValues, DemoWiggle,
 )
 
 SCENES = [
@@ -57,6 +59,15 @@ SCENES = [
     ("40", "GrowFromEdge",                                     DemoGrowFromEdge),
     ("41", "GrowFromPoint",                                    DemoGrowFromPoint),
     ("42", "SpinInFromNothing",                                DemoSpinInFromNothing),
+    ("43", "ApplyWave",                                        DemoApplyingWaves),
+    ("44", "Blink",                                            DemoBlinking),
+    ("45", "Circumscribe",                                     DemoCircumscribe),
+    ("46", "Flash",                                             DemoUsingFlash),
+    ("47", "Flash on Circle",                                   DemoFlashOnCircle),
+    ("48", "FocusOn",                                           DemoFocusOn),
+    ("49", "Indicate",                                          DemoUsingIndicate),
+    ("50", "ShowPassingFlash",                                  DemoTimeWidthValues),
+    ("51", "Wiggle",                                            DemoWiggle),
 ]
 
 

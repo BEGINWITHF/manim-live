@@ -209,7 +209,8 @@ class ShapeMixin:
             cy = grow_pt[1] + (cy - grow_pt[1]) * grow_scale
         sx, sy = manim_to_screen(cx, cy, w, h)
         scale_y = h / 8.0
-        sr = mob.radius * scale_y * grow_scale
+        effective_radius = mob.get_width() / 2.0
+        sr = effective_radius * scale_y * grow_scale
         try:
             fo = float(mob.fill_rgbas[:, 3].max())
         except Exception:
@@ -225,7 +226,8 @@ class ShapeMixin:
             return
         fr, fg, fb = self._fill_color(mob)
         self.dll.AddCircle(float(sx), float(sy), float(sr), fr, fg, fb, 0, 0, 0, 0.0, progress, a * fo)
-        if so > 0:
+        sw_manim = get_stroke_w(mob)
+        if so > 0 and sw_manim > 0:
             cr, cg, cb = self._stroke_color(mob)
             cr = int(cr * so)
             cg = int(cg * so)
@@ -387,11 +389,18 @@ class ShapeMixin:
         bw = self._stroke_width(mob)
         rot = get_anim_rotation(mob)
         progress = getattr(mob, '_vulkan_progress', 1.0)
+        has_bounds = hasattr(mob, '_vulkan_progress_upper')
+        if has_bounds:
+            progress_lower = getattr(mob, '_vulkan_progress_lower', 0.0)
+            progress_upper = getattr(mob, '_vulkan_progress_upper', 1.0)
+        else:
+            progress_lower = 0.0
+            progress_upper = progress
         try:
             fo = float(mob.fill_rgbas[:, 3].max())
         except Exception:
             fo = mob.get_fill_opacity() if hasattr(mob, 'get_fill_opacity') else 1.0
-        if progress <= 0:
+        if progress <= 0 and not has_bounds:
             return
         if fo <= 0:
             flat = []
@@ -413,8 +422,10 @@ class ShapeMixin:
             if alpha >= 1.0:
                 sr, sg, sb = br, bg, bb
                 sw = max(1, round(bw))
-                drawn = perimeter * progress
-                remaining = drawn
+                lower_dist = perimeter * progress_lower
+                upper_dist = perimeter * progress_upper
+                skip = lower_dist
+                remaining = upper_dist
                 for j in range(n):
                     if remaining <= 0:
                         break
@@ -422,6 +433,16 @@ class ShapeMixin:
                     el = edge_lens[j]
                     x0, y0 = flat[j * 2], flat[j * 2 + 1]
                     x1, y1 = flat[j2 * 2], flat[j2 * 2 + 1]
+                    if skip >= el:
+                        skip -= el
+                        continue
+                    seg_start = el - skip
+                    if seg_start > 0:
+                        frac_start = (el - seg_start) / el if el > 0 else 0
+                        x0 = x0 + (x1 - x0) * frac_start
+                        y0 = y0 + (y1 - y0) * frac_start
+                        skip = 0
+                        el = seg_start
                     if remaining >= el:
                         self.dll.AddLine(x0, y0, x1, y1, sw, sr, sg, sb, alpha)
                         remaining -= el
@@ -442,10 +463,11 @@ class ShapeMixin:
             arr = (ctypes.c_float * len(flat))(*flat)
             self.dll.AddPolygon(
                 sx, sy, fr, fg, fb, 0, 0, 0, 0.0,
-                len(verts), arr, progress, alpha * fo, 1
+                len(verts), arr, 0 if has_bounds else progress, alpha * fo, 1
             )
             so = mob.get_stroke_opacity() if hasattr(mob, 'get_stroke_opacity') else 1.0
             if so > 0:
+                n = len(verts)
                 n = len(verts)
                 edge_lens = []
                 perimeter = 0.0
@@ -457,8 +479,10 @@ class ShapeMixin:
                     edge_lens.append(el)
                     perimeter += el
                 sw = max(1, round(bw))
-                drawn = perimeter * progress
-                remaining = drawn
+                lower_dist = perimeter * progress_lower
+                upper_dist = perimeter * progress_upper
+                skip = lower_dist
+                remaining = upper_dist
                 for j in range(n):
                     if remaining <= 0:
                         break
@@ -466,6 +490,16 @@ class ShapeMixin:
                     el = edge_lens[j]
                     x0, y0 = flat[j * 2], flat[j * 2 + 1]
                     x1, y1 = flat[j2 * 2], flat[j2 * 2 + 1]
+                    if skip >= el:
+                        skip -= el
+                        continue
+                    seg_start = el - skip
+                    if seg_start > 0:
+                        frac_start = (el - seg_start) / el if el > 0 else 0
+                        x0 = x0 + (x1 - x0) * frac_start
+                        y0 = y0 + (y1 - y0) * frac_start
+                        skip = 0
+                        el = seg_start
                     cr = int(br * so)
                     cg = int(bg * so)
                     cb = int(bb * so)

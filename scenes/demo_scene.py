@@ -10,8 +10,8 @@ from core.vulkan_bind import (
     TransformMatchingShapes, TransformMatchingTex,
     Animation, AnimationGroup, Succession, DrawBorderThenFill,
     ShowIncreasingSubsets, SpiralIn, GrowFromCenter, GrowArrow, GrowFromEdge, GrowFromPoint,
-    SpinInFromNothing,
-    Blink, TypeWithCursor, UntypeWithCursor,
+    SpinInFromNothing, ApplyWave, Circumscribe,
+    Blink, TypeWithCursor, UntypeWithCursor, Indicate, ShowPassingFlash,
 )
 
 
@@ -934,5 +934,154 @@ class DemoSpinInFromNothing(Scene):
         render.play(SpinInFromNothing(squares[0]))
         render.play(SpinInFromNothing(squares[1], angle=2 * PI))
         render.play(SpinInFromNothing(squares[2], point_color=RED))
+        render.play(Wait(1.5))
+        render.close()
+
+
+class DemoApplyingWaves(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "ApplyWave")
+
+        tex = Text("WaveWaveWaveWaveWave", font_size=36).scale(2)
+        self.add(tex)
+
+        render.play(ApplyWave(tex))
+        render.play(ApplyWave(tex, direction=RIGHT, time_width=0.5, amplitude=0.3))
+        render.play(ApplyWave(tex, rate_func=linear, ripples=4))
+        render.play(Wait(1.5))
+        render.close()
+
+
+class DemoBlinking(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "Blink")
+
+        text = Text("Blinking", font_size=36).scale(1.5)
+        self.add(text)
+
+        render.play(Blink(text, blinks=3))
+        render.play(Wait(1.5))
+        render.close()
+
+
+class DemoCircumscribe(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "Circumscribe")
+
+        lbl = Text("Circum-\nscribe", font_size=36).scale(2)
+        self.add(lbl)
+
+        render.play(Circumscribe(lbl))
+        render.play(Circumscribe(lbl, Circle))
+        render.play(Circumscribe(lbl, fade_out=True))
+        render.play(Circumscribe(lbl, time_width=2))
+        render.play(Circumscribe(lbl, Circle, True))
+        render.play(Wait(1.5))
+        render.close()
+
+
+class DemoUsingIndicate(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "Indicate")
+
+        tex = Text("Indicate", font_size=36).scale(3)
+        self.add(tex)
+
+        render.play(Indicate(tex))
+        render.play(Wait(1.5))
+        render.close()
+
+
+class DemoUsingFlash(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "Flash")
+
+        dot = Dot(color=PURE_YELLOW).shift(DOWN)
+        self.add(Text("Flash the dot below:"), dot)
+        render.play(Flash(dot))
+        render.play(Wait(1.5))
+        render.close()
+
+
+class DemoFlashOnCircle(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "Flash on Circle")
+        radius = 2
+        circle = Circle(radius)
+        self.add(circle)
+        render.play(Flash(
+            circle, line_length=1,
+            num_lines=30, color=RED,
+            flash_radius=radius + SMALL_BUFF,
+            time_width=0.3, run_time=2,
+            rate_func=rush_from,
+        ))
+        render.play(Wait(1.5))
+        render.close()
+
+
+class DemoFocusOn(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "FocusOn")
+        dot = Dot(color=PURE_YELLOW).shift(DOWN)
+        self.add(Text("Focusing on the dot below:"), dot)
+        anim = FocusOn(dot, run_time=1, opacity=0.03)
+        anim.mobject.move_to(dot.get_center())
+        render.play(anim)
+        render.play(Wait(1.5))
+        render.close()
+
+
+class DemoTimeWidthValues(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+
+        p = RegularPolygon(5, color=DARK_GRAY, stroke_width=6).scale(3)
+        self.add(p)
+
+        p = p.copy().set_color(BLUE)
+
+        for time_width in [0.2, 0.5, 1, 2]:
+            lbl = Text(f"time_width={time_width:.1f}", font_size=36)
+            self.add(lbl)
+            render.play(ShowPassingFlash(p.copy().set_color(BLUE), run_time=2, time_width=time_width))
+            self.remove(lbl)
+
+        render.play(Wait(1.5))
+        render.close()
+
+
+class DemoWiggle(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "Wiggle")
+        tex = Text("Wiggle").scale(3)
+        self.add(tex)
+        render.play(Wiggle(tex))
         render.play(Wait(1.5))
         render.close()

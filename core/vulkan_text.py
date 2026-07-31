@@ -90,6 +90,8 @@ class TextMixin:
 
     def _send_text_bitmap(self, mob, w, h, alpha=1.0):
         base_r, base_g, base_b = 255, 255, 255
+        fade_scale = getattr(mob, '_fade_scale', 1.0)
+        cx, cy = mob.get_center()[0], mob.get_center()[1]
         try:
             c = mob.get_color()
             r, g, b = int(c[0] * 255), int(c[1] * 255), int(c[2] * 255)
@@ -142,7 +144,12 @@ class TextMixin:
                 continue
             flat = []
             for p in pts:
-                sx, sy = manim_to_screen(p[0], p[1], w, h)
+                if fade_scale != 1.0:
+                    px = cx + (p[0] - cx) * fade_scale
+                    py = cy + (p[1] - cy) * fade_scale
+                else:
+                    px, py = p[0], p[1]
+                sx, sy = manim_to_screen(px, py, w, h)
                 flat.append(sx)
                 flat.append(sy)
                 flat.append(0.0)
@@ -339,6 +346,14 @@ class TextMixin:
         stroke_alpha = min(1.0, sa * so * a)
         stroke_w = max(1.0, sw)
 
+        progress = getattr(mob, '_vulkan_progress', 1.0)
+        has_bounds = hasattr(mob, '_vulkan_progress_upper')
+        if has_bounds:
+            progress_lower = getattr(mob, '_vulkan_progress_lower', 0.0)
+            progress_upper = getattr(mob, '_vulkan_progress_upper', 1.0)
+        else:
+            progress_lower = 0.0
+            progress_upper = progress
         sri = round(sr * 255 * stroke_alpha)
         sgi = round(sg * 255 * stroke_alpha)
         sbi = round(sb * 255 * stroke_alpha)
@@ -346,7 +361,7 @@ class TextMixin:
         fgi = round(fg * 255)
         fbi = round(fb * 255)
 
-        show_fill = 1 if fill_alpha > 0.01 else 0
+        show_fill = 1 if fill_alpha > 0.01 and progress_lower == 0.0 else 0
         do_stroke = stroke_alpha > 0.01 and stroke_w > 0
 
         if not hasattr(self, '_ts_debug'):
@@ -361,13 +376,15 @@ class TextMixin:
             arr, n,
             sri, sgi, sbi, stroke_w,
             fri, fgi, fbi, fill_alpha,
-            1.0, 0, show_fill, a,
+            progress, 0, show_fill, a,
         )
 
         if do_stroke:
             seg_count = n // 4
             samples_per_seg = 8
-            for si in range(seg_count):
+            vis_start = int(seg_count * progress_lower)
+            vis_end = int(seg_count * progress_upper)
+            for si in range(vis_start, min(seg_count, vis_end + 1)):
                 idx = si * 4
                 p0x, p0y = flat[idx*3], flat[idx*3+1]
                 p1x, p1y = flat[(idx+1)*3], flat[(idx+1)*3+1]

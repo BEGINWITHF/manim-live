@@ -25,6 +25,7 @@ from core.animations import (
     Transform, ReplacementTransform,
     TransformMatchingAbstractBase, TransformMatchingShapes, TransformMatchingTex,
     GrowFromCenter, GrowArrow, GrowFromEdge, GrowFromPoint, SpinInFromNothing,
+    ApplyWave, Circumscribe, ShowPassingFlash,
     set_anim_opacity, get_anim_opacity,
     set_anim_rotation, get_anim_rotation,
     set_anim_rotation_delta, get_anim_rotation_delta, clear_anim_rotation_delta,
@@ -228,14 +229,14 @@ class VulkanRender(ShapeMixin, TextMixin):
             self._send_ellipse(mob, a, w, h, rot)
         elif isinstance(mob, Circle):
             self._send_circle(mob, a, w, h, rot)
+        elif isinstance(mob, Dot):
+            self._send_dot(mob, a, w, h)
         elif isinstance(mob, Arrow):
             self._send_arrow(mob, a, w, h, rot)
         elif isinstance(mob, DashedLine):
             self._send_dashed_line(mob, a, w, h)
         elif isinstance(mob, Line):
             self._send_line(mob, a, w, h, rot)
-        elif isinstance(mob, Dot):
-            self._send_dot(mob, a, w, h)
         elif isinstance(mob, Arc):
             self._send_arc(mob, a, w, h)
         elif isinstance(mob, Polygon):
@@ -307,7 +308,7 @@ class VulkanRender(ShapeMixin, TextMixin):
 
         all_mobjects = list(add_mobs)
         for anim in animations:
-            if isinstance(anim, (Create, Write, DrawBorderThenFill, FadeIn, Rotating, Rotate, GrowArrow)) and anim.mobject:
+            if isinstance(anim, (Create, Write, DrawBorderThenFill, FadeIn, Rotating, Rotate, GrowArrow, Indicate, ShowPassingFlash)) and anim.mobject:
                 if isinstance(anim, (Create, DrawBorderThenFill)):
                     anim.mobject._vulkan_progress = 0.0
                 if anim.mobject not in all_mobjects:
@@ -391,7 +392,7 @@ class VulkanRender(ShapeMixin, TextMixin):
                             all_mobjects.append(ghost)
             elif isinstance(anim, AnimationGroup):
                 for sub in anim.animations:
-                    if isinstance(sub, (Create, Write, DrawBorderThenFill, FadeIn, Rotating, Rotate)) and sub.mobject:
+                    if isinstance(sub, (Create, Write, DrawBorderThenFill, FadeIn, Rotating, Rotate, GrowArrow)) and sub.mobject:
                         if isinstance(sub, (Create, DrawBorderThenFill)):
                             sub.mobject._vulkan_progress = 0.0
                         if isinstance(sub, FadeIn):
@@ -451,6 +452,8 @@ class VulkanRender(ShapeMixin, TextMixin):
             if is_manim:
                 a.start_time = time.time()
                 a.begin()
+                if a.mobject is not None and a.mobject not in self.scene.mobjects:
+                    self.scene.mobjects.append(a.mobject)
             else:
                 a.begin(time.time())
 
@@ -521,6 +524,18 @@ class VulkanRender(ShapeMixin, TextMixin):
                 for a in self._active_anims
             )
 
+            for mob in reversed(self.scene.mobjects):
+                if hasattr(mob, 'updaters') and mob.updaters and not getattr(mob, 'updating_suspended', False):
+                    for updater in mob.updaters:
+                        import inspect
+                        nparams = len(inspect.signature(updater).parameters)
+                        if nparams == 0:
+                            updater()
+                        elif nparams == 1:
+                            updater(mob)
+                        else:
+                            updater(mob, dt)
+
             for a in self._active_anims:
                 is_manim = type(a).__module__.startswith('manim')
                 if is_manim:
@@ -558,18 +573,6 @@ class VulkanRender(ShapeMixin, TextMixin):
             for mob in self.scene.mobjects:
                 if isinstance(mob, (VGroup, Group)) and getattr(mob, 'updaters', None):
                     _patch_vgroup(mob)
-
-            for mob in reversed(self.scene.mobjects):
-                if hasattr(mob, 'updaters') and mob.updaters and not getattr(mob, 'updating_suspended', False):
-                    for updater in mob.updaters:
-                        import inspect
-                        nparams = len(inspect.signature(updater).parameters)
-                        if nparams == 0:
-                            updater()
-                        elif nparams == 1:
-                            updater(mob)
-                        else:
-                            updater(mob, dt)
 
             clear_anim_rotation_delta()
 
