@@ -8,9 +8,9 @@ from core.vulkan_bind import (
     Transform, ReplacementTransform,
     Rotating, Rotate,
     TransformMatchingShapes, TransformMatchingTex,
-    Animation, Succession, DrawBorderThenFill,
+    Animation, AnimationGroup, Succession, DrawBorderThenFill,
     ShowIncreasingSubsets, SpiralIn,
-    Blink, TypeWithCursor,
+    Blink, TypeWithCursor, UntypeWithCursor,
 )
 
 
@@ -701,6 +701,56 @@ class DemoTypeWithCursor(Scene):
         render.close()
 
 
+class DemoUntypeWithCursor(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "UntypeWithCursor + Blink")
+        text = Text("Deleting", color=PURPLE).scale(1.5).to_edge(LEFT)
+        cursor = Rectangle(
+            color=GREY_A,
+            fill_color=GREY_A,
+            fill_opacity=1.0,
+            height=1.1,
+            width=0.5,
+        ).move_to(text[0])
+
+        render.play(UntypeWithCursor(text, cursor))
+        render.play(Blink(cursor, blinks=2))
+        render.close()
+
+
+class DemoUnwriteReverseTrue(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "Unwrite reverse=True")
+
+        text = Text("Alice and Bob").scale(3)
+        render.play(Write(text))
+        render.play(Wait(1.0))
+        render.play(Unwrite(text, reverse=True))
+        render.play(Wait(1.0))
+        render.close()
+
+
+class DemoUnwriteReverseFalse(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "Unwrite reverse=False")
+
+        text = Text("Alice and Bob").scale(3)
+        render.play(Write(text))
+        render.play(Wait(1.0))
+        render.play(Unwrite(text, reverse=False))
+        render.play(Wait(1.0))
+        render.close()
+
+
 class DemoUncreate(Scene):
     def construct(self):
         render = VulkanRender(1920, 1080)
@@ -717,3 +767,86 @@ class DemoUncreate(Scene):
         render.play(Uncreate(sq, run_time=1.5))
         render.play(Wait(0.5))
         render.close()
+
+
+class DemoShowWrite(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "Write - font_size=144")
+
+        text = Text("Hello", font_size=144)
+        render.play(Write(text))
+        render.play(Wait(1.5))
+        render.close()
+
+
+class DemoShowWriteReversed(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "Write reversed - font_size=144")
+
+        text = Text("Hello", font_size=144)
+        render.play(Write(text, reverse=True, remover=False))
+        render.play(Wait(1.5))
+        render.close()
+
+
+class DemoFadeInExample(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "FadeIn with shift/target_position/scale")
+
+        dot = Dot(UP * 2 + LEFT)
+        self.add(dot)
+
+        w0 = Text("FadeIn with", font_size=36)
+        w1 = Text("shift", font_size=36)
+        w2 = Text("target_position", font_size=36)
+        w3 = Text("and scale", font_size=36)
+        words = VGroup(w0, w1, w2, w3).arrange(RIGHT, buff=0.3)
+
+        animations = [
+            FadeIn(w0),
+            FadeIn(w1, shift=DOWN),
+            FadeIn(w2, target_position=dot),
+            FadeIn(w3, scale=1.5),
+        ]
+        render.play(AnimationGroup(*animations, lag_ratio=0.5))
+        render.play(Wait(1.5))
+        render.close()
+
+
+class DemoFadeOutExample(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "FadeOut with shift/target_position/scale")
+
+        dot = Dot(UP * 2 + LEFT)
+        self.add(dot)
+
+        t0 = Text("FadeOut with", font_size=36)
+        t1 = Text("shift", font_size=36)
+        t2 = Text("target_position", font_size=36)
+        t3 = Text("and scale", font_size=36)
+        tex = VGroup(t0, t1, t2, t3).arrange(RIGHT, buff=0.3)
+        self.add(t0, t1, t2, t3)
+
+        animations = [
+            FadeOut(t0),
+            FadeOut(t1, shift=DOWN),
+            FadeOut(t2, target_position=dot),
+            FadeOut(t3, scale=0.5),
+        ]
+        render.play(AnimationGroup(*animations, lag_ratio=0.5))
+        render.play(Wait(1.5))
+        render.close()
+
+

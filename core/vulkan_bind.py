@@ -18,7 +18,7 @@ from core.rate_functions import (
 from core.animations import (
     Animation, Create, Uncreate, DrawBorderThenFill, Write, Unwrite,
     ShowIncreasingSubsets, SpiralIn,
-    Blink, TypeWithCursor,
+    Blink, TypeWithCursor, UntypeWithCursor,
     Succession, Wait, Add, AnimationGroup, MoveToTarget, Indicate,
     FadeIn, FadeOut, FadeTransform,
     Rotating, Rotate,
@@ -183,10 +183,7 @@ class VulkanRender(ShapeMixin, TextMixin):
             elif getattr(mob, '_letter_alphas', None) is not None and hasattr(mob, 'submobjects') and mob.submobjects:
                 self._send_text_write(mob, mob._letter_alphas, w, h, a)
             elif hasattr(mob, 'submobjects') and mob.submobjects:
-                if a < 1.0:
-                    self._send_transformed_text(mob, w, h, alpha=a)
-                else:
-                    self._send_text_bitmap(mob, w, h, a)
+                self._send_text_bitmap(mob, w, h, a)
 
         elif isinstance(mob, (VGroup, Group)):
             effective_alpha = parent_alpha * own_alpha
@@ -202,11 +199,6 @@ class VulkanRender(ShapeMixin, TextMixin):
             offset = vgroup_center - original_center
             if parent_offset is not None:
                 offset = offset + parent_offset
-            if not hasattr(self, '_vgroup_debug_logged'):
-                self._vgroup_debug_logged = True
-                print(f"[VGroup] vgroup_center={vgroup_center} original_center={original_center} offset={offset}")
-                for i, sub in enumerate(mob):
-                    print(f"[VGroup] sub[{i}] center={sub.get_center()} type={type(sub).__name__}")
             for i, sub in enumerate(mob):
                 if vgroup_progress < 1.0 and num_subs > 1:
                     full_length = (num_subs - 1) * 1.0 + 1
@@ -378,8 +370,7 @@ class VulkanRender(ShapeMixin, TextMixin):
                         for sub_anim in getattr(sub, '_anims', []):
                             if isinstance(sub_anim, (FadeIn, FadeOut)):
                                 for mob in sub_anim.mobjects:
-                                    if isinstance(sub_anim, FadeIn):
-                                        set_anim_opacity(mob, 0.0)
+                                    set_anim_opacity(mob, 0.0)
                                     if mob not in all_mobjects:
                                         all_mobjects.append(mob)
                             elif isinstance(sub_anim, Transform):
@@ -400,8 +391,16 @@ class VulkanRender(ShapeMixin, TextMixin):
                     if isinstance(sub, (Create, Write, DrawBorderThenFill, FadeIn, Rotating, Rotate)) and sub.mobject:
                         if isinstance(sub, (Create, DrawBorderThenFill)):
                             sub.mobject._vulkan_progress = 0.0
+                        if isinstance(sub, FadeIn):
+                            set_anim_opacity(sub.mobject, 0.0)
                         if sub.mobject not in all_mobjects:
                             all_mobjects.append(sub.mobject)
+                    elif isinstance(sub, (FadeIn, FadeOut)):
+                        for mob in sub.mobjects:
+                            if isinstance(sub, FadeIn):
+                                set_anim_opacity(mob, 0.0)
+                            if mob not in all_mobjects:
+                                all_mobjects.append(mob)
                     elif isinstance(sub, Transform):
                         if sub.mobject not in all_mobjects:
                             all_mobjects.append(sub.mobject)
@@ -570,13 +569,6 @@ class VulkanRender(ShapeMixin, TextMixin):
                             updater(mob, dt)
 
             clear_anim_rotation_delta()
-
-            # DEBUG: record dot position every frame
-            for mob in self.scene.mobjects:
-                if isinstance(mob, (VGroup, Group)) and getattr(mob, 'updaters', None):
-                    if len(mob) >= 2:
-                        dot_pos = mob[1].get_center()
-                        print(f"  frame={frame_count} dot=({dot_pos[0]:.4f}, {dot_pos[1]:.4f})")
 
             for mob in self.scene.mobjects:
                 if isinstance(mob, (VGroup, Group)) and id(mob) in _orig_vgroup_rotate:

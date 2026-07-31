@@ -176,14 +176,6 @@ class SpiralIn(Animation):
             fade = min(1.0, alpha / self.fade_in_fraction) if self.fade_in_fraction > 0 else 1.0
             set_anim_opacity(shape, fade)
 
-        if not hasattr(self, '_debug_frame'):
-            self._debug_frame = 0
-        self._debug_frame += 1
-        if self._debug_frame % 30 == 1:
-            pos0 = self.shapes_data[0]['mobject'].get_center()
-            pos1 = self.shapes_data[1]['mobject'].get_center()
-            print(f"[SpiralIn] t={t:.3f} alpha={alpha:.3f} shape0_pos={pos0} shape1_pos={pos1}")
-
     def finish(self):
         super().finish()
         for data in self.shapes_data:
@@ -380,6 +372,7 @@ class Write(DrawBorderThenFill):
 
 class Unwrite(Write):
     def __init__(self, mobject, rate_func=_linear, reverse=True, run_time=1.0, **kwargs):
+        self._unwrite_reverse = reverse
         super().__init__(mobject, rate_func=rate_func, reverse=False, run_time=run_time, **kwargs)
 
     def begin(self, t):
@@ -392,8 +385,11 @@ class Unwrite(Write):
             num_subs = len(mob.submobjects)
             letter_alphas = {}
             for i in range(num_subs):
-                rev_i = num_subs - 1 - i
-                sub_alpha = self.get_sub_alpha(alpha, rev_i, num_subs)
+                if self._unwrite_reverse:
+                    idx = num_subs - 1 - i
+                else:
+                    idx = i
+                sub_alpha = self.get_sub_alpha(alpha, idx, num_subs)
                 letter_alphas[i] = self.rate_func(1.0 - sub_alpha)
             mob._letter_alphas = letter_alphas
         else:
@@ -540,6 +536,7 @@ class FadeIn(Animation):
         self._start_positions = []
         self._orig_radius = {}
         self._orig_stroke_width = {}
+        self._orig_points = {}
         for mob in self.mobjects:
             set_anim_opacity(mob, 0.0)
             self._start_positions.append(mob.get_center().copy())
@@ -547,13 +544,22 @@ class FadeIn(Animation):
                 self._orig_radius[id(mob)] = mob.radius
             if hasattr(mob, 'stroke_width'):
                 self._orig_stroke_width[id(mob)] = mob.stroke_width
+            if self.fade_scale != 1.0 and not hasattr(mob, 'radius'):
+                self._orig_points[id(mob)] = [
+                    (fm, fm.get_points().copy())
+                    for fm in mob.family_members_with_points()
+                    if fm is not mob
+                ]
 
     def interpolate(self, t):
-        alpha = (t - self.start_time) / self.run_time if self.run_time > 0 else 1.0
-        alpha = max(0.0, min(1.0, alpha))
-        if self.reverse_rate_function:
-            alpha = 1.0 - alpha
-        alpha = self.rate_func(alpha)
+        if getattr(self, '_use_alpha', False):
+            alpha = float(t)
+        else:
+            alpha = (t - self.start_time) / self.run_time if self.run_time > 0 else 1.0
+            alpha = max(0.0, min(1.0, alpha))
+            if self.reverse_rate_function:
+                alpha = 1.0 - alpha
+            alpha = self.rate_func(alpha)
 
         for i, mob in enumerate(self.mobjects):
             set_anim_opacity(mob, alpha)
@@ -562,8 +568,15 @@ class FadeIn(Animation):
                 target_scale = self.fade_scale + (1.0 - self.fade_scale) * alpha
                 if id(mob) in self._orig_radius:
                     mob.radius = self._orig_radius[id(mob)] * target_scale
-                if id(mob) in self._orig_stroke_width:
-                    mob.stroke_width = self._orig_stroke_width[id(mob)] * target_scale
+                    if id(mob) in self._orig_stroke_width:
+                        mob.stroke_width = self._orig_stroke_width[id(mob)] * target_scale
+                elif id(mob) in self._orig_points:
+                    cx, cy = self._start_positions[i][0], self._start_positions[i][1]
+                    for fm, orig in self._orig_points[id(mob)]:
+                        scaled = orig.copy()
+                        scaled[:, 0] = cx + (orig[:, 0] - cx) * target_scale
+                        scaled[:, 1] = cy + (orig[:, 1] - cy) * target_scale
+                        fm.points = scaled
 
             if self.fade_shift is not None and alpha < 1.0:
                 mob.move_to(self._start_positions[i] + self.fade_shift * (1.0 - alpha))
@@ -580,6 +593,8 @@ class FadeIn(Animation):
         super().finish()
         for mob in self.mobjects:
             set_anim_opacity(mob, 1.0)
+            for fm, orig in self._orig_points.get(id(mob), []):
+                fm.points = orig.copy()
 
     def get_all_mobjects(self):
         return list(self.mobjects)
@@ -608,20 +623,30 @@ class FadeOut(Animation):
         self._start_positions = []
         self._orig_radius = {}
         self._orig_stroke_width = {}
+        self._orig_points = {}
         for mob in self.mobjects:
+            set_anim_opacity(mob, 1.0)
             self._start_positions.append(mob.get_center().copy())
             if hasattr(mob, 'radius'):
                 self._orig_radius[id(mob)] = mob.radius
             if hasattr(mob, 'stroke_width'):
                 self._orig_stroke_width[id(mob)] = mob.stroke_width
+            if self.fade_scale != 1.0 and not hasattr(mob, 'radius'):
+                self._orig_points[id(mob)] = [
+                    (fm, fm.get_points().copy())
+                    for fm in mob.family_members_with_points()
+                    if fm is not mob
+                ]
 
     def interpolate(self, t):
-        alpha = (t - self.start_time) / self.run_time if self.run_time > 0 else 1.0
-        alpha = max(0.0, min(1.0, alpha))
-        if self.reverse_rate_function:
-            alpha = 1.0 - alpha
-        alpha = self.rate_func(alpha)
-
+        if getattr(self, '_use_alpha', False):
+            alpha = float(t)
+        else:
+            alpha = (t - self.start_time) / self.run_time if self.run_time > 0 else 1.0
+            alpha = max(0.0, min(1.0, alpha))
+            if self.reverse_rate_function:
+                alpha = 1.0 - alpha
+            alpha = self.rate_func(alpha)
         opacity = 1.0 - alpha
 
         for i, mob in enumerate(self.mobjects):
@@ -631,8 +656,15 @@ class FadeOut(Animation):
                 target_scale = 1.0 + (self.fade_scale - 1.0) * alpha
                 if id(mob) in self._orig_radius:
                     mob.radius = self._orig_radius[id(mob)] * target_scale
-                if id(mob) in self._orig_stroke_width:
-                    mob.stroke_width = self._orig_stroke_width[id(mob)] * target_scale
+                    if id(mob) in self._orig_stroke_width:
+                        mob.stroke_width = self._orig_stroke_width[id(mob)] * target_scale
+                elif id(mob) in self._orig_points:
+                    cx, cy = self._start_positions[i][0], self._start_positions[i][1]
+                    for fm, orig in self._orig_points[id(mob)]:
+                        scaled = orig.copy()
+                        scaled[:, 0] = cx + (orig[:, 0] - cx) * target_scale
+                        scaled[:, 1] = cy + (orig[:, 1] - cy) * target_scale
+                        fm.points = scaled
 
             if self.fade_shift is not None and alpha > 0.0:
                 mob.move_to(self._start_positions[i] + self.fade_shift * alpha)
@@ -649,14 +681,8 @@ class FadeOut(Animation):
         super().finish()
         for mob in self.mobjects:
             set_anim_opacity(mob, 0.0)
-
-    def clean_up_from_scene(self, scene):
-        for mob in self.mobjects:
-            if mob in scene.mobjects:
-                scene.remove(mob)
-
-    def get_all_mobjects(self):
-        return list(self.mobjects)
+            for fm, orig in self._orig_points.get(id(mob), []):
+                fm.points = orig.copy()
 
 
 class Rotating(Animation):
@@ -813,7 +839,7 @@ class Indicate(Transform):
 
 
 class AnimationGroup(Animation):
-    def __init__(self, *animations, **kwargs):
+    def __init__(self, *animations, lag_ratio=0.0, **kwargs):
         from manim.mobject.mobject import _AnimationBuilder
         resolved = []
         for a in animations:
@@ -822,7 +848,11 @@ class AnimationGroup(Animation):
             else:
                 resolved.append(a)
         self.animations = resolved
-        total = max((a.run_time for a in self.animations), default=0)
+        self.lag_ratio = lag_ratio
+        for i, a in enumerate(self.animations):
+            a._group_start = i * lag_ratio
+        total_runs = [a._group_start + a.run_time for a in self.animations]
+        total = max(total_runs) if total_runs else 0
         super().__init__(run_time=total, **kwargs)
         self._begun = set()
 
@@ -854,7 +884,11 @@ class AnimationGroup(Animation):
                     self._begun.add(i)
                 sub_alpha = (group_time - a_start) / a.run_time if a.run_time > 0 else 1.0
                 sub_alpha = max(0.0, min(1.0, sub_alpha))
-                a.interpolate(sub_alpha)
+                if is_manim:
+                    a.interpolate(sub_alpha)
+                else:
+                    a._use_alpha = True
+                    a.interpolate(sub_alpha)
             elif group_time >= a_end:
                 if i not in self._begun:
                     if is_manim:
@@ -862,7 +896,11 @@ class AnimationGroup(Animation):
                     else:
                         a.begin(t)
                     self._begun.add(i)
-                a.interpolate(1.0)
+                if is_manim:
+                    a.interpolate(1.0)
+                else:
+                    a._use_alpha = True
+                    a.interpolate(1.0)
 
     def finish(self):
         super().finish()
@@ -1232,6 +1270,9 @@ class TypeWithCursor(ShowIncreasingSubsets):
     def update_submobject_list(self, index):
         for mobj in self.all_submobs[:index]:
             set_anim_opacity(mobj, 1.0)
+            if hasattr(mobj, 'family_members_with_points'):
+                for fm in mobj.family_members_with_points():
+                    set_anim_opacity(fm, 1.0)
             try:
                 orig = self._orig_fo.get(id(mobj))
                 if orig is not None:
@@ -1250,6 +1291,9 @@ class TypeWithCursor(ShowIncreasingSubsets):
                 pass
         for mobj in self.all_submobs[index:]:
             set_anim_opacity(mobj, 0.0)
+            if hasattr(mobj, 'family_members_with_points'):
+                for fm in mobj.family_members_with_points():
+                    set_anim_opacity(fm, 0.0)
             try:
                 mobj.fill_rgbas[:, 3] = 0.0
             except Exception:
@@ -1285,6 +1329,204 @@ class TypeWithCursor(ShowIncreasingSubsets):
 
     def finish(self):
         Animation.finish(self)
+        if self.all_submobs:
+            last = self.all_submobs[-1]
+            self.cursor.move_to(last.get_center())
+            self.cursor.shift(np.array([1, 0, 0]) * (last.get_width() / 2 + self.buff * 4))
+        if self.keep_cursor_y:
+            self.cursor.move_to([
+                self.cursor.get_center()[0],
+                self.initial_cursor_y,
+                0
+            ])
+        if self.leave_cursor_on:
+            set_anim_opacity(self.cursor, 1.0)
+            try:
+                self.cursor.fill_rgbas[:, 3] = 1.0
+            except Exception:
+                pass
+            try:
+                self.cursor.stroke_rgbas[:, 3] = 1.0
+            except Exception:
+                pass
+        else:
+            set_anim_opacity(self.cursor, 0.0)
+            try:
+                self.cursor.fill_rgbas[:, 3] = 0.0
+            except Exception:
+                pass
+            try:
+                self.cursor.stroke_rgbas[:, 3] = 0.0
+            except Exception:
+                pass
+            try:
+                self.cursor.stroke_rgbas[:, 3] = 0.0
+            except Exception:
+                pass
+
+
+class UntypeWithCursor(Animation):
+    def __init__(self, text, cursor, buff=0.1, keep_cursor_y=True,
+                 leave_cursor_on=True, time_per_char=0.1, run_time=None, **kwargs):
+        self.cursor = cursor
+        self.buff = buff
+        self.keep_cursor_y = keep_cursor_y
+        self.leave_cursor_on = leave_cursor_on
+        self.time_per_char = time_per_char
+        if run_time is None:
+            n_chars = len(text.submobjects) if hasattr(text, 'submobjects') else max(1, len(str(text)))
+            run_time = max(0.1, time_per_char) * n_chars
+        self.all_submobs = list(text.submobjects) if hasattr(text, 'submobjects') else []
+        self._orig_fo = {}
+        self._orig_so = {}
+        for mobj in self.all_submobs:
+            try:
+                self._orig_fo[id(mobj)] = mobj.fill_rgbas[:, 3].copy()
+            except Exception:
+                self._orig_fo[id(mobj)] = 1.0
+            try:
+                self._orig_so[id(mobj)] = mobj.stroke_rgbas[:, 3].copy()
+            except Exception:
+                self._orig_so[id(mobj)] = 1.0
+        Animation.__init__(self, text, run_time=run_time, **kwargs)
+
+    def begin(self, t):
+        self.y_cursor = self.cursor.get_center()[1]
+        self.initial_cursor_y = self.y_cursor
+        for mobj in self.all_submobs:
+            set_anim_opacity(mobj, 1.0)
+            if hasattr(mobj, 'family_members_with_points'):
+                for fm in mobj.family_members_with_points():
+                    set_anim_opacity(fm, 1.0)
+            try:
+                orig = self._orig_fo.get(id(mobj))
+                if orig is not None:
+                    mobj.fill_rgbas[:, 3] = orig
+                else:
+                    mobj.fill_rgbas[:, 3] = 1.0
+            except Exception:
+                pass
+            try:
+                orig = self._orig_so.get(id(mobj))
+                if orig is not None:
+                    mobj.stroke_rgbas[:, 3] = orig
+                else:
+                    mobj.stroke_rgbas[:, 3] = 1.0
+            except Exception:
+                pass
+        if self.all_submobs:
+            last = self.all_submobs[-1]
+            self.cursor.move_to(last.get_center())
+            self.cursor.shift(np.array([1, 0, 0]) * (last.get_width() / 2 + self.buff * 4))
+            if self.keep_cursor_y:
+                self.cursor.move_to([
+                    self.cursor.get_center()[0],
+                    self.initial_cursor_y,
+                    0
+                ])
+        set_anim_opacity(self.cursor, 1.0)
+        try:
+            self.cursor.fill_rgbas[:, 3] = 1.0
+        except Exception:
+            pass
+        try:
+            self.cursor.stroke_rgbas[:, 3] = 1.0
+        except Exception:
+            pass
+        Animation.begin(self, t)
+
+    def interpolate(self, t):
+        alpha = (t - self.start_time) / self.run_time if self.run_time > 0 else 1.0
+        alpha = max(0.0, min(1.0, alpha))
+        alpha = self.rate_func(alpha)
+        n = len(self.all_submobs)
+        index = n - int(np.floor(alpha * n))
+        index = max(0, min(index, n))
+        self.update_submobject_list(index)
+
+    def update_submobject_list(self, index):
+        for i, mobj in enumerate(self.all_submobs):
+            if i < index:
+                set_anim_opacity(mobj, 1.0)
+                if hasattr(mobj, 'family_members_with_points'):
+                    for fm in mobj.family_members_with_points():
+                        set_anim_opacity(fm, 1.0)
+                try:
+                    orig = self._orig_fo.get(id(mobj))
+                    if orig is not None:
+                        mobj.fill_rgbas[:, 3] = orig
+                    else:
+                        mobj.fill_rgbas[:, 3] = 1.0
+                except Exception:
+                    pass
+                try:
+                    orig = self._orig_so.get(id(mobj))
+                    if orig is not None:
+                        mobj.stroke_rgbas[:, 3] = orig
+                    else:
+                        mobj.stroke_rgbas[:, 3] = 1.0
+                except Exception:
+                    pass
+            else:
+                set_anim_opacity(mobj, 0.0)
+                if hasattr(mobj, 'family_members_with_points'):
+                    for fm in mobj.family_members_with_points():
+                        set_anim_opacity(fm, 0.0)
+                try:
+                    mobj.fill_rgbas[:, 3] = 0.0
+                except Exception:
+                    pass
+                try:
+                    mobj.stroke_rgbas[:, 3] = 0.0
+                except Exception:
+                    pass
+
+        if index > 0:
+            last_visible = self.all_submobs[index - 1]
+            last_center = last_visible.get_center()
+            self.cursor.move_to(last_center)
+            self.cursor.shift(np.array([1, 0, 0]) * (last_visible.get_width() / 2 + self.buff * 4))
+
+        if self.keep_cursor_y:
+            self.cursor.move_to([
+                self.cursor.get_center()[0],
+                self.initial_cursor_y,
+                0
+            ])
+        set_anim_opacity(self.cursor, 1.0)
+        try:
+            self.cursor.fill_rgbas[:, 3] = 1.0
+        except Exception:
+            pass
+        try:
+            self.cursor.stroke_rgbas[:, 3] = 1.0
+        except Exception:
+            pass
+
+    def finish(self):
+        Animation.finish(self)
+        for mobj in self.all_submobs:
+            set_anim_opacity(mobj, 0.0)
+            if hasattr(mobj, 'family_members_with_points'):
+                for fm in mobj.family_members_with_points():
+                    set_anim_opacity(fm, 0.0)
+            try:
+                mobj.fill_rgbas[:, 3] = 0.0
+            except Exception:
+                pass
+            try:
+                mobj.stroke_rgbas[:, 3] = 0.0
+            except Exception:
+                pass
+        if self.all_submobs:
+            first = self.all_submobs[0]
+            self.cursor.move_to(first.get_center())
+        if self.keep_cursor_y:
+            self.cursor.move_to([
+                self.cursor.get_center()[0],
+                self.initial_cursor_y,
+                0
+            ])
         if self.leave_cursor_on:
             set_anim_opacity(self.cursor, 1.0)
             try:

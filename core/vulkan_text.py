@@ -54,7 +54,6 @@ class TextMixin:
             base_r, base_g, base_b = 255, 255, 255
         if base_r == 0 and base_g == 0 and base_b == 0:
             base_r, base_g, base_b = 255, 255, 255
-
         for i, sub in enumerate(mob.submobjects):
             sub_alpha = letter_alphas.get(i, 0.0)
             if sub_alpha <= 0.001:

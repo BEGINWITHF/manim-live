@@ -8,7 +8,9 @@ from scenes.demo_scene import (
     DemoAnimatedBoundary, DemoTracedPath, DemoDissipatingPath, DemoLaggedStart,
     DemoLaggedStartMap, DemoSuccessionDots, DemoCreateSquare,
     DemoDrawBorderThenFill, DemoShowIncreasingSubsets, DemoSpiralIn,
-    DemoTypeWithCursor, DemoUncreate,
+    DemoTypeWithCursor, DemoUncreate, DemoUntypeWithCursor,
+    DemoUnwriteReverseTrue, DemoUnwriteReverseFalse, DemoShowWrite, DemoShowWriteReversed,
+    DemoFadeInExample, DemoFadeOutExample,
 )
 
 SCENES = [
@@ -41,7 +43,14 @@ SCENES = [
     ("27", "ShowIncreasingSubsets - reveal submobjects", DemoShowIncreasingSubsets),
     ("28", "SpiralIn - shapes fly in on spiral",          DemoSpiralIn),
     ("29", "TypeWithCursor + Blink - typing effect",       DemoTypeWithCursor),
-    ("30", "Uncreate - reverse of Create",                  DemoUncreate),
+    ("30", "UntypeWithCursor + Blink - deleting text",     DemoUntypeWithCursor),
+    ("31", "Uncreate - reverse of Create",                  DemoUncreate),
+    ("32", "Unwrite reverse=True",                         DemoUnwriteReverseTrue),
+    ("33", "Unwrite reverse=False",                        DemoUnwriteReverseFalse),
+    ("34", "Write - font_size=144",                        DemoShowWrite),
+    ("35", "Write reversed - font_size=144",                DemoShowWriteReversed),
+    ("36", "FadeIn with shift/target_position/scale",      DemoFadeInExample),
+    ("37", "FadeOut with shift/target_position/scale",     DemoFadeOutExample),
 ]
 
 
