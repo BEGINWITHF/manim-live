@@ -29,9 +29,14 @@ class ShapeMixin:
 
     def _send_square(self, mob, a, w, h, rot):
         cx, cy, _ = mob.get_center()
+        grow_scale = getattr(mob, '_grow_scale', 1.0)
+        grow_pt = getattr(mob, '_grow_point', None)
+        if grow_scale != 1.0 and grow_pt is not None:
+            cx = grow_pt[0] + (cx - grow_pt[0]) * grow_scale
+            cy = grow_pt[1] + (cy - grow_pt[1]) * grow_scale
         sx, sy = manim_to_screen(cx, cy, w, h)
         scale_x = w / 14.0
-        half = mob.side_length / 2.0 * scale_x
+        half = mob.side_length / 2.0 * scale_x * grow_scale
         try:
             fo = float(mob.fill_rgbas[:, 3].max())
         except Exception:
@@ -81,11 +86,16 @@ class ShapeMixin:
 
     def _send_rectangle(self, mob, a, w, h, rot):
         cx, cy, _ = mob.get_center()
+        grow_scale = getattr(mob, '_grow_scale', 1.0)
+        grow_pt = getattr(mob, '_grow_point', None)
+        if grow_scale != 1.0 and grow_pt is not None:
+            cx = grow_pt[0] + (cx - grow_pt[0]) * grow_scale
+            cy = grow_pt[1] + (cy - grow_pt[1]) * grow_scale
         sx, sy = manim_to_screen(cx, cy, w, h)
         scale_x = w / 14.0
         scale_y = h / 8.0
-        hw = mob.width / 2.0 * scale_x
-        hh = mob.height / 2.0 * scale_y
+        hw = mob.width / 2.0 * scale_x * grow_scale
+        hh = mob.height / 2.0 * scale_y * grow_scale
         try:
             fo = float(mob.fill_rgbas[:, 3].max())
         except Exception:
@@ -135,10 +145,15 @@ class ShapeMixin:
 
     def _send_ellipse(self, mob, a, w, h, rot):
         cx, cy, _ = mob.get_center()
+        grow_scale = getattr(mob, '_grow_scale', 1.0)
+        grow_pt = getattr(mob, '_grow_point', None)
+        if grow_scale != 1.0 and grow_pt is not None:
+            cx = grow_pt[0] + (cx - grow_pt[0]) * grow_scale
+            cy = grow_pt[1] + (cy - grow_pt[1]) * grow_scale
         sx, sy = manim_to_screen(cx, cy, w, h)
         scale = w / 14.0
-        rx = mob.width / 2.0 * scale
-        ry = mob.height / 2.0 * scale
+        rx = mob.width / 2.0 * scale * grow_scale
+        ry = mob.height / 2.0 * scale * grow_scale
         try:
             fo = float(mob.fill_rgbas[:, 3].max())
         except Exception:
@@ -187,9 +202,14 @@ class ShapeMixin:
 
     def _send_circle(self, mob, a, w, h, rot):
         cx, cy, _ = mob.get_center()
+        grow_scale = getattr(mob, '_grow_scale', 1.0)
+        grow_pt = getattr(mob, '_grow_point', None)
+        if grow_scale != 1.0 and grow_pt is not None:
+            cx = grow_pt[0] + (cx - grow_pt[0]) * grow_scale
+            cy = grow_pt[1] + (cy - grow_pt[1]) * grow_scale
         sx, sy = manim_to_screen(cx, cy, w, h)
         scale_y = h / 8.0
-        sr = mob.radius * scale_y
+        sr = mob.radius * scale_y * grow_scale
         try:
             fo = float(mob.fill_rgbas[:, 3].max())
         except Exception:
@@ -239,6 +259,15 @@ class ShapeMixin:
     def _send_arrow(self, mob, a, w, h, rot):
         s = mob.get_start()
         e = mob.get_end()
+        grow_scale = getattr(mob, '_grow_scale', 1.0)
+        grow_pt = getattr(mob, '_grow_point', None)
+        if grow_scale != 1.0 and grow_pt is not None:
+            s = (grow_pt[0] + (s[0] - grow_pt[0]) * grow_scale,
+                 grow_pt[1] + (s[1] - grow_pt[1]) * grow_scale,
+                 s[2])
+            e = (grow_pt[0] + (e[0] - grow_pt[0]) * grow_scale,
+                 grow_pt[1] + (e[1] - grow_pt[1]) * grow_scale,
+                 e[2])
         cx, cy, _ = mob.get_center()
         sx1, sy1 = manim_to_screen(s[0], s[1], w, h)
         sx2, sy2 = manim_to_screen(e[0], e[1], w, h)
@@ -262,7 +291,7 @@ class ShapeMixin:
         if length > 0:
             ux = dx / length
             uy = dy / length
-            head_len = sw * 8
+            head_len = sw * 8 * grow_scale
             head_w = head_len * 0.5
             px = -uy
             py = ux
@@ -279,6 +308,15 @@ class ShapeMixin:
     def _send_line(self, mob, a, w, h, rot):
         s = mob.get_start()
         e = mob.get_end()
+        grow_scale = getattr(mob, '_grow_scale', 1.0)
+        grow_pt = getattr(mob, '_grow_point', None)
+        if grow_scale != 1.0 and grow_pt is not None:
+            s = (grow_pt[0] + (s[0] - grow_pt[0]) * grow_scale,
+                 grow_pt[1] + (s[1] - grow_pt[1]) * grow_scale,
+                 s[2])
+            e = (grow_pt[0] + (e[0] - grow_pt[0]) * grow_scale,
+                 grow_pt[1] + (e[1] - grow_pt[1]) * grow_scale,
+                 e[2])
         cx, cy, _ = mob.get_center()
         sx1, sy1 = manim_to_screen(s[0], s[1], w, h)
         sx2, sy2 = manim_to_screen(e[0], e[1], w, h)

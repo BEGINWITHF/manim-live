@@ -9,7 +9,8 @@ from core.vulkan_bind import (
     Rotating, Rotate,
     TransformMatchingShapes, TransformMatchingTex,
     Animation, AnimationGroup, Succession, DrawBorderThenFill,
-    ShowIncreasingSubsets, SpiralIn,
+    ShowIncreasingSubsets, SpiralIn, GrowFromCenter, GrowArrow, GrowFromEdge, GrowFromPoint,
+    SpinInFromNothing,
     Blink, TypeWithCursor, UntypeWithCursor,
 )
 
@@ -850,3 +851,88 @@ class DemoFadeOutExample(Scene):
         render.close()
 
 
+class DemoGrowFromCenter(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "GrowFromCenter")
+
+        squares = [Square() for _ in range(2)]
+        VGroup(*squares).set_x(0).arrange(buff=2)
+
+        render.play(GrowFromCenter(squares[0]))
+        render.play(GrowFromCenter(squares[1], point_color=RED))
+        render.play(Wait(1.5))
+        render.close()
+
+
+class DemoGrowArrow(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "GrowArrow")
+
+        arrows = [Arrow(2 * LEFT, 2 * RIGHT), Arrow(2 * DR, 2 * UL)]
+        VGroup(*arrows).set_x(0).arrange(buff=2)
+
+        render.play(GrowArrow(arrows[0]))
+        render.play(GrowArrow(arrows[1], point_color=RED))
+        render.play(Wait(1.5))
+        render.close()
+
+
+class DemoGrowFromEdge(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "GrowFromEdge")
+
+        squares = [Square() for _ in range(4)]
+        VGroup(*squares).set_x(0).arrange(buff=1)
+
+        render.play(GrowFromEdge(squares[0], DOWN))
+        render.play(GrowFromEdge(squares[1], RIGHT))
+        render.play(GrowFromEdge(squares[2], UR))
+        render.play(GrowFromEdge(squares[3], UP, point_color=RED))
+        render.play(Wait(1.5))
+        render.close()
+
+
+class DemoGrowFromPoint(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "GrowFromPoint")
+
+        dot = Dot(3 * UR, color=GREEN)
+        squares = [Square() for _ in range(4)]
+        VGroup(*squares).set_x(0).arrange(buff=1)
+        self.add(dot)
+
+        render.play(GrowFromPoint(squares[0], ORIGIN))
+        render.play(GrowFromPoint(squares[1], [-2, 2, 0]))
+        render.play(GrowFromPoint(squares[2], [3, -2, 0], RED))
+        render.play(GrowFromPoint(squares[3], dot, dot.get_color()))
+        render.play(Wait(1.5))
+        render.close()
+
+
+class DemoSpinInFromNothing(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "SpinInFromNothing")
+
+        squares = [Square() for _ in range(3)]
+        VGroup(*squares).set_x(0).arrange(buff=2)
+
+        render.play(SpinInFromNothing(squares[0]))
+        render.play(SpinInFromNothing(squares[1], angle=2 * PI))
+        render.play(SpinInFromNothing(squares[2], point_color=RED))
+        render.play(Wait(1.5))
+        render.close()

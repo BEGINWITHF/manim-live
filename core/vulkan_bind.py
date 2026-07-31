@@ -24,6 +24,7 @@ from core.animations import (
     Rotating, Rotate,
     Transform, ReplacementTransform,
     TransformMatchingAbstractBase, TransformMatchingShapes, TransformMatchingTex,
+    GrowFromCenter, GrowArrow, GrowFromEdge, GrowFromPoint, SpinInFromNothing,
     set_anim_opacity, get_anim_opacity,
     set_anim_rotation, get_anim_rotation,
     set_anim_rotation_delta, get_anim_rotation_delta, clear_anim_rotation_delta,
@@ -164,6 +165,8 @@ class VulkanRender(ShapeMixin, TextMixin):
             return
 
         rot = get_anim_rotation(mob) + angle
+        grow_rot = getattr(mob, '_grow_rot', 0.0)
+        rot += grow_rot
 
         if isinstance(mob, Text):
             has_stroke = False
@@ -304,7 +307,7 @@ class VulkanRender(ShapeMixin, TextMixin):
 
         all_mobjects = list(add_mobs)
         for anim in animations:
-            if isinstance(anim, (Create, Write, DrawBorderThenFill, FadeIn, Rotating, Rotate)) and anim.mobject:
+            if isinstance(anim, (Create, Write, DrawBorderThenFill, FadeIn, Rotating, Rotate, GrowArrow)) and anim.mobject:
                 if isinstance(anim, (Create, DrawBorderThenFill)):
                     anim.mobject._vulkan_progress = 0.0
                 if anim.mobject not in all_mobjects:

@@ -189,8 +189,13 @@ class TextMixin:
             raw_pts = []
             cos_a = math.cos(rot)
             sin_a = math.sin(rot)
+            grow_scale = getattr(mob, '_grow_scale', 1.0)
+            grow_pt = getattr(mob, '_grow_point', None)
             for i in range(len(pts)):
                 px, py = float(pts[i][0]), float(pts[i][1])
+                if grow_scale != 1.0 and grow_pt is not None:
+                    px = grow_pt[0] + (px - grow_pt[0]) * grow_scale
+                    py = grow_pt[1] + (py - grow_pt[1]) * grow_scale
                 dx, dy = px - cx, py - cy
                 rx = dx * cos_a - dy * sin_a + cx
                 ry = dx * sin_a + dy * cos_a + cy
@@ -256,8 +261,13 @@ class TextMixin:
             cos_a = math.cos(rot)
             sin_a = math.sin(rot)
             flat = []
+            grow_scale = getattr(mob, '_grow_scale', 1.0)
+            grow_pt = getattr(mob, '_grow_point', None)
             for p in pts:
                 px, py = p[0], p[1]
+                if grow_scale != 1.0 and grow_pt is not None:
+                    px = grow_pt[0] + (px - grow_pt[0]) * grow_scale
+                    py = grow_pt[1] + (py - grow_pt[1]) * grow_scale
                 dx, dy = px - cx, py - cy
                 px = dx * cos_a - dy * sin_a + cx
                 py = dx * sin_a + dy * cos_a + cy
@@ -343,8 +353,6 @@ class TextMixin:
             self._ts_debug = True
             try:
                 c = mob.get_color()
-                print(f"[TextStroke] get_color={c} fr,fg,fb=({fr:.2f},{fg:.2f},{fb:.2f}) fa={fa:.2f} sr,sg,sb=({sr:.2f},{sg:.2f},{sb:.2f}) sa={sa:.2f} so={so:.2f} a={a:.2f}")
-                print(f"  fill_alpha={fill_alpha:.2f} stroke_alpha={stroke_alpha:.2f} show_fill={show_fill} do_stroke={do_stroke}")
             except Exception:
                 pass
 

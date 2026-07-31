@@ -10,7 +10,8 @@ from scenes.demo_scene import (
     DemoDrawBorderThenFill, DemoShowIncreasingSubsets, DemoSpiralIn,
     DemoTypeWithCursor, DemoUncreate, DemoUntypeWithCursor,
     DemoUnwriteReverseTrue, DemoUnwriteReverseFalse, DemoShowWrite, DemoShowWriteReversed,
-    DemoFadeInExample, DemoFadeOutExample,
+    DemoFadeInExample, DemoFadeOutExample, DemoGrowFromCenter, DemoGrowArrow, DemoGrowFromEdge,
+    DemoGrowFromPoint, DemoSpinInFromNothing,
 )
 
 SCENES = [
@@ -51,6 +52,11 @@ SCENES = [
     ("35", "Write reversed - font_size=144",                DemoShowWriteReversed),
     ("36", "FadeIn with shift/target_position/scale",      DemoFadeInExample),
     ("37", "FadeOut with shift/target_position/scale",     DemoFadeOutExample),
+    ("38", "GrowFromCenter",                                 DemoGrowFromCenter),
+    ("39", "GrowArrow",                                       DemoGrowArrow),
+    ("40", "GrowFromEdge",                                     DemoGrowFromEdge),
+    ("41", "GrowFromPoint",                                    DemoGrowFromPoint),
+    ("42", "SpinInFromNothing",                                DemoSpinInFromNothing),
 ]
 
 
