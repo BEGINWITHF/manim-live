@@ -209,7 +209,7 @@ class ShapeMixin:
             cy = grow_pt[1] + (cy - grow_pt[1]) * grow_scale
         sx, sy = manim_to_screen(cx, cy, w, h)
         scale_y = h / 8.0
-        sr = mob.radius * scale_y * grow_scale
+        sr = (mob.width / 2.0) * scale_y * grow_scale
         try:
             fo = float(mob.fill_rgbas[:, 3].max())
         except Exception:
@@ -340,9 +340,15 @@ class ShapeMixin:
         cx, cy, _ = mob.get_center()
         sx, sy = manim_to_screen(cx, cy, w, h)
         scale_y = h / 8.0
-        rad = mob.radius * scale_y if hasattr(mob, 'radius') else 6.0
+        rad = (mob.width / 2.0) * scale_y
+        try:
+            fo = float(mob.fill_rgbas[:, 3].max())
+        except Exception:
+            fo = mob.get_fill_opacity() if hasattr(mob, 'get_fill_opacity') else 1.0
+        if fo <= 0:
+            return
         r, g, b = self._color(mob, a)
-        self.dll.AddCircle(sx, sy, rad, r, g, b, 0, 0, 0, 0.0, 1.0, a)
+        self.dll.AddCircle(sx, sy, rad, r, g, b, 0, 0, 0, 0.0, 1.0, a * fo)
 
     def _send_dashed_line(self, mob, a, w, h):
         s = mob.get_start()

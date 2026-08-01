@@ -12,6 +12,7 @@ from core.vulkan_bind import (
     ShowIncreasingSubsets, SpiralIn, GrowFromCenter, GrowArrow, GrowFromEdge, GrowFromPoint,
     SpinInFromNothing, ApplyWave, Circumscribe,
     Blink, TypeWithCursor, UntypeWithCursor, Indicate, ShowPassingFlash, Homotopy, MoveAlongPath,
+    TextDecimalNumber,
 )
 
 
@@ -1046,7 +1047,7 @@ class DemoFocusOn(Scene):
         _title(render, "FocusOn")
         dot = Dot(color=PURE_YELLOW).shift(DOWN)
         self.add(Text("Focusing on the dot below:"), dot)
-        anim = FocusOn(dot, run_time=1, opacity=0.03)
+        anim = FocusOn(dot, run_time=1, opacity=0.2)
         anim.mobject.move_to(dot.get_center())
         render.play(anim)
         render.play(Wait(1.5))
@@ -1103,7 +1104,9 @@ class DemoMoveAlongPath(Scene):
 
         d1 = Dot().set_color(ORANGE)
         l1 = Line(LEFT, RIGHT)
-        self.add(d1, l1)
+        l2 = Line(LEFT, LEFT + UP * 0.001).set_color(ORANGE).set_stroke(width=6)
+        l2.add_updater(lambda m: m.put_start_and_end_on(LEFT, d1.get_center()))
+        self.add(d1, l1, l2)
 
         render.play(MoveAlongPath(d1, l1), rate_func=linear)
         render.play(Wait(1.5))
@@ -1127,10 +1130,44 @@ class DemoChangeDecimalToValue(Scene):
     def construct(self):
         render = VulkanRender(1920, 1080)
         render.scene = self
+        render.play(Wait(2.0))
         _title(render, "ChangeDecimalToValue")
-        start_num = Text("0.00", font_size=144)
-        end_num = Text("99.99", font_size=144)
-        self.add(start_num)
-        render.play(Transform(start_num, end_num), run_time=3)
+        number = TextDecimalNumber(0, font_size=48)
+        self.add(number)
+        render.play(ChangeDecimalToValue(number, 10, run_time=3))
+        render.play(Wait(1))
+        render.close()
+
+
+class DemoUsingRotate(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "Rotate")
+        top_sq = Square(side_length=0.5).shift(UP * 2)
+        bot_sq = Square(side_length=0.5)
+        self.add(top_sq, bot_sq)
+        render.play(
+            Rotate(
+                VGroup(top_sq, bot_sq),
+                angle=2*PI,
+                about_point=ORIGIN,
+                rate_func=linear,
+            ),
+        )
+        render.play(Wait(1))
+        render.close()
+
+
+class DemoChangingDecimal(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "ChangingDecimal")
+        number = TextDecimalNumber(0, font_size=48)
+        self.add(number)
+        render.play(ChangingDecimal(number, lambda a: 5 * a, run_time=3))
         render.play(Wait(1))
         render.close()

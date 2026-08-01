@@ -130,12 +130,12 @@ class TextMixin:
         if base_r == 0 and base_g == 0 and base_b == 0:
             base_r, base_g, base_b = 255, 255, 255
         progress = getattr(mob, '_vulkan_progress', 1.0)
-        for sub in mob.submobjects:
-            sub_a = get_anim_opacity(sub)
+        for fm in mob.family_members_with_points():
+            sub_a = get_anim_opacity(fm)
             if sub_a <= 0:
                 continue
             try:
-                pts = sub.get_points()
+                pts = fm.get_points()
             except Exception:
                 continue
             if len(pts) < 8:
@@ -174,7 +174,11 @@ class TextMixin:
         is_polyline = isinstance(mob, TracedPath)
 
         if is_polyline and len(pts) >= 2:
-            cx, cy, _ = mob.get_center()
+            about = getattr(mob, '_rotation_about_point', None)
+            if about is not None:
+                cx, cy = float(about[0]), float(about[1])
+            else:
+                cx, cy, _ = mob.get_center()
             sr, sg, sb, sa = 1, 1, 1, 1
             try:
                 srgbas = mob.get_stroke_rgbas()

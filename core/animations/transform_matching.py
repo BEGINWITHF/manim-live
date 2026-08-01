@@ -1,0 +1,158 @@
+from core.animations.base import Animation, set_anim_opacity, get_anim_opacity
+import numpy as np
+from manim import VGroup, Group
+from core.animations.transform import Transform
+from core.animations.fade import FadeTransform, FadeOut
+
+
+class TransformMatchingAbstractBase(Animation):
+    def __init__(
+        self,
+        mobject,
+        target_mobject,
+        transform_mismatches=False,
+        fade_transform_mismatches=False,
+        key_map=None,
+        run_time=1.0,
+        **kwargs,
+    ):
+        self.target_mobject = target_mobject
+        self.transform_mismatches = transform_mismatches
+        self.fade_transform_mismatches = fade_transform_mismatches
+        self.key_map = key_map or {}
+        self._anims = []
+        self._scene = None
+        super().__init__(mobject, run_time=run_time, **kwargs)
+
+    def get_shape_map(self, mobject):
+        shape_map = {}
+        for sm in self.get_mobject_parts(mobject):
+            key = self.get_mobject_key(sm)
+            if key not in shape_map:
+                shape_map[key] = VGroup()
+            shape_map[key].add(sm)
+        return shape_map
+
+    def begin(self, t):
+        super().begin(t)
+        if hasattr(self.mobject, '_letter_alphas'):
+            self.mobject._letter_alphas = None
+        if hasattr(self.target_mobject, '_letter_alphas'):
+            self.target_mobject._letter_alphas = None
+
+        source_map = self.get_shape_map(self.mobject)
+        target_map = self.get_shape_map(self.target_mobject)
+
+        transform_source = VGroup()
+        transform_target = VGroup()
+        for key in set(source_map).intersection(target_map):
+            transform_source.add(source_map[key])
+            transform_target.add(target_map[key])
+        self._anims.append(
+            Transform(transform_source, transform_target, run_time=self.run_time)
+        )
+
+        key_mapped_source = VGroup()
+        key_mapped_target = VGroup()
+        for key1, key2 in self.key_map.items():
+            if key1 in source_map and key2 in target_map:
+                key_mapped_source.add(source_map[key1])
+                key_mapped_target.add(target_map[key2])
+                source_map.pop(key1, None)
+                target_map.pop(key2, None)
+        if len(key_mapped_source.submobjects) > 0:
+            self._anims.append(
+                FadeTransform(key_mapped_source, key_mapped_target, run_time=self.run_time)
+            )
+
+        fade_source = VGroup()
+        fade_target = VGroup()
+        for key in set(source_map).difference(target_map):
+            fade_source.add(source_map[key])
+        for key in set(target_map).difference(source_map):
+            fade_target.add(target_map[key])
+
+        if self.transform_mismatches:
+            self._anims.append(
+                Transform(fade_source, fade_target, run_time=self.run_time,
+                          replace_mobject_with_target_in_scene=True)
+            )
+        elif self.fade_transform_mismatches:
+            self._anims.append(
+                FadeTransform(fade_source, fade_target, run_time=self.run_time)
+            )
+        else:
+            self._anims.append(
+                FadeOut(self.mobject, target_position=fade_target, run_time=self.run_time)
+            )
+
+        for anim in self._anims:
+            anim.begin(t)
+
+    def interpolate(self, t):
+        for anim in self._anims:
+            anim.interpolate(t)
+
+    def finish(self):
+        super().finish()
+        for anim in self._anims:
+            anim.finish()
+
+    def get_all_mobjects(self):
+        return [self.mobject, self.target_mobject]
+
+    def clean_up_from_scene(self, scene):
+        if self.mobject in scene.mobjects:
+            scene.remove(self.mobject)
+        if self.target_mobject not in scene.mobjects:
+            scene.add(self.target_mobject)
+        if hasattr(self.mobject, '_transforming'):
+            self.mobject._transforming = False
+        if hasattr(self.target_mobject, '_transforming'):
+            self.target_mobject._transforming = False
+
+    @staticmethod
+    def get_mobject_parts(mobject):
+        if hasattr(mobject, 'family_members_with_points'):
+            return mobject.family_members_with_points()
+        if hasattr(mobject, 'submobjects') and mobject.submobjects:
+            return list(mobject.submobjects)
+        return [mobject]
+
+    @staticmethod
+    def get_mobject_key(mobject):
+        raise NotImplementedError
+
+
+class TransformMatchingShapes(TransformMatchingAbstractBase):
+    @staticmethod
+    def get_mobject_parts(mobject):
+        if hasattr(mobject, 'family_members_with_points'):
+            return mobject.family_members_with_points()
+        if hasattr(mobject, 'submobjects') and mobject.submobjects:
+            return list(mobject.submobjects)
+        return [mobject]
+
+    @staticmethod
+    def get_mobject_key(mobject):
+        mobject.save_state()
+        mobject.center()
+        mobject.set(height=1)
+        rounded_points = np.round(mobject.points, 3) + 0.0
+        result = hash(rounded_points.tobytes())
+        mobject.restore()
+        return result
+
+
+class TransformMatchingTex(TransformMatchingAbstractBase):
+    @staticmethod
+    def get_mobject_parts(mobject):
+        if hasattr(mobject, 'submobjects') and mobject.submobjects:
+            return list(mobject.submobjects)
+        return [mobject]
+
+    @staticmethod
+    def get_mobject_key(mobject):
+        return getattr(mobject, 'tex_string',
+                       getattr(mobject, '_tex_string',
+                               str(id(mobject))))

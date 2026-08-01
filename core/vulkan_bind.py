@@ -9,6 +9,7 @@ from manim import (
     Arrow, Dot, DashedLine,
     Arc, Ellipse, Point, Text, VGroup, Group, OUT, ORIGIN
 )
+from manim.animation.transform import Transform as _ManimTransform
 
 from core.rate_functions import (
     _smooth, _linear, _rush_into, _rush_from,
@@ -31,10 +32,16 @@ from core.animations import (
     set_anim_rotation, get_anim_rotation,
     set_anim_rotation_delta, get_anim_rotation_delta, clear_anim_rotation_delta,
     TARGET_FPS, FRAME_DURATION,
+    TextDecimalNumber,
 )
 from core.vulkan_util import manim_to_screen, rotate_point, get_fill_rgb, get_stroke_rgb, get_stroke_w
 from core.vulkan_shapes import ShapeMixin
 from core.vulkan_text import TextMixin
+
+from manim import ChangingDecimal as _OrigChangingDecimal
+from manim import ChangeDecimalToValue as _OrigChangeDecimalToValue
+_OrigChangingDecimal.check_validity_of_input = lambda self, dm: None
+_OrigChangeDecimalToValue.check_validity_of_input = lambda self, dm: None
 
 
 class VulkanRender(ShapeMixin, TextMixin):
@@ -199,6 +206,7 @@ class VulkanRender(ShapeMixin, TextMixin):
                 return
             vgroup_progress = getattr(mob, '_vulkan_progress', 1.0)
             num_subs = len(list(mob)) if hasattr(mob, '__len__') else 0
+            about = getattr(mob, '_rotation_about_point', None)
             vgroup_center = np.array(mob.get_center(), dtype=float)
             try:
                 original_center = np.array(mob.get_points().mean(axis=0) if len(mob.get_points()) > 0 else mob.get_center(), dtype=float)
@@ -208,6 +216,16 @@ class VulkanRender(ShapeMixin, TextMixin):
             if parent_offset is not None:
                 offset = offset + parent_offset
             for i, sub in enumerate(mob):
+                sub_offset = offset
+                if about is not None and rot != 0.0:
+                    sub_center = np.array(sub.get_center(), dtype=float)
+                    rel = sub_center - np.array(about, dtype=float)
+                    cos_a = math.cos(rot)
+                    sin_a = math.sin(rot)
+                    rx = rel[0] * cos_a - rel[1] * sin_a
+                    ry = rel[0] * sin_a + rel[1] * cos_a
+                    new_center = np.array(about, dtype=float) + np.array([rx, ry, 0.0])
+                    sub_offset = sub_offset + (new_center - sub_center)
                 if vgroup_progress < 1.0 and num_subs > 1:
                     full_length = (num_subs - 1) * 1.0 + 1
                     value = vgroup_progress * full_length
@@ -216,7 +234,7 @@ class VulkanRender(ShapeMixin, TextMixin):
                     sub._vulkan_progress = sub_progress
                 elif vgroup_progress < 1.0:
                     sub._vulkan_progress = vgroup_progress
-                self._send(sub, rot, parent_alpha=effective_alpha, parent_offset=offset)
+                self._send(sub, rot, parent_alpha=effective_alpha, parent_offset=sub_offset)
             return
 
         if getattr(mob, '_transforming', False):
@@ -336,12 +354,12 @@ class VulkanRender(ShapeMixin, TextMixin):
                                 set_anim_opacity(mob, 0.0)
                             if mob not in all_mobjects:
                                 all_mobjects.append(mob)
-                    elif isinstance(sub_anim, Transform):
+                    elif isinstance(sub_anim, (Transform, _ManimTransform)):
                         if sub_anim.mobject not in all_mobjects:
                             all_mobjects.append(sub_anim.mobject)
                         if sub_anim.target_mobject not in all_mobjects:
                             all_mobjects.append(sub_anim.target_mobject)
-            elif isinstance(anim, Transform):
+            elif isinstance(anim, (Transform, _ManimTransform)):
                 if anim.mobject not in all_mobjects:
                     all_mobjects.append(anim.mobject)
                 if anim.replace_mobject_with_target_in_scene:
@@ -381,7 +399,7 @@ class VulkanRender(ShapeMixin, TextMixin):
                                     set_anim_opacity(mob, 0.0)
                                     if mob not in all_mobjects:
                                         all_mobjects.append(mob)
-                            elif isinstance(sub_anim, Transform):
+                            elif isinstance(sub_anim, (Transform, _ManimTransform)):
                                 if sub_anim.mobject not in all_mobjects:
                                     all_mobjects.append(sub_anim.mobject)
                                 if sub_anim.target_mobject not in all_mobjects:
@@ -456,6 +474,13 @@ class VulkanRender(ShapeMixin, TextMixin):
             if is_manim:
                 a.start_time = time.time()
                 a.begin()
+                tm = getattr(a, 'target_mobject', None)
+                if tm is not None and hasattr(tm, 'get_updaters') and tm.get_updaters():
+                    for upd in tm.get_updaters():
+                        upd(tm)
+                    tc = getattr(a, 'target_copy', None)
+                    if tc is not None:
+                        tc.move_to(tm.get_center())
                 if a.mobject is not None and a.mobject not in self.scene.mobjects:
                     self.scene.mobjects.append(a.mobject)
             else:
@@ -464,7 +489,7 @@ class VulkanRender(ShapeMixin, TextMixin):
         for a in real_anims:
             if isinstance(a, TransformMatchingAbstractBase):
                 for sub_anim in getattr(a, '_anims', []):
-                    if isinstance(sub_anim, Transform):
+                    if isinstance(sub_anim, (Transform, _ManimTransform)):
                         if sub_anim.mobject not in self.scene.mobjects:
                             self.scene.add(sub_anim.mobject)
                         if sub_anim.target_mobject not in self.scene.mobjects:
