@@ -1,5 +1,6 @@
 import ctypes
 import math
+import numpy as np
 from core.vulkan_util import manim_to_screen, rotate_point, get_fill_rgb, get_fill_rgb_raw, get_stroke_rgb, get_stroke_w
 from core.animations import get_anim_rotation
 
@@ -27,8 +28,17 @@ class ShapeMixin:
     def _rotate_point(self, x, y, cx, cy, angle):
         return rotate_point(x, y, cx, cy, angle)
 
-    def _send_square(self, mob, a, w, h, rot):
+    def _send_square(self, mob, a, w, h, rot, parent_offset=None):
         cx, cy, _ = mob.get_center()
+        if parent_offset is not None:
+            cx += parent_offset[0]; cy += parent_offset[1]
+        about = getattr(mob, '_rotation_about_point', None)
+        if about is not None:
+            neg_rot = -rot
+            dx, dy = cx - about[0], cy - about[1]
+            c, sn = math.cos(neg_rot), math.sin(neg_rot)
+            cx = about[0] + dx * c - dy * sn
+            cy = about[1] + dx * sn + dy * c
         grow_scale = getattr(mob, '_grow_scale', 1.0)
         grow_pt = getattr(mob, '_grow_point', None)
         if grow_scale != 1.0 and grow_pt is not None:
@@ -84,8 +94,17 @@ class ShapeMixin:
                     self.dll.AddLine(x0, y0, ex, ey, sw, cr, cg, cb, a)
                     remaining = 0
 
-    def _send_rectangle(self, mob, a, w, h, rot):
+    def _send_rectangle(self, mob, a, w, h, rot, parent_offset=None):
         cx, cy, _ = mob.get_center()
+        if parent_offset is not None:
+            cx += parent_offset[0]; cy += parent_offset[1]
+        about = getattr(mob, '_rotation_about_point', None)
+        if about is not None:
+            neg_rot = -rot
+            dx, dy = cx - about[0], cy - about[1]
+            c, sn = math.cos(neg_rot), math.sin(neg_rot)
+            cx = about[0] + dx * c - dy * sn
+            cy = about[1] + dx * sn + dy * c
         grow_scale = getattr(mob, '_grow_scale', 1.0)
         grow_pt = getattr(mob, '_grow_point', None)
         if grow_scale != 1.0 and grow_pt is not None:
@@ -143,8 +162,17 @@ class ShapeMixin:
                     self.dll.AddLine(x0, y0, ex, ey, sw, cr, cg, cb, a)
                     remaining = 0
 
-    def _send_ellipse(self, mob, a, w, h, rot):
+    def _send_ellipse(self, mob, a, w, h, rot, parent_offset=None):
         cx, cy, _ = mob.get_center()
+        if parent_offset is not None:
+            cx += parent_offset[0]; cy += parent_offset[1]
+        about = getattr(mob, '_rotation_about_point', None)
+        if about is not None:
+            neg_rot = -rot
+            dx, dy = cx - about[0], cy - about[1]
+            c, sn = math.cos(neg_rot), math.sin(neg_rot)
+            cx = about[0] + dx * c - dy * sn
+            cy = about[1] + dx * sn + dy * c
         grow_scale = getattr(mob, '_grow_scale', 1.0)
         grow_pt = getattr(mob, '_grow_point', None)
         if grow_scale != 1.0 and grow_pt is not None:
@@ -200,8 +228,17 @@ class ShapeMixin:
                     accumulated = drawn
                 prev_px, prev_py = px, py
 
-    def _send_circle(self, mob, a, w, h, rot):
+    def _send_circle(self, mob, a, w, h, rot, parent_offset=None):
         cx, cy, _ = mob.get_center()
+        if parent_offset is not None:
+            cx += parent_offset[0]; cy += parent_offset[1]
+        about = getattr(mob, '_rotation_about_point', None)
+        if about is not None:
+            neg_rot = -rot
+            dx, dy = cx - about[0], cy - about[1]
+            c, sn = math.cos(neg_rot), math.sin(neg_rot)
+            cx = about[0] + dx * c - dy * sn
+            cy = about[1] + dx * sn + dy * c
         grow_scale = getattr(mob, '_grow_scale', 1.0)
         grow_pt = getattr(mob, '_grow_point', None)
         if grow_scale != 1.0 and grow_pt is not None:
@@ -257,71 +294,107 @@ class ShapeMixin:
                     accumulated = drawn
                 prev_px, prev_py = px, py
 
-    def _send_arrow(self, mob, a, w, h, rot):
-        s = mob.get_start()
-        e = mob.get_end()
+    def _send_arrow(self, mob, a, w, h, rot, parent_offset=None):
+        s = np.array(mob.get_start(), dtype=float)
+        e = np.array(mob.get_end(), dtype=float)
         grow_scale = getattr(mob, '_grow_scale', 1.0)
         grow_pt = getattr(mob, '_grow_point', None)
         if grow_scale != 1.0 and grow_pt is not None:
-            s = (grow_pt[0] + (s[0] - grow_pt[0]) * grow_scale,
-                 grow_pt[1] + (s[1] - grow_pt[1]) * grow_scale,
-                 s[2])
-            e = (grow_pt[0] + (e[0] - grow_pt[0]) * grow_scale,
-                 grow_pt[1] + (e[1] - grow_pt[1]) * grow_scale,
-                 e[2])
-        cx, cy, _ = mob.get_center()
-        sx1, sy1 = manim_to_screen(s[0], s[1], w, h)
-        sx2, sy2 = manim_to_screen(e[0], e[1], w, h)
-        scx, scy = manim_to_screen(cx, cy, w, h)
-        sx1, sy1 = self._rotate_point(sx1, sy1, scx, scy, rot)
-        sx2, sy2 = self._rotate_point(sx2, sy2, scx, scy, rot)
+            gp = np.array(grow_pt, dtype=float)
+            s = gp + (s - gp) * grow_scale
+            e = gp + (e - gp) * grow_scale
+        if parent_offset is not None:
+            off = np.array(parent_offset, dtype=float)
+            s = s + off; e = e + off
+        about = getattr(mob, '_rotation_about_point', None)
+        if about is not None:
+            pivot = np.array(about, dtype=float)
+            neg_rot = -rot
+            c, sn = math.cos(neg_rot), math.sin(neg_rot)
+            dx, dy = s[0] - pivot[0], s[1] - pivot[1]
+            s = np.array([pivot[0] + dx * c - dy * sn, pivot[1] + dx * sn + dy * c, 0.0])
+            dx, dy = e[0] - pivot[0], e[1] - pivot[1]
+            e = np.array([pivot[0] + dx * c - dy * sn, pivot[1] + dx * sn + dy * c, 0.0])
+            sx1, sy1 = manim_to_screen(s[0], s[1], w, h)
+            sx2, sy2 = manim_to_screen(e[0], e[1], w, h)
+        else:
+            sx1, sy1 = manim_to_screen(s[0], s[1], w, h)
+            sx2, sy2 = manim_to_screen(e[0], e[1], w, h)
+            cx, cy, _ = mob.get_center()
+            if parent_offset is not None:
+                cx += parent_offset[0]; cy += parent_offset[1]
+            scx, scy = manim_to_screen(cx, cy, w, h)
+            sx1, sy1 = self._rotate_point(sx1, sy1, scx, scy, rot)
+            sx2, sy2 = self._rotate_point(sx2, sy2, scx, scy, rot)
         r, g, b = self._stroke_color(mob)
         sw = max(1, round(self._stroke_width(mob)))
         progress = getattr(mob, '_vulkan_progress', 1.0)
         if progress <= 0:
             return
-        if progress >= 1.0:
-            self.dll.AddLine(sx1, sy1, sx2, sy2, sw, r, g, b, a)
-        else:
-            ex = sx1 + (sx2 - sx1) * progress
-            ey = sy1 + (sy2 - sy1) * progress
-            self.dll.AddLine(sx1, sy1, ex, ey, sw, r, g, b, a)
         dx = sx2 - sx1
         dy = sy2 - sy1
-        length = math.sqrt(dx * dx + dy * dy)
-        if length > 0:
-            ux = dx / length
-            uy = dy / length
-            head_len = sw * 8 * grow_scale
-            head_w = head_len * 0.5
-            px = -uy
-            py = ux
-            hx1 = sx2 - ux * head_len + px * head_w
-            hy1 = sy2 - uy * head_len + py * head_w
-            hx2 = sx2 - ux * head_len - px * head_w
-            hy2 = sy2 - uy * head_len - py * head_w
-            head_verts = (ctypes.c_float * 6)(sx2, sy2, hx2, hy2, hx1, hy1)
-            self.dll.AddPolygon(
-                sx2, sy2, r, g, b, r, g, b, float(sw),
-                3, head_verts, progress, a, 1,
-            )
+        length = math.hypot(dx, dy)
+        if length <= 0:
+            return
+        ux = dx / length
+        uy = dy / length
+        arrow_len_manim = math.hypot(e[0] - s[0], e[1] - s[1])
+        max_tip_ratio = getattr(mob, 'max_tip_length_to_length_ratio', 0.25)
+        default_tip_length = getattr(mob, 'tip_length', 0.35)
+        tip_manim = min(default_tip_length, max_tip_ratio * arrow_len_manim)
+        scale_y = h / 8.0
+        head_len = tip_manim * scale_y
+        head_w = head_len * 0.5
+        base_x = sx2 - ux * head_len
+        base_y = sy2 - uy * head_len
+        if progress >= 1.0:
+            self.dll.AddLine(sx1, sy1, base_x, base_y, sw, r, g, b, a)
+        else:
+            ex = sx1 + (base_x - sx1) * progress
+            ey = sy1 + (base_y - sy1) * progress
+            self.dll.AddLine(sx1, sy1, ex, ey, sw, r, g, b, a)
+        px = -uy
+        py = ux
+        hx1 = base_x + px * head_w
+        hy1 = base_y + py * head_w
+        hx2 = base_x - px * head_w
+        hy2 = base_y - py * head_w
+        head_verts = (ctypes.c_float * 6)(sx2, sy2, hx2, hy2, hx1, hy1)
+        self.dll.AddPolygon(
+            sx2, sy2, r, g, b, r, g, b, 0,
+            3, head_verts, progress, a, 1,
+        )
 
-    def _send_line(self, mob, a, w, h, rot):
-        s = mob.get_start()
-        e = mob.get_end()
+    def _send_line(self, mob, a, w, h, rot, parent_offset=None):
+        s = np.array(mob.get_start(), dtype=float)
+        e = np.array(mob.get_end(), dtype=float)
         grow_scale = getattr(mob, '_grow_scale', 1.0)
         grow_pt = getattr(mob, '_grow_point', None)
         if grow_scale != 1.0 and grow_pt is not None:
-            s = (grow_pt[0] + (s[0] - grow_pt[0]) * grow_scale,
-                 grow_pt[1] + (s[1] - grow_pt[1]) * grow_scale,
-                 s[2])
-            e = (grow_pt[0] + (e[0] - grow_pt[0]) * grow_scale,
-                 grow_pt[1] + (e[1] - grow_pt[1]) * grow_scale,
-                 e[2])
-        cx, cy, _ = mob.get_center()
-        sx1, sy1 = manim_to_screen(s[0], s[1], w, h)
-        sx2, sy2 = manim_to_screen(e[0], e[1], w, h)
-        scx, scy = manim_to_screen(cx, cy, w, h)
+            gp = np.array(grow_pt, dtype=float)
+            s = gp + (s - gp) * grow_scale
+            e = gp + (e - gp) * grow_scale
+        if parent_offset is not None:
+            off = np.array(parent_offset, dtype=float)
+            s = s + off; e = e + off
+        about = getattr(mob, '_rotation_about_point', None)
+        if about is not None:
+            pivot = np.array(about, dtype=float)
+            neg_rot = -rot
+            c, sn = math.cos(neg_rot), math.sin(neg_rot)
+            dx, dy = s[0] - pivot[0], s[1] - pivot[1]
+            s = np.array([pivot[0] + dx * c - dy * sn, pivot[1] + dx * sn + dy * c, 0.0])
+            dx, dy = e[0] - pivot[0], e[1] - pivot[1]
+            e = np.array([pivot[0] + dx * c - dy * sn, pivot[1] + dx * sn + dy * c, 0.0])
+            sx1, sy1 = manim_to_screen(s[0], s[1], w, h)
+            sx2, sy2 = manim_to_screen(e[0], e[1], w, h)
+        else:
+            sx1, sy1 = manim_to_screen(s[0], s[1], w, h)
+            sx2, sy2 = manim_to_screen(e[0], e[1], w, h)
+            cx, cy, _ = mob.get_center()
+            if parent_offset is not None:
+                cx += parent_offset[0]; cy += parent_offset[1]
+            scx, scy = manim_to_screen(cx, cy, w, h)
         sx1, sy1 = self._rotate_point(sx1, sy1, scx, scy, rot)
         sx2, sy2 = self._rotate_point(sx2, sy2, scx, scy, rot)
         r, g, b = self._stroke_color(mob)

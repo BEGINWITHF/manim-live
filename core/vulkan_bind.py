@@ -207,14 +207,21 @@ class VulkanRender(ShapeMixin, TextMixin):
             vgroup_progress = getattr(mob, '_vulkan_progress', 1.0)
             num_subs = len(list(mob)) if hasattr(mob, '__len__') else 0
             about = getattr(mob, '_rotation_about_point', None)
+            is_3d = getattr(mob, '_rotation_3d', False)
             vgroup_center = np.array(mob.get_center(), dtype=float)
             try:
-                original_center = np.array(mob.get_points().mean(axis=0) if len(mob.get_points()) > 0 else mob.get_center(), dtype=float)
+                pts = mob.get_points()
+                original_center = np.array(pts.mean(axis=0) if len(pts) > 0 else mob.get_center(), dtype=float)
             except Exception:
                 original_center = vgroup_center.copy()
             offset = vgroup_center - original_center
             if parent_offset is not None:
                 offset = offset + parent_offset
+            if is_3d:
+                for sub in mob.family_members_with_points():
+                    if hasattr(sub, 'points') and len(sub.points) > 0:
+                        self._send_vmobject(sub, effective_alpha, w, h, offset, 0.0)
+                return
             for i, sub in enumerate(mob):
                 sub_offset = offset
                 if about is not None and rot != 0.0:
@@ -234,7 +241,11 @@ class VulkanRender(ShapeMixin, TextMixin):
                     sub._vulkan_progress = sub_progress
                 elif vgroup_progress < 1.0:
                     sub._vulkan_progress = vgroup_progress
-                self._send(sub, rot, parent_alpha=effective_alpha, parent_offset=sub_offset)
+                if about is not None:
+                    sub_rot = rot
+                else:
+                    sub_rot = get_anim_rotation(sub)
+                self._send(sub, sub_rot, parent_alpha=effective_alpha, parent_offset=sub_offset)
             return
 
         if getattr(mob, '_transforming', False):
@@ -243,22 +254,23 @@ class VulkanRender(ShapeMixin, TextMixin):
             self._send_vmobject(mob, a, w, h, parent_offset, 0.0)
             return
 
+        screen_rot = -rot
         if isinstance(mob, Square):
-            self._send_square(mob, a, w, h, rot)
+            self._send_square(mob, a, w, h, screen_rot, parent_offset)
         elif isinstance(mob, Rectangle):
-            self._send_rectangle(mob, a, w, h, rot)
+            self._send_rectangle(mob, a, w, h, screen_rot, parent_offset)
         elif isinstance(mob, Ellipse):
-            self._send_ellipse(mob, a, w, h, rot)
+            self._send_ellipse(mob, a, w, h, screen_rot, parent_offset)
         elif isinstance(mob, Dot):
             self._send_dot(mob, a, w, h)
         elif isinstance(mob, Circle):
-            self._send_circle(mob, a, w, h, rot)
+            self._send_circle(mob, a, w, h, screen_rot, parent_offset)
         elif isinstance(mob, Arrow):
-            self._send_arrow(mob, a, w, h, rot)
+            self._send_arrow(mob, a, w, h, screen_rot, parent_offset)
         elif isinstance(mob, DashedLine):
             self._send_dashed_line(mob, a, w, h)
         elif isinstance(mob, Line):
-            self._send_line(mob, a, w, h, rot)
+            self._send_line(mob, a, w, h, screen_rot, parent_offset)
         elif isinstance(mob, Arc):
             self._send_arc(mob, a, w, h)
         elif isinstance(mob, Polygon):
@@ -567,6 +579,9 @@ class VulkanRender(ShapeMixin, TextMixin):
             # Apply rotation delta per VGroup.
             for mob in self.scene.mobjects:
                 if isinstance(mob, (VGroup, Group)):
+                    if getattr(mob, '_rotation_about_point', None) is not None or getattr(mob, '_rotation_3d', False):
+                        # Rotation is handled by the VGroup handler in _send().
+                        continue
                     vg_rot = get_anim_rotation(mob)
                     prev_rot = _prev_vg_rotation.get(id(mob), 0.0)
                     delta = vg_rot - prev_rot
