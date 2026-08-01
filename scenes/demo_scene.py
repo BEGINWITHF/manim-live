@@ -1121,3 +1121,16 @@ class DemoWiggle(Scene):
         render.play(Wiggle(tex))
         render.play(Wait(1.5))
         render.close()
+
+
+class DemoChangeDecimalToValue(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        _title(render, "ChangeDecimalToValue")
+        start_num = Text("0.00", font_size=144)
+        end_num = Text("99.99", font_size=144)
+        self.add(start_num)
+        render.play(Transform(start_num, end_num), run_time=3)
+        render.play(Wait(1))
+        render.close()

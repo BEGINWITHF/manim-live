@@ -209,8 +209,7 @@ class ShapeMixin:
             cy = grow_pt[1] + (cy - grow_pt[1]) * grow_scale
         sx, sy = manim_to_screen(cx, cy, w, h)
         scale_y = h / 8.0
-        effective_radius = mob.get_width() / 2.0
-        sr = effective_radius * scale_y * grow_scale
+        sr = mob.radius * scale_y * grow_scale
         try:
             fo = float(mob.fill_rgbas[:, 3].max())
         except Exception:
@@ -467,7 +466,6 @@ class ShapeMixin:
             )
             so = mob.get_stroke_opacity() if hasattr(mob, 'get_stroke_opacity') else 1.0
             if so > 0:
-                n = len(verts)
                 n = len(verts)
                 edge_lens = []
                 perimeter = 0.0

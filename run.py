@@ -14,6 +14,7 @@ from scenes.demo_scene import (
     DemoGrowFromPoint, DemoSpinInFromNothing,     DemoApplyingWaves, DemoBlinking, DemoCircumscribe,
     DemoUsingFlash, DemoFlashOnCircle, DemoFocusOn, DemoUsingIndicate,
     DemoTimeWidthValues, DemoWiggle, DemoHomotopy, DemoMoveAlongPath,
+    DemoChangeDecimalToValue,
 )
 
 SCENES = [
@@ -70,6 +71,7 @@ SCENES = [
     ("51", "Wiggle",                                            DemoWiggle),
     ("52", "Homotopy",                                          DemoHomotopy),
     ("53", "MoveAlongPath",                                     DemoMoveAlongPath),
+    ("54", "ChangeDecimalToValue",                              DemoChangeDecimalToValue),
 ]
 
 

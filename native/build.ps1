@@ -129,6 +129,50 @@ if (!$gccCheck) {
     }
 }
 
+# Check for LaTeX (MiKTeX) - required by manim for DecimalNumber, MathTex, etc.
+$latexExists = Get-Command pdflatex -ErrorAction SilentlyContinue
+if (!$latexExists) {
+    foreach ($miBin in @("$env:LOCALAPPDATA\Programs\MiKTeX\miktex\bin\x64", "C:\Program Files\MiKTeX\miktex\bin\x64")) {
+        if (Test-Path (Join-Path $miBin "pdflatex.exe")) {
+            $env:PATH = "$miBin;$env:PATH"
+            $latexExists = $true
+            break
+        }
+    }
+}
+if (!$latexExists) {
+    Write-Host "[WARNING] LaTeX not found" -ForegroundColor Yellow
+    $download = Read-Host "Download MiKTeX (provides pdflatex) now? (Y/n)"
+    if ($download -eq 'n' -or $download -eq 'N') {
+        Write-Host "[ERROR] LaTeX is required for some demos. Skipping." -ForegroundColor Yellow
+    } else {
+        Write-Host "[INFO] Downloading MiKTeX basic installer..." -ForegroundColor Cyan
+        $miktexUrl = "https://mirrors.ctan.org/systems/win32/miktex/setup/windows-x64/basic-miktex-24.1-x64.exe"
+        $miktexInstaller = Join-Path $env:TEMP "miktex-basic-installer.exe"
+
+        try {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            Invoke-WebRequest -Uri $miktexUrl -OutFile $miktexInstaller -UseBasicParsing
+            Write-Host "[SUCCESS] Downloaded MiKTeX installer" -ForegroundColor Green
+        } catch {
+            Write-Host "[ERROR] Failed to download MiKTeX: $_" -ForegroundColor Red
+            exit 1
+        }
+
+        Write-Host "[INFO] Installing MiKTeX (silent mode)..." -ForegroundColor Cyan
+        $installArgs = @("--unattended", "--user", "--package-set=basic")
+        Start-Process -FilePath $miktexInstaller -ArgumentList $installArgs -Wait -NoNewWindow
+
+        if (Test-Path (Join-Path $miktexBin "pdflatex.exe")) {
+            $env:PATH = "$miktexBin;$env:PATH"
+            Write-Host "[SUCCESS] MiKTeX installed at: $miktexBin" -ForegroundColor Green
+        } else {
+            Write-Host "[WARNING] MiKTeX install may have failed - pdflatex not found at $miktexBin" -ForegroundColor Yellow
+            Write-Host "[INFO] Try installing manually: https://miktex.org/download" -ForegroundColor Yellow
+        }
+    }
+}
+
 $CommonFlags = "-shared -m64"
 if ($BuildConfig -eq "debug") {
     $OptimizationFlags = "-O0 -g -DDEBUG"

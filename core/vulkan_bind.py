@@ -1,4 +1,5 @@
 import ctypes
+import inspect
 import os
 import math
 import time
@@ -187,7 +188,10 @@ class VulkanRender(ShapeMixin, TextMixin):
             elif getattr(mob, '_letter_alphas', None) is not None and hasattr(mob, 'submobjects') and mob.submobjects:
                 self._send_text_write(mob, mob._letter_alphas, w, h, a)
             elif hasattr(mob, 'submobjects') and mob.submobjects:
-                self._send_text_bitmap(mob, w, h, a)
+                if a < 1.0:
+                    self._send_transformed_text(mob, w, h, alpha=a)
+                else:
+                    self._send_text_bitmap(mob, w, h, a)
 
         elif isinstance(mob, (VGroup, Group)):
             effective_alpha = parent_alpha * own_alpha
@@ -227,10 +231,10 @@ class VulkanRender(ShapeMixin, TextMixin):
             self._send_rectangle(mob, a, w, h, rot)
         elif isinstance(mob, Ellipse):
             self._send_ellipse(mob, a, w, h, rot)
-        elif isinstance(mob, Circle):
-            self._send_circle(mob, a, w, h, rot)
         elif isinstance(mob, Dot):
             self._send_dot(mob, a, w, h)
+        elif isinstance(mob, Circle):
+            self._send_circle(mob, a, w, h, rot)
         elif isinstance(mob, Arrow):
             self._send_arrow(mob, a, w, h, rot)
         elif isinstance(mob, DashedLine):
@@ -524,17 +528,22 @@ class VulkanRender(ShapeMixin, TextMixin):
                 for a in self._active_anims
             )
 
-            for mob in reversed(self.scene.mobjects):
-                if hasattr(mob, 'updaters') and mob.updaters and not getattr(mob, 'updating_suspended', False):
-                    for updater in mob.updaters:
-                        import inspect
-                        nparams = len(inspect.signature(updater).parameters)
-                        if nparams == 0:
-                            updater()
-                        elif nparams == 1:
-                            updater(mob)
-                        else:
-                            updater(mob, dt)
+            # Save pre-interpolate state for VGroups with updaters.
+            # After interpolate resets points, we shift the saved (rotated)
+            # points by the interpolation delta instead of re-applying
+            # cumulative rotation around the (wrong) current pivot.
+            _saved_vg_state = {}
+            if interpolate_will_run:
+                for mob in self.scene.mobjects:
+                    if isinstance(mob, (VGroup, Group)) and getattr(mob, 'updaters', None) and not getattr(mob, 'updating_suspended', False):
+                        pivot = _rotation_pivot(mob)
+                        _saved_vg_state[id(mob)] = {
+                            'pivot': np.array(pivot, dtype=float),
+                            'members': {},
+                        }
+                        for fm in mob.family_members_with_points():
+                            if hasattr(fm, 'points') and len(fm.points) > 0:
+                                _saved_vg_state[id(mob)]['members'][id(fm)] = fm.points.copy()
 
             for a in self._active_anims:
                 is_manim = type(a).__module__.startswith('manim')
@@ -561,18 +570,41 @@ class VulkanRender(ShapeMixin, TextMixin):
             if interpolate_will_run:
                 for mob in self.scene.mobjects:
                     if isinstance(mob, (VGroup, Group)):
-                        vg_rot = get_anim_rotation(mob)
-                        if vg_rot != 0.0:
-                            pivot = _rotation_pivot(mob)
-                            for sub in mob.family_members_with_points():
-                                if hasattr(sub, 'points') and len(sub.points) > 0:
-                                    c, s = np.cos(vg_rot), np.sin(vg_rot)
-                                    rot_matrix = np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
-                                    sub.points = (sub.points - pivot) @ rot_matrix.T + pivot
+                        if id(mob) in _saved_vg_state:
+                            # VGroup with updaters: shift saved rotated points
+                            # by the interpolation delta instead of re-applying
+                            # cumulative rotation (which is wrong when the
+                            # pivot moves between frames).
+                            saved = _saved_vg_state[id(mob)]
+                            new_pivot = np.array(_rotation_pivot(mob), dtype=float)
+                            delta = new_pivot - saved['pivot']
+                            for fm in mob.family_members_with_points():
+                                if hasattr(fm, 'points') and len(fm.points) > 0 and id(fm) in saved['members']:
+                                    fm.points = saved['members'][id(fm)] + delta
+                        else:
+                            vg_rot = get_anim_rotation(mob)
+                            if vg_rot != 0.0:
+                                pivot = _rotation_pivot(mob)
+                                for sub in mob.family_members_with_points():
+                                    if hasattr(sub, 'points') and len(sub.points) > 0:
+                                        c, s = np.cos(vg_rot), np.sin(vg_rot)
+                                        rot_matrix = np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
+                                        sub.points = (sub.points - pivot) @ rot_matrix.T + pivot
 
             for mob in self.scene.mobjects:
                 if isinstance(mob, (VGroup, Group)) and getattr(mob, 'updaters', None):
                     _patch_vgroup(mob)
+
+            for mob in reversed(self.scene.mobjects):
+                if hasattr(mob, 'updaters') and mob.updaters and not getattr(mob, 'updating_suspended', False):
+                    for updater in mob.updaters:
+                        nparams = len(inspect.signature(updater).parameters)
+                        if nparams == 0:
+                            updater()
+                        elif nparams == 1:
+                            updater(mob)
+                        else:
+                            updater(mob, dt)
 
             clear_anim_rotation_delta()
 

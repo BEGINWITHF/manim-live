@@ -39,7 +39,7 @@ class TextMixin:
                 arr = (ctypes.c_float * len(flat))(*flat)
                 self.dll.AddBezierPath(
                     arr, num_segs * 4,
-                    sr, sg, sb, 0.7,
+                    sr, sg, sb, 2.0,
                     sr, sg, sb, 1.0,
                     1.0, 1, 1, alpha,
                 )
@@ -71,6 +71,7 @@ class TextMixin:
                 flat.append(0.0)
 
             n = len(flat) // 3
+            n = (n // 4) * 4
             arr = (ctypes.c_float * len(flat))(*flat)
 
             stroke_progress = min(1.0, sub_alpha * 2.5)
@@ -83,7 +84,7 @@ class TextMixin:
 
             self.dll.AddBezierPath(
                 arr, n,
-                sr, sg, sb, 0.7,
+                sr, sg, sb, 2.0,
                 base_r, base_g, base_b, fill_alpha,
                 stroke_progress, 1, 1 if fill_alpha > 0 else 0, alpha,
             )
@@ -155,9 +156,10 @@ class TextMixin:
                 flat.append(0.0)
             arr = (ctypes.c_float * len(flat))(*flat)
             n = len(flat) // 3
+            n = (n // 4) * 4
             self.dll.AddBezierPath(
                 arr, n,
-                base_r, base_g, base_b, 0.7,
+                base_r, base_g, base_b, 2.0,
                 base_r, base_g, base_b, 1.0,
                 progress, 1, 1, alpha * sub_a,
             )
@@ -411,6 +413,7 @@ class TextMixin:
             do_stroke = True
 
         arr = (ctypes.c_float * len(flat))(*flat)
+        n = (n // 4) * 4
         self.dll.AddBezierPath(
             arr, n,
             sri, sgi, sbi, stroke_w,

@@ -1226,6 +1226,7 @@ class Indicate(Animation):
         self._indicate_color = color
         self._orig_fill = None
         self._orig_stroke = None
+        kwargs.pop('run_time', None)
         super().__init__(mobject, run_time=1.0, rate_func=rate_func or _there_and_back, **kwargs)
 
     def begin(self, t):
@@ -1300,8 +1301,8 @@ class Indicate(Animation):
             for fm in mob.family_members_with_points():
                 if hasattr(fm, 'stroke_rgbas') and len(fm.stroke_rgbas) > 0:
                     fm.stroke_rgbas[:, 0] = self._orig_stroke[0]
-                fm.stroke_rgbas[:, 1] = self._orig_stroke[1]
-                fm.stroke_rgbas[:, 2] = self._orig_stroke[2]
+                    fm.stroke_rgbas[:, 1] = self._orig_stroke[1]
+                    fm.stroke_rgbas[:, 2] = self._orig_stroke[2]
 
 
 class ShowPassingFlash(Animation):
