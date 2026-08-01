@@ -177,7 +177,7 @@ class Rotating(Animation):
         if self.reverse_rate_function:
             alpha = 1.0 - alpha
         alpha = self.rate_func(alpha)
-        current = self._start_rotation - self.rot_angle * alpha
+        current = self._start_rotation + self.rot_angle * alpha
         set_anim_rotation(self.mobject, current)
 
 
@@ -212,5 +212,5 @@ class Rotate(Animation):
         if self.reverse_rate_function:
             alpha = 1.0 - alpha
         alpha = self.rate_func(alpha)
-        current = self._start_rotation - self.rot_angle * alpha
+        current = self._start_rotation + self.rot_angle * alpha
         set_anim_rotation(self.mobject, current)

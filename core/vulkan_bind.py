@@ -498,10 +498,11 @@ class VulkanRender(ShapeMixin, TextMixin):
         self._active_anims = real_anims
         self._last_frame_time = time.time() - (1.0 / 30.0)
         _orig_vgroup_rotate = {}
+        _prev_vg_rotation = {}
 
         def _rotation_pivot(vg):
-            if len(vg) > 0 and hasattr(vg[0], 'get_center'):
-                return vg[0].get_center()
+            if hasattr(vg, '_rotation_about_point'):
+                return np.array(vg._rotation_about_point, dtype=float)
             return vg.get_center()
 
         def _patch_vgroup(vg):
@@ -542,34 +543,6 @@ class VulkanRender(ShapeMixin, TextMixin):
             current_alpha = dt * 30
             _anim_alpha[0] = current_alpha
 
-            # Check BEFORE the animation loop whether any point-modifying
-            # animation will run its interpolate on this frame.  We do this
-            # before the loop because finish() sets a.finished = True right
-            # after interpolate(1), and we still need to re-apply rotation
-            # on that final frame.
-            interpolate_will_run = any(
-                not isinstance(a, (Wait, Succession, AnimationGroup))
-                and not getattr(a, 'finished', False)
-                for a in self._active_anims
-            )
-
-            # Save pre-interpolate state for VGroups with updaters.
-            # After interpolate resets points, we shift the saved (rotated)
-            # points by the interpolation delta instead of re-applying
-            # cumulative rotation around the (wrong) current pivot.
-            _saved_vg_state = {}
-            if interpolate_will_run:
-                for mob in self.scene.mobjects:
-                    if isinstance(mob, (VGroup, Group)) and getattr(mob, 'updaters', None) and not getattr(mob, 'updating_suspended', False):
-                        pivot = _rotation_pivot(mob)
-                        _saved_vg_state[id(mob)] = {
-                            'pivot': np.array(pivot, dtype=float),
-                            'members': {},
-                        }
-                        for fm in mob.family_members_with_points():
-                            if hasattr(fm, 'points') and len(fm.points) > 0:
-                                _saved_vg_state[id(mob)]['members'][id(fm)] = fm.points.copy()
-
             for a in self._active_anims:
                 is_manim = type(a).__module__.startswith('manim')
                 if is_manim:
@@ -591,30 +564,20 @@ class VulkanRender(ShapeMixin, TextMixin):
                 if not getattr(a, 'finished', False):
                     all_done = False
 
-            # Re-apply cumulative rotation after interpolate resets points.
-            if interpolate_will_run:
-                for mob in self.scene.mobjects:
-                    if isinstance(mob, (VGroup, Group)):
-                        if id(mob) in _saved_vg_state:
-                            # VGroup with updaters: shift saved rotated points
-                            # by the interpolation delta instead of re-applying
-                            # cumulative rotation (which is wrong when the
-                            # pivot moves between frames).
-                            saved = _saved_vg_state[id(mob)]
-                            new_pivot = np.array(_rotation_pivot(mob), dtype=float)
-                            delta = new_pivot - saved['pivot']
-                            for fm in mob.family_members_with_points():
-                                if hasattr(fm, 'points') and len(fm.points) > 0 and id(fm) in saved['members']:
-                                    fm.points = saved['members'][id(fm)] + delta
-                        else:
-                            vg_rot = get_anim_rotation(mob)
-                            if vg_rot != 0.0:
-                                pivot = _rotation_pivot(mob)
-                                for sub in mob.family_members_with_points():
-                                    if hasattr(sub, 'points') and len(sub.points) > 0:
-                                        c, s = np.cos(vg_rot), np.sin(vg_rot)
-                                        rot_matrix = np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
-                                        sub.points = (sub.points - pivot) @ rot_matrix.T + pivot
+            # Apply rotation delta per VGroup.
+            for mob in self.scene.mobjects:
+                if isinstance(mob, (VGroup, Group)):
+                    vg_rot = get_anim_rotation(mob)
+                    prev_rot = _prev_vg_rotation.get(id(mob), 0.0)
+                    delta = vg_rot - prev_rot
+                    if abs(delta) > 1e-12:
+                        pivot = _rotation_pivot(mob)
+                        c, s = np.cos(delta), np.sin(delta)
+                        rot_matrix = np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
+                        for sub in mob.family_members_with_points():
+                            if hasattr(sub, 'points') and len(sub.points) > 0:
+                                sub.points = (sub.points - pivot) @ rot_matrix.T + pivot
+                    _prev_vg_rotation[id(mob)] = vg_rot
 
             for mob in self.scene.mobjects:
                 if isinstance(mob, (VGroup, Group)) and getattr(mob, 'updaters', None):
