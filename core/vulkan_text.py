@@ -262,7 +262,29 @@ class TextMixin:
             self.dll.AddLineStrip(coords, alphas, len(raw_pts), sw, sri, sgi, sbi, 1.0)
             return
         else:
+            if len(pts) < 2:
+                return
             if len(pts) < 4:
+                sr, sg, sb = 1, 1, 1
+                try:
+                    srgbas = mob.get_stroke_rgbas()
+                    if len(srgbas) > 0:
+                        sr, sg, sb = float(srgbas[0][0]), float(srgbas[0][1]), float(srgbas[0][2])
+                except Exception:
+                    pass
+                sw = self._stroke_width(mob)
+                sri = int(sr * 255 * a)
+                sgi = int(sg * 255 * a)
+                sbi = int(sb * 255 * a)
+                for i in range(len(pts) - 1):
+                    px0, py0 = float(pts[i][0]), float(pts[i][1])
+                    px1, py1 = float(pts[i+1][0]), float(pts[i+1][1])
+                    if parent_offset is not None:
+                        px0 += parent_offset[0]; py0 += parent_offset[1]
+                        px1 += parent_offset[0]; py1 += parent_offset[1]
+                    sx0, sy0 = manim_to_screen(px0, py0, w, h)
+                    sx1, sy1 = manim_to_screen(px1, py1, w, h)
+                    self.dll.AddLine(sx0, sy0, sx1, sy1, max(1, round(sw)), sri, sgi, sbi, a)
                 return
             cx, cy, _ = mob.get_center()
             cos_a = math.cos(rot)
@@ -288,6 +310,22 @@ class TextMixin:
 
         n = len(flat) // 3
         if n < 8:
+            if n >= 2:
+                sr, sg, sb = 1, 1, 1
+                try:
+                    srgbas = mob.get_stroke_rgbas()
+                    if len(srgbas) > 0:
+                        sr, sg, sb = float(srgbas[0][0]), float(srgbas[0][1]), float(srgbas[0][2])
+                except Exception:
+                    pass
+                sw = self._stroke_width(mob)
+                sri = int(sr * 255 * a)
+                sgi = int(sg * 255 * a)
+                sbi = int(sb * 255 * a)
+                for i in range(n - 1):
+                    x0, y0 = flat[i * 3], flat[i * 3 + 1]
+                    x1, y1 = flat[(i + 1) * 3], flat[(i + 1) * 3 + 1]
+                    self.dll.AddLine(x0, y0, x1, y1, max(1, round(sw)), sri, sgi, sbi, a)
             return
 
         fr, fg, fb, fa = 0, 0, 0, 0
@@ -364,12 +402,13 @@ class TextMixin:
         show_fill = 1 if fill_alpha > 0.01 and progress_lower == 0.0 else 0
         do_stroke = stroke_alpha > 0.01 and stroke_w > 0
 
-        if not hasattr(self, '_ts_debug'):
-            self._ts_debug = True
-            try:
-                c = mob.get_color()
-            except Exception:
-                pass
+        if not do_stroke and getattr(mob, '_transforming', False) and sw > 0:
+            sr, sg, sb = fr, fg, fb
+            stroke_alpha = max(stroke_alpha, a)
+            sri = round(sr * 255 * stroke_alpha)
+            sgi = round(sg * 255 * stroke_alpha)
+            sbi = round(sb * 255 * stroke_alpha)
+            do_stroke = True
 
         arr = (ctypes.c_float * len(flat))(*flat)
         self.dll.AddBezierPath(
@@ -384,20 +423,27 @@ class TextMixin:
             samples_per_seg = 8
             vis_start = int(seg_count * progress_lower)
             vis_end = int(seg_count * progress_upper)
+            stroke_pts = []
             for si in range(vis_start, min(seg_count, vis_end + 1)):
                 idx = si * 4
                 p0x, p0y = flat[idx*3], flat[idx*3+1]
                 p1x, p1y = flat[(idx+1)*3], flat[(idx+1)*3+1]
                 p2x, p2y = flat[(idx+2)*3], flat[(idx+2)*3+1]
                 p3x, p3y = flat[(idx+3)*3], flat[(idx+3)*3+1]
-                prev_x, prev_y = p0x, p0y
-                for s in range(1, samples_per_seg + 1):
+                for s in range(samples_per_seg + 1):
                     t = s / samples_per_seg
                     u = 1.0 - t
                     bx = u*u*u*p0x + 3*u*u*t*p1x + 3*u*t*t*p2x + t*t*t*p3x
                     by = u*u*u*p0y + 3*u*u*t*p1y + 3*u*t*t*p2y + t*t*t*p3y
-                    self.dll.AddLine(prev_x, prev_y, bx, by, int(stroke_w), sri, sgi, sbi, a)
-                    prev_x, prev_y = bx, by
+                    stroke_pts.append((bx, by))
+            if len(stroke_pts) >= 2:
+                coords = (ctypes.c_float * (len(stroke_pts) * 2))()
+                alphas = (ctypes.c_float * len(stroke_pts))()
+                for i, (px, py) in enumerate(stroke_pts):
+                    coords[i * 2] = px
+                    coords[i * 2 + 1] = py
+                    alphas[i] = a
+                self.dll.AddLineStrip(coords, alphas, len(stroke_pts), int(stroke_w), sri, sgi, sbi, 1.0)
 
     def _send_text_stroke(self, mob, a, w, h, parent_offset=None):
         if not hasattr(mob, 'family_members_with_points'):

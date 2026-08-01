@@ -11,7 +11,7 @@ from core.vulkan_bind import (
     Animation, AnimationGroup, Succession, DrawBorderThenFill,
     ShowIncreasingSubsets, SpiralIn, GrowFromCenter, GrowArrow, GrowFromEdge, GrowFromPoint,
     SpinInFromNothing, ApplyWave, Circumscribe,
-    Blink, TypeWithCursor, UntypeWithCursor, Indicate, ShowPassingFlash,
+    Blink, TypeWithCursor, UntypeWithCursor, Indicate, ShowPassingFlash, Homotopy, MoveAlongPath,
 )
 
 
@@ -1070,6 +1070,42 @@ class DemoTimeWidthValues(Scene):
             render.play(ShowPassingFlash(p.copy().set_color(BLUE), run_time=2, time_width=time_width))
             self.remove(lbl)
 
+        render.play(Wait(1.5))
+        render.close()
+
+
+class DemoHomotopy(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+
+        square = Square()
+        self.add(square)
+
+        def homotopy(x, y, z, t):
+            if t <= 0.25:
+                progress = t / 0.25
+                return (x, y + progress * 0.2 * np.sin(x), z)
+            else:
+                wave_progress = (t - 0.25) / 0.75
+                return (x, y + 0.2 * np.sin(x + 10 * wave_progress), z)
+
+        render.play(Homotopy(homotopy, square, rate_func=linear, run_time=2))
+        render.play(Wait(1.5))
+        render.close()
+
+class DemoMoveAlongPath(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+
+        d1 = Dot().set_color(ORANGE)
+        l1 = Line(LEFT, RIGHT)
+        self.add(d1, l1)
+
+        render.play(MoveAlongPath(d1, l1), rate_func=linear)
         render.play(Wait(1.5))
         render.close()
 

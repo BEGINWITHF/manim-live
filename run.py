@@ -13,7 +13,7 @@ from scenes.demo_scene import (
     DemoFadeInExample, DemoFadeOutExample, DemoGrowFromCenter, DemoGrowArrow, DemoGrowFromEdge,
     DemoGrowFromPoint, DemoSpinInFromNothing,     DemoApplyingWaves, DemoBlinking, DemoCircumscribe,
     DemoUsingFlash, DemoFlashOnCircle, DemoFocusOn, DemoUsingIndicate,
-    DemoTimeWidthValues, DemoWiggle,
+    DemoTimeWidthValues, DemoWiggle, DemoHomotopy, DemoMoveAlongPath,
 )
 
 SCENES = [
@@ -68,6 +68,8 @@ SCENES = [
     ("49", "Indicate",                                          DemoUsingIndicate),
     ("50", "ShowPassingFlash",                                  DemoTimeWidthValues),
     ("51", "Wiggle",                                            DemoWiggle),
+    ("52", "Homotopy",                                          DemoHomotopy),
+    ("53", "MoveAlongPath",                                     DemoMoveAlongPath),
 ]
 
 

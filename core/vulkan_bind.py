@@ -25,7 +25,7 @@ from core.animations import (
     Transform, ReplacementTransform,
     TransformMatchingAbstractBase, TransformMatchingShapes, TransformMatchingTex,
     GrowFromCenter, GrowArrow, GrowFromEdge, GrowFromPoint, SpinInFromNothing,
-    ApplyWave, Circumscribe, ShowPassingFlash,
+    ApplyWave, Circumscribe, ShowPassingFlash, Homotopy, MoveAlongPath,
     set_anim_opacity, get_anim_opacity,
     set_anim_rotation, get_anim_rotation,
     set_anim_rotation_delta, get_anim_rotation_delta, clear_anim_rotation_delta,
