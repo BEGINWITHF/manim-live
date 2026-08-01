@@ -465,7 +465,7 @@ class ShapeMixin:
         sx, sy = manim_to_screen(cx, cy, w, h)
         br, bg, bb = self._stroke_color(mob)
         bw = self._stroke_width(mob)
-        rot = get_anim_rotation(mob)
+        rot = -get_anim_rotation(mob)
         progress = getattr(mob, '_vulkan_progress', 1.0)
         has_bounds = hasattr(mob, '_vulkan_progress_upper')
         if has_bounds:
