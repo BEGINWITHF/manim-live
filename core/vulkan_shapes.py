@@ -45,8 +45,8 @@ class ShapeMixin:
             cx = grow_pt[0] + (cx - grow_pt[0]) * grow_scale
             cy = grow_pt[1] + (cy - grow_pt[1]) * grow_scale
         sx, sy = manim_to_screen(cx, cy, w, h)
-        scale_x = w / 14.0
-        half = mob.side_length / 2.0 * scale_x * grow_scale
+        scale = h / 8.0
+        half = mob.side_length / 2.0 * scale * grow_scale
         try:
             fo = float(mob.fill_rgbas[:, 3].max())
         except Exception:
@@ -111,10 +111,9 @@ class ShapeMixin:
             cx = grow_pt[0] + (cx - grow_pt[0]) * grow_scale
             cy = grow_pt[1] + (cy - grow_pt[1]) * grow_scale
         sx, sy = manim_to_screen(cx, cy, w, h)
-        scale_x = w / 14.0
-        scale_y = h / 8.0
-        hw = mob.width / 2.0 * scale_x * grow_scale
-        hh = mob.height / 2.0 * scale_y * grow_scale
+        scale = h / 8.0
+        hw = mob.width / 2.0 * scale * grow_scale
+        hh = mob.height / 2.0 * scale * grow_scale
         try:
             fo = float(mob.fill_rgbas[:, 3].max())
         except Exception:
@@ -179,7 +178,7 @@ class ShapeMixin:
             cx = grow_pt[0] + (cx - grow_pt[0]) * grow_scale
             cy = grow_pt[1] + (cy - grow_pt[1]) * grow_scale
         sx, sy = manim_to_screen(cx, cy, w, h)
-        scale = w / 14.0
+        scale = h / 8.0
         rx = mob.width / 2.0 * scale * grow_scale
         ry = mob.height / 2.0 * scale * grow_scale
         try:
@@ -429,15 +428,15 @@ class ShapeMixin:
         sx1, sy1 = manim_to_screen(s[0], s[1], w, h)
         sx2, sy2 = manim_to_screen(e[0], e[1], w, h)
         r, g, b = self._stroke_color(mob)
-        scale_x = w / 14.0
+        scale = h / 8.0
         sw = max(1, round(self._stroke_width(mob)))
         dl_manim = getattr(mob, 'dash_length', 0.05)
         ratio = getattr(mob, 'dashed_ratio', 0.5)
         if ratio <= 0 or ratio >= 1:
             ratio = 0.5
         gl_manim = dl_manim * (1.0 - ratio) / ratio
-        dl = max(1.0, dl_manim * scale_x)
-        gl = max(1.0, gl_manim * scale_x)
+        dl = max(1.0, dl_manim * scale)
+        gl = max(1.0, gl_manim * scale)
         progress = getattr(mob, '_vulkan_progress', 1.0)
         if progress <= 0:
             return

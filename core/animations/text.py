@@ -7,13 +7,15 @@ from core.rate_functions import _smooth
 class TextDecimalNumber(Text):
     _value_cache = {}
 
-    def __init__(self, number=0, font_size=48, font="Times New Roman", **kwargs):
+    def __init__(self, number=0, font_size=48, font="Times New Roman", num_decimal_places=2, **kwargs):
         self.number = number
+        self.num_decimal_places = num_decimal_places
         self._font_size = font_size
         self._font = font
         cache_key = (font_size, font)
         TextDecimalNumber._ensure_cache(cache_key)
-        super().__init__(f"{number:.2f}", font_size=font_size, font=font, **kwargs)
+        fmt = f"{{:.{num_decimal_places}f}}"
+        super().__init__(fmt.format(number), font_size=font_size, font=font, **kwargs)
 
     @classmethod
     def _ensure_cache(cls, cache_key):
@@ -23,7 +25,8 @@ class TextDecimalNumber(Text):
     def set_value(self, number):
         self.number = number
         center = self.get_center()
-        s = f"{number:.2f}"
+        fmt = f"{{:.{self.num_decimal_places}f}}"
+        s = fmt.format(number)
         cache_key = (self._font_size, self._font)
         cache = TextDecimalNumber._value_cache.get(cache_key)
         if cache is None:

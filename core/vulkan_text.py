@@ -39,12 +39,14 @@ class TextMixin:
                 arr = (ctypes.c_float * len(flat))(*flat)
                 self.dll.AddBezierPath(
                     arr, num_segs * 4,
-                    sr, sg, sb, 2.0,
+                    sr, sg, sb, 3.0,
                     sr, sg, sb, 1.0,
                     1.0, 1, 1, alpha,
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                import traceback
+                print('[ERROR] _send_transformed_text: ' + str(e))
+                traceback.print_exc()
 
     def _send_text_write(self, mob, letter_alphas, w, h, alpha=1.0):
         try:
@@ -129,45 +131,27 @@ class TextMixin:
                 pass
         if base_r == 0 and base_g == 0 and base_b == 0:
             base_r, base_g, base_b = 255, 255, 255
-        progress = getattr(mob, '_vulkan_progress', 1.0)
-        for fm in mob.family_members_with_points():
-            sub_a = get_anim_opacity(fm)
-            if sub_a <= 0:
-                continue
-            try:
-                pts = fm.get_points()
-            except Exception:
-                continue
-            if len(pts) < 8:
-                continue
-            num_segs = len(pts) // 4
-            if num_segs == 0:
-                continue
-            flat = []
-            for p in pts:
-                if fade_scale != 1.0:
-                    px = cx + (p[0] - cx) * fade_scale
-                    py = cy + (p[1] - cy) * fade_scale
-                else:
-                    px, py = p[0], p[1]
-                sx, sy = manim_to_screen(px, py, w, h)
-                flat.append(sx)
-                flat.append(sy)
-                flat.append(0.0)
-            arr = (ctypes.c_float * len(flat))(*flat)
-            n = len(flat) // 3
-            n = (n // 4) * 4
-            self.dll.AddBezierPath(
-                arr, n,
-                base_r, base_g, base_b, 2.0,
-                base_r, base_g, base_b, 1.0,
-                progress, 1, 1, alpha * sub_a,
-            )
 
-    def _send_vmobject(self, mob, a, w, h, parent_offset=None, rot=0.0):
+        text_str = mob.text if hasattr(mob, 'text') else str(mob)
+        font_size = mob._font_size if hasattr(mob, '_font_size') else 48.0
+        font_px = font_size * (h / 480.0)
+        try:
+            bottom_y = mob.get_bottom()[1]
+            cy = bottom_y
+        except Exception:
+            cy = mob.get_center()[1]
+        sx, sy = manim_to_screen(cx, cy, w, h)
+        self.dll.AddText(sx, sy, base_r, base_g, base_b, font_px, 1.0, text_str.encode('utf-8'), alpha)
+
+    def _send_vmobject(self, mob, a, w, h, parent_offset=None, rot=0.0, is_text=False):
         try:
             pts = mob.get_points()
         except Exception:
+            return
+
+        if len(pts) == 0 and hasattr(mob, 'submobjects') and mob.submobjects:
+            for sub in mob.submobjects:
+                self._send_vmobject(sub, a, w, h, parent_offset, rot, is_text=is_text)
             return
 
         from manim.animation.changing import TracedPath
@@ -349,6 +333,8 @@ class TextMixin:
             except Exception:
                 fr, fg, fb = 1.0, 1.0, 1.0
                 fa = 1.0
+            if is_text and fr == 0 and fg == 0 and fb == 0:
+                fr, fg, fb = 1.0, 1.0, 1.0
 
         sr, sg, sb, sa = 1, 1, 1, 1
         try:
@@ -360,6 +346,8 @@ class TextMixin:
             sa = 1.0
         if sr == 0 and sg == 0 and sb == 0:
             sr, sg, sb = fr, fg, fb
+            if is_text and sr == 0 and sg == 0 and sb == 0:
+                sr, sg, sb = 1.0, 1.0, 1.0
         if sa <= 0:
             try:
                 for fm in mob.family_members_with_points():
@@ -386,6 +374,8 @@ class TextMixin:
             except Exception:
                 pass
         sw = self._stroke_width(mob)
+        if is_text and sw < 4.0:
+            sw = 4.0
         fill_alpha = min(1.0, fa * a)
         stroke_alpha = min(1.0, sa * so * a)
         stroke_w = max(1.0, sw)
@@ -408,7 +398,10 @@ class TextMixin:
         show_fill = 1 if fill_alpha > 0.01 and progress_lower == 0.0 else 0
         do_stroke = stroke_alpha > 0.01 and stroke_w > 0
 
-        if not do_stroke and getattr(mob, '_transforming', False) and sw > 0:
+        if is_text and getattr(mob, '_transforming', False):
+            do_stroke = False
+
+        if not do_stroke and getattr(mob, '_transforming', False) and sw > 0 and not is_text:
             sr, sg, sb = fr, fg, fb
             stroke_alpha = max(stroke_alpha, a)
             sri = round(sr * 255 * stroke_alpha)
@@ -422,35 +415,27 @@ class TextMixin:
             arr, n,
             sri, sgi, sbi, stroke_w,
             fri, fgi, fbi, fill_alpha,
-            progress, 0, show_fill, a,
+            progress, 1 if do_stroke else 0, show_fill, a,
         )
 
         if do_stroke:
             seg_count = n // 4
-            samples_per_seg = 8
-            vis_start = int(seg_count * progress_lower)
-            vis_end = int(seg_count * progress_upper)
-            stroke_pts = []
-            for si in range(vis_start, min(seg_count, vis_end + 1)):
+            prev_x, prev_y = None, None
+            for si in range(seg_count):
                 idx = si * 4
                 p0x, p0y = flat[idx*3], flat[idx*3+1]
                 p1x, p1y = flat[(idx+1)*3], flat[(idx+1)*3+1]
                 p2x, p2y = flat[(idx+2)*3], flat[(idx+2)*3+1]
                 p3x, p3y = flat[(idx+3)*3], flat[(idx+3)*3+1]
-                for s in range(samples_per_seg + 1):
-                    t = s / samples_per_seg
+                steps = 4
+                for s in range(steps + 1):
+                    t = s / steps
                     u = 1.0 - t
                     bx = u*u*u*p0x + 3*u*u*t*p1x + 3*u*t*t*p2x + t*t*t*p3x
                     by = u*u*u*p0y + 3*u*u*t*p1y + 3*u*t*t*p2y + t*t*t*p3y
-                    stroke_pts.append((bx, by))
-            if len(stroke_pts) >= 2:
-                coords = (ctypes.c_float * (len(stroke_pts) * 2))()
-                alphas = (ctypes.c_float * len(stroke_pts))()
-                for i, (px, py) in enumerate(stroke_pts):
-                    coords[i * 2] = px
-                    coords[i * 2 + 1] = py
-                    alphas[i] = a
-                self.dll.AddLineStrip(coords, alphas, len(stroke_pts), int(stroke_w), sri, sgi, sbi, 1.0)
+                    if prev_x is not None:
+                        self.dll.AddLine(prev_x, prev_y, bx, by, 3, sri, sgi, sbi, a)
+                    prev_x, prev_y = bx, by
 
     def _send_text_stroke(self, mob, a, w, h, parent_offset=None):
         if not hasattr(mob, 'family_members_with_points'):

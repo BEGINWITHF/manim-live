@@ -157,6 +157,15 @@ class VulkanRender(ShapeMixin, TextMixin):
             ctypes.c_int, ctypes.c_int, ctypes.c_int,
             ctypes.c_float,
         ]
+        self.dll.AddText.restype = None
+        self.dll.AddText.argtypes = [
+            ctypes.c_float, ctypes.c_float,
+            ctypes.c_int, ctypes.c_int, ctypes.c_int,
+            ctypes.c_float, ctypes.c_float,
+            ctypes.c_char_p, ctypes.c_float,
+        ]
+        self.dll.Text_LoadFont.restype = ctypes.c_int
+        self.dll.Text_LoadFont.argtypes = [ctypes.POINTER(ctypes.c_ubyte), ctypes.c_int]
         self.dll.AddBezierPath.restype = None
         self.dll.AddBezierPath.argtypes = [
             ctypes.POINTER(ctypes.c_float), ctypes.c_int,
@@ -172,12 +181,27 @@ class VulkanRender(ShapeMixin, TextMixin):
         if self.dll.Vulkan_Init(w, h) != 1:
             raise RuntimeError("Vulkan_Init failed")
 
+        font_paths = [r"C:\Windows\Fonts\times.ttf", r"C:\Windows\Fonts\arial.ttf"]
+        font_loaded = False
+        for fp in font_paths:
+            try:
+                with open(fp, "rb") as f:
+                    data = f.read()
+                arr = (ctypes.c_ubyte * len(data))(*data)
+                if self.dll.Text_LoadFont(arr, len(data)):
+                    font_loaded = True
+                    break
+            except Exception:
+                pass
+        if not font_loaded:
+            raise RuntimeError("Failed to load any font")
+
     def sync(self, scene, angle=0.0):
         self.dll.ClearShapes()
         for mob in scene.mobjects:
             self._send(mob, angle, parent_alpha=1.0)
 
-    def _send(self, mob, angle=0.0, parent_alpha=1.0, parent_offset=None):
+    def _send(self, mob, angle=0.0, parent_alpha=1.0, parent_offset=None, parent_transforming=False, parent_is_text=False):
         w, h = self.win_w, self.win_h
         own_alpha = get_anim_opacity(mob)
         a = parent_alpha * own_alpha
@@ -188,28 +212,19 @@ class VulkanRender(ShapeMixin, TextMixin):
         grow_rot = getattr(mob, '_grow_rot', 0.0)
         rot += grow_rot
 
-        if isinstance(mob, Text):
-            has_stroke = False
-            if hasattr(mob, 'family_members_with_points'):
-                for fm in mob.family_members_with_points():
-                    sw = fm.get_stroke_width() if hasattr(fm, 'get_stroke_width') else 0
-                    if sw > 0:
-                        try:
-                            sa = float(fm.stroke_rgbas[:, 3].max())
-                        except Exception:
-                            sa = 1.0
-                        if sa > 0:
-                            has_stroke = True
-                            break
-            if has_stroke:
-                self._send_text_stroke(mob, a, w, h, parent_offset)
-            elif getattr(mob, '_letter_alphas', None) is not None and hasattr(mob, 'submobjects') and mob.submobjects:
-                self._send_text_write(mob, mob._letter_alphas, w, h, a)
-            elif hasattr(mob, 'submobjects') and mob.submobjects:
-                if a < 1.0:
+        is_text = isinstance(mob, Text) or getattr(mob, '_is_text', False) or parent_is_text
+
+        if isinstance(mob, Text) and hasattr(mob, 'submobjects') and mob.submobjects:
+            if not getattr(mob, '_transforming', False) and not parent_transforming:
+                if getattr(mob, '_letter_alphas', None) is not None:
+                    self._send_text_write(mob, mob._letter_alphas, w, h, a)
+                elif a < 1.0:
                     self._send_transformed_text(mob, w, h, alpha=a)
                 else:
                     self._send_text_bitmap(mob, w, h, a)
+            else:
+                self._send_vmobject(mob, a, w, h, parent_offset, 0.0, is_text=is_text)
+            return
 
         elif isinstance(mob, (VGroup, Group)):
             effective_alpha = parent_alpha * own_alpha
@@ -231,7 +246,7 @@ class VulkanRender(ShapeMixin, TextMixin):
             if is_3d:
                 for sub in mob.family_members_with_points():
                     if hasattr(sub, 'points') and len(sub.points) > 0:
-                        self._send_vmobject(sub, effective_alpha, w, h, offset, 0.0)
+                        self._send_vmobject(sub, effective_alpha, w, h, offset, 0.0, is_text=is_text)
                 return
             for i, sub in enumerate(mob):
                 sub_offset = offset
@@ -256,13 +271,13 @@ class VulkanRender(ShapeMixin, TextMixin):
                     sub_rot = rot
                 else:
                     sub_rot = get_anim_rotation(sub)
-                self._send(sub, sub_rot, parent_alpha=effective_alpha, parent_offset=sub_offset)
+                sub_is_text = isinstance(sub, Text) or getattr(sub, '_is_text', False)
+                effective_sub_offset = None if sub_is_text else sub_offset
+                self._send(sub, sub_rot, parent_alpha=effective_alpha, parent_offset=effective_sub_offset, parent_transforming=getattr(mob, '_transforming', False) or parent_transforming, parent_is_text=is_text)
             return
 
-        if getattr(mob, '_transforming', False):
-            # Points already have the cumulative rotation applied by the
-            # correction + updater, so pass rot=0 to avoid double rotation.
-            self._send_vmobject(mob, a, w, h, parent_offset, 0.0)
+        if getattr(mob, '_transforming', False) or parent_transforming:
+            self._send_vmobject(mob, a, w, h, None if is_text else parent_offset, 0.0, is_text=is_text)
             return
 
         screen_rot = -rot
@@ -333,10 +348,6 @@ class VulkanRender(ShapeMixin, TextMixin):
                 built = anim.build()
                 resolved.append(built)
             elif isinstance(anim, AnimationGroup):
-                anim.anim_args['suspend_mobject_updating'] = False
-                built = anim.build()
-                resolved.append(built)
-            elif isinstance(anim, AnimationGroup):
                 sub_resolved = []
                 for sub in anim.animations:
                     if isinstance(sub, _AnimationBuilder):
@@ -389,6 +400,7 @@ class VulkanRender(ShapeMixin, TextMixin):
             elif isinstance(anim, (Transform, _ManimTransform)):
                 if anim.mobject not in all_mobjects:
                     all_mobjects.append(anim.mobject)
+                Transform._set_transforming(anim.mobject, True)
                 if anim.replace_mobject_with_target_in_scene:
                     if anim.target_mobject not in all_mobjects:
                         all_mobjects.append(anim.target_mobject)
@@ -454,7 +466,7 @@ class VulkanRender(ShapeMixin, TextMixin):
                                 set_anim_opacity(mob, 0.0)
                             if mob not in all_mobjects:
                                 all_mobjects.append(mob)
-                    elif isinstance(sub, Transform):
+                    elif isinstance(sub, (Transform, _ManimTransform)):
                         if sub.mobject not in all_mobjects:
                             all_mobjects.append(sub.mobject)
                         if sub.target_mobject not in all_mobjects:
@@ -510,6 +522,8 @@ class VulkanRender(ShapeMixin, TextMixin):
         for a in real_anims:
             is_manim = type(a).__module__.startswith('manim')
             if is_manim:
+                if isinstance(a, _ManimTransform):
+                    a.mobject._transforming = True
                 a.start_time = time.time()
                 a.begin()
                 tm = getattr(a, 'target_mobject', None)
@@ -592,9 +606,27 @@ class VulkanRender(ShapeMixin, TextMixin):
                     if not getattr(a, 'finished', False) and elapsed >= a.run_time:
                         a.finish()
                         a.finished = True
+                        if hasattr(a, 'clean_up_from_scene'):
+                            a.clean_up_from_scene(self.scene)
                         mob = getattr(a, 'mobject', None)
                         if mob:
                             mob.resume_updating()
+                            Transform._set_transforming(mob, False)
+                            if hasattr(mob, '_was_transforming_text'):
+                                del mob._was_transforming_text
+                            target = getattr(a, 'target_mobject', None) or getattr(a, 'target', None)
+                            if target and isinstance(mob, Text) and hasattr(mob, 'text') and hasattr(target, 'text'):
+                                mob.text = target.text
+                        if hasattr(a, 'animations'):
+                            for sub in a.animations:
+                                sub_mob = getattr(sub, 'mobject', None)
+                                if sub_mob and hasattr(sub_mob, '_transforming'):
+                                    sub_mob._transforming = False
+                        if hasattr(a, '_anims'):
+                            for sub in a._anims:
+                                sub_mob = getattr(sub, 'mobject', None)
+                                if sub_mob and hasattr(sub_mob, '_transforming'):
+                                    sub_mob._transforming = False
                 else:
                     a.interpolate(now)
                     if not a.finished and (now - a.start_time) >= a.run_time:

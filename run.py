@@ -16,7 +16,9 @@ from scenes.demo_scene import (
     DemoTimeWidthValues, DemoWiggle, DemoHomotopy, DemoMoveAlongPath,
     DemoChangeDecimalToValue, DemoChangingDecimal, DemoUsingRotate, DemoRotatingAbout,
     BroadcastExample, SpeedModifierExample, SpeedModifierUpdaterExample,
-    SpeedModifierUpdaterExample2,
+    SpeedModifierUpdaterExample2, ApplyMatrixExample, WarpSquare, ClockwiseExample,
+    CounterclockwiseTransform_vs_Transform, DemoCyclicReplace, DemoFadeToColor,
+    DemoDifferentFadeTransforms, DemoFadeTransformPieces,
 )
 
 SCENES = [
@@ -81,6 +83,14 @@ SCENES = [
     ("59", "SpeedModifier (ChangeSpeed)",                           SpeedModifierExample),
     ("60", "SpeedModifier (Updater)",                                 SpeedModifierUpdaterExample),
     ("61", "SpeedModifier (Updater 2 - stop)",                        SpeedModifierUpdaterExample2),
+    ("62", "ApplyMatrix",                                              ApplyMatrixExample),
+    ("63", "WarpSquare (exp)",                                         WarpSquare),
+    ("64", "ClockwiseTransform",                                        ClockwiseExample),
+    ("65", "CounterclockwiseTransform vs Transform",                     CounterclockwiseTransform_vs_Transform),
+    ("66", "CyclicReplace",                                          DemoCyclicReplace),
+    ("67", "FadeToColor",                                            DemoFadeToColor),
+    ("68", "FadeTransform",                                          DemoDifferentFadeTransforms),
+    ("69", "FadeTransformPieces",                                     DemoFadeTransformPieces),
 ]
 
 

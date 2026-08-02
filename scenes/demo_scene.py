@@ -1,6 +1,7 @@
 import time
 import numpy as np
 from manim import *
+from manim.animation.transform import Transform as _ManimTransform
 from core.vulkan_bind import (
     VulkanRender, Write, Wait, Add,
     Create, Uncreate, Unwrite,
@@ -1259,4 +1260,150 @@ class SpeedModifierUpdaterExample2(Scene):
                 affects_speed_updaters=True,
             )
         )
+        render.close()
+
+
+class ApplyMatrixExample(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        matrix = [[1, 1], [0, 2/3]]
+        render.play(ApplyMatrix(matrix, Text("Hello World!")), ApplyMatrix(matrix, NumberPlane()))
+        render.play(Wait(1))
+        render.close()
+
+
+class WarpSquare(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        square = Square()
+        render.play(
+            ApplyPointwiseFunction(
+                lambda point: complex_to_R3(np.exp(R3_to_complex(point))), square
+            )
+        )
+        render.play(Wait(1))
+        render.close()
+
+
+class ClockwiseExample(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        dl, dr = Dot(), Dot()
+        sl, sr = Square(), Square()
+
+        VGroup(dl, sl).arrange(DOWN).shift(2*LEFT)
+        VGroup(dr, sr).arrange(DOWN).shift(2*RIGHT)
+
+        self.add(dl, dr)
+        render.play(Wait(1.0))
+        render.play(
+            ClockwiseTransform(dl, sl),
+            Transform(dr, sr)
+        )
+        render.play(Wait(1.0))
+        render.close()
+
+# do not change the code here
+class CounterclockwiseTransform_vs_Transform(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        c_transform = VGroup(
+            TextDecimalNumber(number=3.141, num_decimal_places=3),
+            TextDecimalNumber(number=1.618, num_decimal_places=3)
+        )
+        text_1 = Text("CounterclockwiseTransform", color=RED)
+        c_transform.add(text_1)
+
+        transform = VGroup(
+            TextDecimalNumber(number=1.618, num_decimal_places=3),
+            TextDecimalNumber(number=3.141, num_decimal_places=3)
+        )
+        text_2 = Text("Transform", color=BLUE)
+        transform.add(text_2)
+
+        ints = VGroup(c_transform, transform)
+        texts = VGroup(text_1, text_2).scale(0.75)
+        c_transform.arrange(direction=UP, buff=1)
+        transform.arrange(direction=UP, buff=1)
+
+        ints.arrange(buff=2)
+        self.add(ints, texts)
+
+        render.play(CounterclockwiseTransform(c_transform[0], c_transform[1]))
+        render.play(_ManimTransform(transform[0], transform[1]))
+        render.play(Wait(1.0))
+        render.close()
+
+
+class DemoCyclicReplace(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "CyclicReplace")
+        group = VGroup(Square(), Circle(), Triangle(), Star())
+        group.arrange(RIGHT)
+        self.add(group)
+        for _ in range(4):
+            render.play(CyclicReplace(*group))
+            render.play(Wait(0.5))
+        render.play(Wait(1))
+        render.close()
+
+
+class DemoFadeToColor(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "FadeToColor")
+        render.play(FadeToColor(Text("Hello World!"), color=RED))
+        render.play(Wait(1))
+        render.close()
+
+
+class DemoDifferentFadeTransforms(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "FadeTransform")
+        starts = [Rectangle(width=4, height=1) for _ in range(3)]
+        VGroup(*starts).arrange(DOWN, buff=1).shift(3*LEFT)
+        targets = [Circle(fill_opacity=1).scale(0.25) for _ in range(3)]
+        VGroup(*targets).arrange(DOWN, buff=1).shift(3*RIGHT)
+        self.add(*starts)
+        render.play(Wait(0.5))
+        render.play(
+            FadeTransform(starts[0], targets[0], stretch=True),
+            FadeTransform(starts[1], targets[1], stretch=False, dim_to_match=0),
+            FadeTransform(starts[2], targets[2], stretch=False, dim_to_match=1),
+        )
+        render.play(Wait(1))
+        render.close()
+
+
+class DemoFadeTransformPieces(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "FadeTransformPieces")
+        src = VGroup(Square(), Circle().shift(LEFT + UP))
+        src.shift(3*LEFT + 2*UP)
+        src_copy = src.copy().shift(4*DOWN)
+        target = VGroup(Circle(), Triangle().shift(RIGHT + DOWN))
+        target.shift(3*RIGHT + 2*UP)
+        target_copy = target.copy().shift(4*DOWN)
+        self.add(src, src_copy)
+        render.play(Wait(0.5))
+        render.play(
+            FadeTransform(src, target),
+            FadeTransformPieces(src_copy, target_copy),
+        )
+        render.play(Wait(1))
         render.close()
