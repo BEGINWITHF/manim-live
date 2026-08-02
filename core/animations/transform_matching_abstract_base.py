@@ -1,8 +1,9 @@
 from core.animations.base import Animation, set_anim_opacity, get_anim_opacity
 import numpy as np
-from manim import VGroup, Group
+from manim import VGroup
 from core.animations.transform import Transform
-from core.animations.fade import FadeTransform, FadeOut
+from core.animations.fade_out import FadeOut
+from core.animations.fade_transform import FadeTransform
 
 
 class TransformMatchingAbstractBase(Animation):
@@ -122,37 +123,3 @@ class TransformMatchingAbstractBase(Animation):
     @staticmethod
     def get_mobject_key(mobject):
         raise NotImplementedError
-
-
-class TransformMatchingShapes(TransformMatchingAbstractBase):
-    @staticmethod
-    def get_mobject_parts(mobject):
-        if hasattr(mobject, 'family_members_with_points'):
-            return mobject.family_members_with_points()
-        if hasattr(mobject, 'submobjects') and mobject.submobjects:
-            return list(mobject.submobjects)
-        return [mobject]
-
-    @staticmethod
-    def get_mobject_key(mobject):
-        mobject.save_state()
-        mobject.center()
-        mobject.set(height=1)
-        rounded_points = np.round(mobject.points, 3) + 0.0
-        result = hash(rounded_points.tobytes())
-        mobject.restore()
-        return result
-
-
-class TransformMatchingTex(TransformMatchingAbstractBase):
-    @staticmethod
-    def get_mobject_parts(mobject):
-        if hasattr(mobject, 'submobjects') and mobject.submobjects:
-            return list(mobject.submobjects)
-        return [mobject]
-
-    @staticmethod
-    def get_mobject_key(mobject):
-        return getattr(mobject, 'tex_string',
-                       getattr(mobject, '_tex_string',
-                               str(id(mobject))))

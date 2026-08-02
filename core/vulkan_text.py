@@ -374,8 +374,6 @@ class TextMixin:
             except Exception:
                 pass
         sw = self._stroke_width(mob)
-        if is_text and sw < 4.0:
-            sw = 4.0
         fill_alpha = min(1.0, fa * a)
         stroke_alpha = min(1.0, sa * so * a)
         stroke_w = max(1.0, sw)
@@ -398,7 +396,7 @@ class TextMixin:
         show_fill = 1 if fill_alpha > 0.01 and progress_lower == 0.0 else 0
         do_stroke = stroke_alpha > 0.01 and stroke_w > 0
 
-        if is_text and getattr(mob, '_transforming', False):
+        if is_text:
             do_stroke = False
 
         if not do_stroke and getattr(mob, '_transforming', False) and sw > 0 and not is_text:
@@ -415,7 +413,7 @@ class TextMixin:
             arr, n,
             sri, sgi, sbi, stroke_w,
             fri, fgi, fbi, fill_alpha,
-            progress, 1 if do_stroke else 0, show_fill, a,
+            progress, 0, show_fill, a,
         )
 
         if do_stroke:

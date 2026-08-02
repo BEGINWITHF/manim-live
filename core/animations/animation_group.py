@@ -3,7 +3,8 @@ import time
 import numpy as np
 from manim.mobject.mobject import _AnimationBuilder
 from core.animations.wait import Wait
-from core.animations.fade import FadeIn, FadeOut
+from core.animations.fade_in import FadeIn
+from core.animations.fade_out import FadeOut
 from core.animations.transform import Transform
 
 

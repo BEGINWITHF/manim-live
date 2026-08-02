@@ -13,6 +13,7 @@ from manim import (
     Arc, Ellipse, Point, Text, VGroup, Group, OUT, ORIGIN
 )
 from manim.animation.transform import Transform as _ManimTransform
+from manim.animation.transform import FadeTransform as _ManimFadeTransform
 
 from core.rate_functions import (
     _smooth, _linear, _rush_into, _rush_from,
@@ -233,7 +234,10 @@ class VulkanRender(ShapeMixin, TextMixin):
 
     def sync(self, scene, angle=0.0):
         self.dll.ClearShapes()
+        skip_ids = getattr(self, '_skip_mob_ids', None)
         for mob in scene.mobjects:
+            if skip_ids and id(mob) in skip_ids:
+                continue
             self._send(mob, angle, parent_alpha=1.0)
 
     def _send(self, mob, angle=0.0, parent_alpha=1.0, parent_offset=None, parent_transforming=False, parent_is_text=False):
@@ -250,13 +254,8 @@ class VulkanRender(ShapeMixin, TextMixin):
         is_text = isinstance(mob, Text) or getattr(mob, '_is_text', False) or parent_is_text
 
         if isinstance(mob, Text) and hasattr(mob, 'submobjects') and mob.submobjects:
-            if not getattr(mob, '_transforming', False) and not parent_transforming:
-                if getattr(mob, '_letter_alphas', None) is not None:
-                    self._send_text_write(mob, mob._letter_alphas, w, h, a)
-                elif a < 1.0:
-                    self._send_transformed_text(mob, w, h, alpha=a)
-                else:
-                    self._send_text_bitmap(mob, w, h, a)
+            if getattr(mob, '_letter_alphas', None) is not None:
+                self._send_text_write(mob, mob._letter_alphas, w, h, a)
             else:
                 self._send_vmobject(mob, a, w, h, parent_offset, 0.0, is_text=is_text)
             return
@@ -373,6 +372,8 @@ class VulkanRender(ShapeMixin, TextMixin):
         if not self.scene:
             return
 
+        self._skip_mob_ids = set()
+
         screenshot_at = kwargs.get('screenshot_at', None)
 
         resolved = []
@@ -432,14 +433,6 @@ class VulkanRender(ShapeMixin, TextMixin):
                             all_mobjects.append(sub_anim.mobject)
                         if sub_anim.target_mobject not in all_mobjects:
                             all_mobjects.append(sub_anim.target_mobject)
-            elif isinstance(anim, (Transform, _ManimTransform)):
-                if anim.mobject not in all_mobjects:
-                    all_mobjects.append(anim.mobject)
-                Transform._set_transforming(anim.mobject, True)
-                if anim.replace_mobject_with_target_in_scene:
-                    if anim.target_mobject not in all_mobjects:
-                        all_mobjects.append(anim.target_mobject)
-                    set_anim_opacity(anim.target_mobject, 0.0)
             elif isinstance(anim, FadeTransform):
                 if anim.mobject not in all_mobjects:
                     all_mobjects.append(anim.mobject)
@@ -448,6 +441,29 @@ class VulkanRender(ShapeMixin, TextMixin):
                 ghost = getattr(anim, '_ghost', None)
                 if ghost is not None and ghost not in all_mobjects:
                     all_mobjects.append(ghost)
+                is_manim_ft = type(anim).__module__.startswith('manim')
+                if is_manim_ft and hasattr(anim.mobject, 'submobjects'):
+                    for sub in anim.mobject.submobjects:
+                        for existing in self.scene.mobjects:
+                            if sub is existing:
+                                if not hasattr(self, '_skip_mob_ids'):
+                                    self._skip_mob_ids = set()
+                                self._skip_mob_ids.add(id(existing))
+                                break
+            elif isinstance(anim, (Transform, _ManimTransform)):
+                if anim.mobject not in all_mobjects:
+                    all_mobjects.append(anim.mobject)
+                Transform._set_transforming(anim.mobject, True)
+                if anim.replace_mobject_with_target_in_scene:
+                    if anim.target_mobject not in all_mobjects:
+                        all_mobjects.append(anim.target_mobject)
+                    set_anim_opacity(anim.target_mobject, 0.0)
+                if isinstance(anim, _ManimFadeTransform) and hasattr(anim.mobject, 'submobjects'):
+                    for sub in anim.mobject.submobjects:
+                        for existing in self.scene.mobjects:
+                            if sub is existing:
+                                self._skip_mob_ids.add(id(existing))
+                                break
             elif isinstance(anim, Succession):
                 for sub in anim.animations:
                     if isinstance(sub, (Create, Write, DrawBorderThenFill, FadeIn, Rotating, Rotate)) and sub.mobject:
@@ -486,6 +502,13 @@ class VulkanRender(ShapeMixin, TextMixin):
                         ghost = getattr(sub, '_ghost', None)
                         if ghost is not None and ghost not in all_mobjects:
                             all_mobjects.append(ghost)
+                        is_manim_ft = type(sub).__module__.startswith('manim')
+                        if is_manim_ft and hasattr(sub.mobject, 'submobjects'):
+                            for child in sub.mobject.submobjects:
+                                for existing in self.scene.mobjects:
+                                    if child is existing:
+                                        self._skip_mob_ids.add(id(existing))
+                                        break
             elif isinstance(anim, AnimationGroup):
                 for sub in anim.animations:
                     if isinstance(sub, (Create, Write, DrawBorderThenFill, FadeIn, Rotating, Rotate, GrowArrow)) and sub.mobject:

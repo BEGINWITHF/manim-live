@@ -1,7 +1,6 @@
-from core.animations.base import Animation, set_anim_opacity, get_anim_opacity, clear_anim_rotation_delta
+# This might not cause a bug or issue, check for other place first --TT Noted
+from core.animations.base import Animation, set_anim_opacity, get_anim_opacity
 import numpy as np
-from manim import VGroup, Group, ORIGIN, UP
-from core.rate_functions import _smooth, _linear, _double_smooth
 
 
 class Transform(Animation):
@@ -75,15 +74,3 @@ class Transform(Animation):
         else:
             self._set_transforming(self.mobject, True)
             self._set_transforming(self.target_mobject, False)
-
-
-class ReplacementTransform(Transform):
-    def __init__(self, mobject, target_mobject, **kwargs):
-        kwargs['replace_mobject_with_target_in_scene'] = True
-        super().__init__(mobject, target_mobject, **kwargs)
-
-
-class MoveToTarget(Transform):
-    def __init__(self, mobject, **kwargs):
-        target = mobject.target if hasattr(mobject, 'target') else mobject.copy()
-        super().__init__(mobject, target, **kwargs)
