@@ -109,7 +109,7 @@ __declspec(dllexport) int Vulkan_Init(int w, int h) {
         .hInstance = g_hinst,
         .lpszClassName = L"ManimVulkanClass",
         .hCursor = LoadCursor(NULL, IDC_ARROW),
-        .hbrBackground = (HBRUSH)(COLOR_WINDOW + 1)
+        .hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH)
     };
     RegisterClassW(&wc);
 

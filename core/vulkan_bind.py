@@ -3,6 +3,9 @@ import inspect
 import os
 import math
 import time
+import shutil
+import subprocess
+import tempfile
 import numpy as np
 from manim import (
     Square, Circle, Line, Rectangle, Polygon, Polygram,
@@ -55,6 +58,33 @@ import manim.animation.animation as _aa
 _aa.prepare_animation = _patched_prepare_animation
 
 
+class BITMAPINFOHEADER(ctypes.Structure):
+    _pack_ = 1
+    _fields_ = [
+        ("biSize", ctypes.c_uint32),
+        ("biWidth", ctypes.c_long),
+        ("biHeight", ctypes.c_long),
+        ("biPlanes", ctypes.c_uint16),
+        ("biBitCount", ctypes.c_uint16),
+        ("biCompression", ctypes.c_uint32),
+        ("biSizeImage", ctypes.c_uint32),
+        ("biXPelsPerMeter", ctypes.c_long),
+        ("biYPelsPerMeter", ctypes.c_long),
+        ("biClrUsed", ctypes.c_uint32),
+        ("biClrImportant", ctypes.c_uint32),
+    ]
+
+class BITMAPFILEHEADER(ctypes.Structure):
+    _pack_ = 1
+    _fields_ = [
+        ("bfType", ctypes.c_uint16),
+        ("bfSize", ctypes.c_uint32),
+        ("bfReserved1", ctypes.c_uint16),
+        ("bfReserved2", ctypes.c_uint16),
+        ("bfOffBits", ctypes.c_uint32),
+    ]
+
+
 class VulkanRender(ShapeMixin, TextMixin):
     def __init__(self, w=1920, h=1080):
         self.win_w = w
@@ -62,6 +92,11 @@ class VulkanRender(ShapeMixin, TextMixin):
         self.frame_count = 0
         self.scene = None
         self._active_anims = []
+        self._recording = False
+        self._record_dir = None
+        self._record_frame_idx = 0
+        self._record_path = None
+        self._record_fps = 60
 
         base_dir = os.path.dirname(os.path.abspath(__file__))
         dll_path = os.path.normpath(os.path.join(base_dir, "..", "dist", "release", "vulkan_core.dll"))
@@ -676,6 +711,7 @@ class VulkanRender(ShapeMixin, TextMixin):
             if not self.tick():
                 break
             self.sync(self.scene)
+            self._capture_frame()
 
             frame_count += 1
 
@@ -706,5 +742,150 @@ class VulkanRender(ShapeMixin, TextMixin):
         path_bytes = path.encode('utf-8') if isinstance(path, str) else path
         return self.dll.SaveScreenshot(path_bytes)
 
+    def screenshot_printwindow(self, path):
+        import ctypes.wintypes as wt
+        user32 = ctypes.windll.user32
+        gdi32 = ctypes.windll.gdi32
+        hwnd = user32.FindWindowW(None, "Manim Vulkan")
+        if not hwnd:
+            return False
+        rc = wt.RECT()
+        user32.GetClientRect(hwnd, ctypes.byref(rc))
+        w, h = rc.right, rc.bottom
+        hdc_window = user32.GetDC(hwnd)
+        hdc_mem = gdi32.CreateCompatibleDC(hdc_window)
+        hbitmap = gdi32.CreateCompatibleBitmap(hdc_window, w, h)
+        gdi32.SelectObject(hdc_mem, hbitmap)
+        user32.PrintWindow(hwnd, hdc_mem, 2)
+        bi = BITMAPINFOHEADER()
+        bi.biSize = ctypes.sizeof(BITMAPINFOHEADER)
+        bi.biWidth = w
+        bi.biHeight = -h
+        bi.biPlanes = 1
+        bi.biBitCount = 24
+        bi.biCompression = 0
+        row_bytes = ((w * 3 + 3) & ~3)
+        buf = (ctypes.c_ubyte * (row_bytes * h))()
+        gdi32.GetDIBits(hdc_mem, hbitmap, 0, h, buf, ctypes.byref(bi), 0)
+        bfh = BITMAPFILEHEADER()
+        bfh.bfType = 0x4D42
+        bfh.bfOffBits = ctypes.sizeof(BITMAPFILEHEADER) + ctypes.sizeof(BITMAPINFOHEADER)
+        bfh.bfSize = bfh.bfOffBits + row_bytes * h
+        path_b = path.encode('utf-8') if isinstance(path, str) else path
+        hdr_buf = ctypes.string_at(ctypes.addressof(bfh), ctypes.sizeof(bfh)) + \
+                  ctypes.string_at(ctypes.addressof(bi), ctypes.sizeof(bi))
+        with open(path_b, 'wb') as f:
+            f.write(hdr_buf)
+            f.write(ctypes.string_at(ctypes.addressof(buf), len(buf)))
+        gdi32.DeleteObject(hbitmap)
+        gdi32.DeleteDC(hdc_mem)
+        user32.ReleaseDC(hwnd, hdc_window)
+        return True
+
     def close(self):
         self.dll.Vulkan_Shutdown()
+
+    def start_record(self, path="output.mp4", fps=60):
+        if self._recording:
+            return
+        self._record_path = os.path.abspath(path)
+        self._record_fps = fps
+        self._record_dir = tempfile.mkdtemp(prefix="manim_record_")
+        self._record_frame_idx = 0
+        self._recording = True
+        import threading
+        self._record_stop_event = threading.Event()
+        self._record_thread = threading.Thread(target=self._record_worker, daemon=True)
+        self._record_thread.start()
+        print(f"[Record] Recording to {self._record_path} at {fps} fps")
+
+    def _record_worker(self):
+        try:
+            import mss as mss_mod
+            sct = mss_mod.MSS()
+        except Exception:
+            sct = None
+        bbox = self._get_screen_bbox()
+        if not bbox:
+            print("[Record] Cannot find window for recording.")
+            return
+        monitor = {'left': bbox[0], 'top': bbox[1], 'width': bbox[2]-bbox[0], 'height': bbox[3]-bbox[1]}
+        interval = 1.0 / self._record_fps
+        while not self._record_stop_event.is_set():
+            t0 = time.time()
+            try:
+                path = os.path.join(self._record_dir, f"frame_{self._record_frame_idx:06d}.bmp")
+                if sct:
+                    shot = sct.grab(monitor)
+                    from PIL import Image
+                    img = Image.frombytes('RGB', shot.size, shot.bgra, 'raw', 'BGRX')
+                    img.save(path)
+                else:
+                    self.screenshot(path)
+                self._record_frame_idx += 1
+            except Exception:
+                pass
+            elapsed = time.time() - t0
+            remaining = interval - elapsed
+            if remaining > 0:
+                self._record_stop_event.wait(remaining)
+        self._record_thread = None
+
+    def stop_record(self):
+        if not self._recording:
+            return
+        self._record_stop_event.set()
+        self._recording = False
+        if self._record_thread:
+            self._record_thread.join(timeout=2.0)
+            self._record_thread = None
+        frame_dir = self._record_dir
+        output = self._record_path
+        fps = self._record_fps
+        total = self._record_frame_idx
+        print(f"[Record] Captured {total} frames, encoding to {output} ...")
+        if total == 0:
+            print("[Record] No frames captured, aborting.")
+            if os.path.isdir(frame_dir):
+                shutil.rmtree(frame_dir, ignore_errors=True)
+            return
+
+        pattern = os.path.join(frame_dir, "frame_%06d.bmp")
+        cmd = [
+            "ffmpeg", "-y",
+            "-framerate", str(fps),
+            "-i", pattern,
+            "-c:v", "libx264",
+            "-pix_fmt", "yuv420p",
+            "-crf", "18",
+            "-preset", "fast",
+            output,
+        ]
+        try:
+            subprocess.run(cmd, check=True, capture_output=True)
+            print(f"[Record] Saved: {output}")
+        except FileNotFoundError:
+            print("[Record] ffmpeg not found. Install ffmpeg and add it to PATH.")
+            print(f"[Record] Frames are in: {frame_dir}")
+            return
+        except subprocess.CalledProcessError as e:
+            print(f"[Record] ffmpeg failed: {e.stderr.decode(errors='replace')}")
+            print(f"[Record] Frames are in: {frame_dir}")
+            return
+        if os.path.isdir(frame_dir):
+            shutil.rmtree(frame_dir, ignore_errors=True)
+
+    def _get_screen_bbox(self):
+        import ctypes.wintypes as wt
+        user32 = ctypes.windll.user32
+        hwnd = user32.FindWindowW(None, "Manim Vulkan")
+        if not hwnd:
+            return None
+        rc = wt.RECT()
+        user32.GetClientRect(hwnd, ctypes.byref(rc))
+        pt = wt.POINT(0, 0)
+        user32.ClientToScreen(hwnd, ctypes.byref(pt))
+        return (pt.x, pt.y, pt.x + rc.right, pt.y + rc.bottom)
+
+    def _capture_frame(self):
+        pass
