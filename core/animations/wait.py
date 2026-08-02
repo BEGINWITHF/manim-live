@@ -12,7 +12,7 @@ class Wait(Animation):
         super().__init__(None, run_time=run_time, rate_func=rate_func or _linear, **kwargs)
 
     def interpolate(self, alpha):
-        pass
+        self.rate_func(alpha)
 
 
 class Add(Animation):

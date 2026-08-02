@@ -1190,3 +1190,73 @@ class DemoChangingDecimal(Scene):
         render.play(ChangingDecimal(number, lambda a: 5 * a, run_time=3))
         render.play(Wait(1))
         render.close()
+
+
+class BroadcastExample(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(1))
+        mob = Circle(radius=4, color=TEAL_A)
+        render.play(Broadcast(mob))
+        render.play(Wait(1))
+        render.close()
+
+
+class SpeedModifierExample(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        a = Dot().shift(LEFT * 4)
+        b = Dot().shift(RIGHT * 4)
+        self.add(a, b)
+        render.play(Wait(0.5))
+        render.play(
+            ChangeSpeed(
+                AnimationGroup(
+                    a.animate(run_time=1).shift(RIGHT * 8),
+                    b.animate(run_time=1).shift(LEFT * 8),
+                ),
+                speedinfo={0.3: 1, 0.4: 0.1, 0.6: 0.1, 1: 1},
+                rate_func=linear,
+            )
+        )
+        render.play(Wait(1))
+        render.close()
+
+
+class SpeedModifierUpdaterExample(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        a = Dot().shift(LEFT * 4)
+        self.add(a)
+
+        ChangeSpeed.add_updater(a, lambda x, dt: x.shift(RIGHT * 4 * dt))
+        render.play(
+            ChangeSpeed(
+                Wait(2),
+                speedinfo={0.4: 1, 0.5: 0.2, 0.8: 0.2, 1: 1},
+                affects_speed_updaters=True,
+            )
+        )
+        render.close()
+
+
+class SpeedModifierUpdaterExample2(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        a = Dot().shift(LEFT * 4)
+        self.add(a)
+
+        ChangeSpeed.add_updater(a, lambda x, dt: x.shift(RIGHT * 4 * dt))
+        render.play(Wait(1.0))
+        render.play(
+            ChangeSpeed(
+                Wait(),
+                speedinfo={1: 0},
+                affects_speed_updaters=True,
+            )
+        )
+        render.close()

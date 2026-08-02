@@ -1,4 +1,5 @@
 from core.animations.base import Animation, set_anim_opacity, get_anim_opacity
+import time
 import numpy as np
 from manim.mobject.mobject import _AnimationBuilder
 from core.animations.wait import Wait
@@ -24,19 +25,24 @@ class AnimationGroup(Animation):
         super().__init__(run_time=total, **kwargs)
         self._begun = set()
 
-    def begin(self, t):
+    def begin(self, t=None):
+        if t is None:
+            import time as _time
+            t = _time.time()
         super().begin(t)
         self._begun = set()
 
     def interpolate(self, t):
-        elapsed = t - self.start_time
         total = self.run_time
-        if total > 0:
-            raw_alpha = max(0.0, min(1.0, elapsed / total))
-            mapped_alpha = self.rate_func(raw_alpha)
-            group_time = mapped_alpha * total
+        if t < 100.0:
+            group_time = self.rate_func(t) * total if total > 0 else 0.0
         else:
-            group_time = elapsed
+            elapsed = t - self.start_time
+            if total > 0:
+                raw_alpha = max(0.0, min(1.0, elapsed / total))
+                group_time = self.rate_func(raw_alpha) * total
+            else:
+                group_time = elapsed
 
         for i, a in enumerate(self.animations):
             a_start = getattr(a, '_group_start', 0.0)
@@ -48,7 +54,7 @@ class AnimationGroup(Animation):
                     if is_manim:
                         a.begin()
                     else:
-                        a.begin(t)
+                        a.begin(t if t >= 100.0 else time.time())
                     self._begun.add(i)
                 sub_alpha = (group_time - a_start) / a.run_time if a.run_time > 0 else 1.0
                 sub_alpha = max(0.0, min(1.0, sub_alpha))
@@ -62,7 +68,7 @@ class AnimationGroup(Animation):
                     if is_manim:
                         a.begin()
                     else:
-                        a.begin(t)
+                        a.begin(t if t >= 100.0 else time.time())
                     self._begun.add(i)
                 if is_manim:
                     a.interpolate(1.0)

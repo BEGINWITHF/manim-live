@@ -15,6 +15,8 @@ from scenes.demo_scene import (
     DemoUsingFlash, DemoFlashOnCircle, DemoFocusOn, DemoUsingIndicate,
     DemoTimeWidthValues, DemoWiggle, DemoHomotopy, DemoMoveAlongPath,
     DemoChangeDecimalToValue, DemoChangingDecimal, DemoUsingRotate, DemoRotatingAbout,
+    BroadcastExample, SpeedModifierExample, SpeedModifierUpdaterExample,
+    SpeedModifierUpdaterExample2,
 )
 
 SCENES = [
@@ -75,6 +77,10 @@ SCENES = [
     ("55", "ChangingDecimal",                                    DemoChangingDecimal),
     ("56", "Rotate",                                              DemoUsingRotate),
     ("57", "Rotating with about_point",                           DemoRotatingAbout),
+    ("58", "Broadcast",                                            BroadcastExample),
+    ("59", "SpeedModifier (ChangeSpeed)",                           SpeedModifierExample),
+    ("60", "SpeedModifier (Updater)",                                 SpeedModifierUpdaterExample),
+    ("61", "SpeedModifier (Updater 2 - stop)",                        SpeedModifierUpdaterExample2),
 ]
 
 

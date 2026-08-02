@@ -43,6 +43,17 @@ from manim import ChangeDecimalToValue as _OrigChangeDecimalToValue
 _OrigChangingDecimal.check_validity_of_input = lambda self, dm: None
 _OrigChangeDecimalToValue.check_validity_of_input = lambda self, dm: None
 
+from manim.animation.animation import prepare_animation as _orig_prepare_animation
+from core.animations.base import Animation as _OurAnimation
+def _patched_prepare_animation(anim):
+    if isinstance(anim, _OurAnimation):
+        return anim
+    return _orig_prepare_animation(anim)
+import manim.animation.speedmodifier as _sm
+_sm.prepare_animation = _patched_prepare_animation
+import manim.animation.animation as _aa
+_aa.prepare_animation = _patched_prepare_animation
+
 
 class VulkanRender(ShapeMixin, TextMixin):
     def __init__(self, w=1920, h=1080):
@@ -322,6 +333,10 @@ class VulkanRender(ShapeMixin, TextMixin):
                 built = anim.build()
                 resolved.append(built)
             elif isinstance(anim, AnimationGroup):
+                anim.anim_args['suspend_mobject_updating'] = False
+                built = anim.build()
+                resolved.append(built)
+            elif isinstance(anim, AnimationGroup):
                 sub_resolved = []
                 for sub in anim.animations:
                     if isinstance(sub, _AnimationBuilder):
@@ -445,6 +460,17 @@ class VulkanRender(ShapeMixin, TextMixin):
                         if sub.target_mobject not in all_mobjects:
                             all_mobjects.append(sub.target_mobject)
                         sub.mobject._transforming = True
+            else:
+                from manim.animation.composition import AnimationGroup as _ManimAG
+                if isinstance(anim, _ManimAG):
+                    for sub in anim.animations:
+                        if hasattr(sub, 'mobject') and sub.mobject is not None:
+                            if sub.mobject not in all_mobjects:
+                                all_mobjects.append(sub.mobject)
+                            sub.mobject._transforming = True
+                        if hasattr(sub, 'target_mobject') and sub.target_mobject is not None:
+                            if sub.target_mobject not in all_mobjects:
+                                all_mobjects.append(sub.target_mobject)
 
         for mob in all_mobjects:
             if mob not in self.scene.mobjects:

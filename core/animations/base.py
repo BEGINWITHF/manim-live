@@ -102,7 +102,10 @@ class Animation:
     def __repr__(self):
         return self.__str__()
 
-    def begin(self, t):
+    def begin(self, t=None):
+        if t is None:
+            import time as _time
+            t = _time.time()
         self.start_time = t
 
     def finish(self):
@@ -125,6 +128,9 @@ class Animation:
         lower = index * lag_ratio
         raw_sub_alpha = max(0.0, min(1.0, value - lower))
         return self.rate_func(raw_sub_alpha)
+
+    def set_rate_func(self, func):
+        self.rate_func = func
 
     def clean_up_from_scene(self, scene):
         pass
