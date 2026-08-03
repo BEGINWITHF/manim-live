@@ -656,6 +656,11 @@ class VulkanRender(ShapeMixin, TextMixin):
         def _rotation_pivot(vg):
             if hasattr(vg, '_rotation_about_point'):
                 return np.array(vg._rotation_about_point, dtype=float)
+            # Use the first submobject's center as pivot instead of the
+            # VGroup aggregate center. This prevents vertical vibration when a
+            # dot on the circumference shifts the VGroup center (rolling circle).
+            if hasattr(vg, 'submobjects') and len(vg.submobjects) > 0:
+                return np.array(vg.submobjects[0].get_center(), dtype=float)
             return vg.get_center()
 
         def _maybe_clear_prev_vg_rotation(anim):
