@@ -254,6 +254,12 @@ class VulkanRender(ShapeMixin, TextMixin):
         is_text = isinstance(mob, Text) or getattr(mob, '_is_text', False) or parent_is_text
 
         if isinstance(mob, Text) and hasattr(mob, 'submobjects') and mob.submobjects:
+            # Tag all text characters so they're recognized as text even
+            # when rendered through an intermediate Group (e.g. LaggedStartMap).
+            # This prevents the _transforming stroke logic in _send_vmobject
+            # from adding unwanted borders to text characters during animation.
+            for sub in mob.submobjects:
+                sub._is_text = True
             if getattr(mob, '_letter_alphas', None) is not None:
                 self._send_text_write(mob, mob._letter_alphas, w, h, a)
             else:
@@ -365,7 +371,7 @@ class VulkanRender(ShapeMixin, TextMixin):
             try:
                 pts = mob.get_points()
                 if len(pts) >= 2:
-                    self._send_vmobject(mob, a, w, h, parent_offset, rot)
+                    self._send_vmobject(mob, a, w, h, parent_offset, rot, is_text=is_text)
             except Exception:
                 pass
 
@@ -552,6 +558,12 @@ class VulkanRender(ShapeMixin, TextMixin):
                         if sub.target_mobject not in all_mobjects:
                             all_mobjects.append(sub.target_mobject)
                         sub.mobject._transforming = True
+                    else:
+                        # Catch-all for ApplyMethod, etc. — track their mobjects
+                        # so _is_descendant_of_scene can prevent double-rendering
+                        if hasattr(sub, 'mobject') and sub.mobject is not None:
+                            if sub.mobject not in all_mobjects:
+                                all_mobjects.append(sub.mobject)
             else:
                 from manim.animation.composition import AnimationGroup as _ManimAG
                 if isinstance(anim, _ManimAG):

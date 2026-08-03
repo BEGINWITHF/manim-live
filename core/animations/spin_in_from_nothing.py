@@ -16,7 +16,7 @@ class SpinInFromNothing(GrowFromCenter):
 
         mob = self.mobject
         mob._grow_scale = alpha
-        mob._grow_rot = -self._spin_angle * alpha
+        mob._grow_rot = self._spin_angle * alpha
         if self.point_color and self._orig_fill:
             fr, fg, fb = self._orig_fill[0], self._orig_fill[1], self._orig_fill[2]
             cr = self._pc[0] + (fr - self._pc[0]) * alpha

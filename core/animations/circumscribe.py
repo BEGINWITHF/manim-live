@@ -25,9 +25,6 @@ class Circumscribe(Succession):
             radius = frame.width / 2
             frame.scale((radius + buff) / radius)
 
-        if hasattr(mobject, 'font_size'):
-            frame.scale(0.875)
-
         if fade_in and fade_out:
             animations = [
                 FadeIn(frame, run_time=run_time / 2),
