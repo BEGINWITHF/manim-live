@@ -264,6 +264,28 @@ class VulkanRender(ShapeMixin, TextMixin):
             effective_alpha = parent_alpha * own_alpha
             if effective_alpha <= 0:
                 return
+            # Propagate VGroup stroke_width to descendants that have stroke
+            # color but no own stroke_width (e.g. AnimatedBoundary's text chars)
+            vg_stroke_w = 0
+            try:
+                vg_stroke_w = mob.get_stroke_width()
+            except Exception:
+                pass
+            stroke_propagated = set()
+            if vg_stroke_w > 0:
+                for desc in mob.family_members_with_points():
+                    try:
+                        dsw = desc.stroke_width
+                    except Exception:
+                        continue
+                    if dsw <= 0:
+                        try:
+                            sc = desc.get_stroke_color()
+                            if sc is not None and sc != '#000000' and sc != '#000':
+                                desc.stroke_width = vg_stroke_w
+                                stroke_propagated.add(id(desc))
+                        except Exception:
+                            pass
             vgroup_progress = getattr(mob, '_vulkan_progress', 1.0)
             num_subs = len(list(mob)) if hasattr(mob, '__len__') else 0
             about = getattr(mob, '_rotation_about_point', None)
@@ -636,6 +658,22 @@ class VulkanRender(ShapeMixin, TextMixin):
                 return np.array(vg._rotation_about_point, dtype=float)
             return vg.get_center()
 
+        def _maybe_clear_prev_vg_rotation(anim):
+            """After interpolate() resets mobject points, clear prev-rotation
+            tracking so the VGroup delta loop reapplies the FULL accumulated
+            rotation, not just the increment since last frame."""
+            mob = getattr(anim, 'mobject', None)
+            if mob is None:
+                return
+            for scene_mob in self.scene.mobjects:
+                if isinstance(scene_mob, (VGroup, Group)):
+                    # Check if anim.mobject is this VGroup or a descendant
+                    if mob is scene_mob or (
+                        hasattr(scene_mob, 'family_members_with_points') and
+                        mob in scene_mob.family_members_with_points()
+                    ):
+                        _prev_vg_rotation.pop(id(scene_mob), None)
+
         def _patch_vgroup(vg):
             if id(vg) in _orig_vgroup_rotate:
                 return
@@ -681,6 +719,9 @@ class VulkanRender(ShapeMixin, TextMixin):
                     alpha = elapsed / a.run_time if a.run_time > 0 else 1.0
                     alpha = max(0.0, min(1.0, alpha))
                     a.interpolate(alpha)
+                    # interpolate() resets mobject points, erasing accumulated rotation.
+                    # Clear _prev_vg_rotation so the delta loop reapplies the FULL rotation.
+                    _maybe_clear_prev_vg_rotation(a)
 
                     if not getattr(a, 'finished', False) and elapsed >= a.run_time:
                         a.finish()

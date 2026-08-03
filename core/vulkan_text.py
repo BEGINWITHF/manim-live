@@ -396,7 +396,7 @@ class TextMixin:
         show_fill = 1 if fill_alpha > 0.01 and progress_lower == 0.0 else 0
         do_stroke = stroke_alpha > 0.01 and stroke_w > 0
 
-        if is_text:
+        if is_text and fill_alpha > 0.01:
             do_stroke = False
 
         if not do_stroke and getattr(mob, '_transforming', False) and sw > 0 and not is_text:
