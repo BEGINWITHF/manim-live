@@ -17,6 +17,8 @@ class Indicate(Animation):
     def begin(self, t):
         super().begin(t)
         mob = self.mobject
+        self._grow_point = mob.get_center()
+        mob._grow_point = self._grow_point
         if hasattr(mob, 'family_members_with_points'):
             try:
                 for fm in mob.family_members_with_points():
@@ -76,6 +78,8 @@ class Indicate(Animation):
             del mob._fade_scale
         if hasattr(mob, '_grow_scale'):
             del mob._grow_scale
+        if hasattr(mob, '_grow_point'):
+            del mob._grow_point
         if self._orig_fill:
             for fm in mob.family_members_with_points():
                 if hasattr(fm, 'fill_rgbas') and len(fm.fill_rgbas) > 0:

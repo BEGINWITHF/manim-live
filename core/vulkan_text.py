@@ -150,8 +150,23 @@ class TextMixin:
             return
 
         if len(pts) == 0 and hasattr(mob, 'submobjects') and mob.submobjects:
+            # Propagate _grow_scale/_grow_point to submobjects so animations
+            # like Indicate that set them on a VGroup/Text parent correctly
+            # scale individual child pieces.
+            pg_gs = getattr(mob, '_grow_scale', None)
+            pg_gp = getattr(mob, '_grow_point', None)
             for sub in mob.submobjects:
+                need_gs = pg_gs is not None and not hasattr(sub, '_grow_scale')
+                need_gp = pg_gp is not None and not hasattr(sub, '_grow_point')
+                if need_gs:
+                    sub._grow_scale = pg_gs
+                if need_gp:
+                    sub._grow_point = pg_gp
                 self._send_vmobject(sub, a, w, h, parent_offset, rot, is_text=is_text)
+                if need_gs:
+                    del sub._grow_scale
+                if need_gp:
+                    del sub._grow_point
             return
 
         from manim.animation.changing import TracedPath
@@ -375,8 +390,10 @@ class TextMixin:
                 pass
         sw = self._stroke_width(mob)
         fill_alpha = min(1.0, fa * a)
-        stroke_alpha = min(1.0, sa * so * a)
-        stroke_w = max(1.0, sw)
+        # stroke_alpha uses so (max stroke-rgba alpha) — consistent
+        # with how fill_alpha uses fa (fill-rgba alpha from first element)
+        stroke_alpha = min(1.0, so * a)
+        stroke_w = max(1.0, sw) if sw > 0 else 0
 
         progress = getattr(mob, '_vulkan_progress', 1.0)
         has_bounds = hasattr(mob, '_vulkan_progress_upper')

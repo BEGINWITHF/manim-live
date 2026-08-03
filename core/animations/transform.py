@@ -28,8 +28,16 @@ class Transform(Animation):
             alpha = 1.0 - alpha
         alpha = self.rate_func(alpha)
         try:
-            self.mobject._points_just_reset = True
-            self.mobject.interpolate(self._starting_mobject, self._target_copy, alpha)
+            # Interpolate hierarchically (family members) so that
+            # Text, VGroup, and other objects with submobjects
+            # morph correctly. The old single-call
+            #   self.mobject.interpolate(start, target, alpha)
+            # only touches top-level points, which are empty for Text.
+            mob_fam = self.mobject.family_members_with_points()
+            start_fam = self._starting_mobject.family_members_with_points()
+            target_fam = self._target_copy.family_members_with_points()
+            for m, s, t in zip(mob_fam, start_fam, target_fam):
+                m.interpolate(s, t, alpha)
         except Exception:
             pass
 
@@ -37,9 +45,18 @@ class Transform(Animation):
         super().finish()
         set_anim_opacity(self.mobject, 1.0)
         try:
-            self.mobject.set_points(self.target_mobject.get_points().copy())
+            # Copy points hierarchically so Text/VGroup submobjects
+            # get the target's shape, not just the empty top-level.
+            mob_fam = self.mobject.family_members_with_points()
+            target_fam = self.target_mobject.family_members_with_points()
+            for m, t in zip(mob_fam, target_fam):
+                m.set_points(t.get_points().copy())
         except Exception:
-            pass
+            # Fallback to top-level-only copy for simple shapes
+            try:
+                self.mobject.set_points(self.target_mobject.get_points().copy())
+            except Exception:
+                pass
         if not self.replace_mobject_with_target_in_scene:
             set_anim_opacity(self.target_mobject, 0.0)
         self._set_transforming(self.mobject, True)

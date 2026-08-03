@@ -308,7 +308,18 @@ class VulkanRender(ShapeMixin, TextMixin):
             if is_3d:
                 for sub in mob.family_members_with_points():
                     if hasattr(sub, 'points') and len(sub.points) > 0:
+                        pg_gs, pg_gp = getattr(mob, '_grow_scale', None), getattr(mob, '_grow_point', None)
+                        need_gs = pg_gs is not None and not hasattr(sub, '_grow_scale')
+                        need_gp = pg_gp is not None and not hasattr(sub, '_grow_point')
+                        if need_gs:
+                            sub._grow_scale = pg_gs
+                        if need_gp:
+                            sub._grow_point = pg_gp
                         self._send_vmobject(sub, effective_alpha, w, h, offset, 0.0, is_text=is_text)
+                        if need_gs:
+                            del sub._grow_scale
+                        if need_gp:
+                            del sub._grow_point
                 return
             for i, sub in enumerate(mob):
                 sub_offset = offset
@@ -335,7 +346,21 @@ class VulkanRender(ShapeMixin, TextMixin):
                     sub_rot = get_anim_rotation(sub)
                 sub_is_text = isinstance(sub, Text) or getattr(sub, '_is_text', False)
                 effective_sub_offset = None if sub_is_text else sub_offset
+                # Propagate _grow_scale/_grow_point from parent VGroup to submobjects
+                # so animations like Indicate that set these on the VGroup correctly
+                # scale individual characters/text pieces.
+                pg_gs, pg_gp = getattr(mob, '_grow_scale', None), getattr(mob, '_grow_point', None)
+                need_gs = pg_gs is not None and not hasattr(sub, '_grow_scale')
+                need_gp = pg_gp is not None and not hasattr(sub, '_grow_point')
+                if need_gs:
+                    sub._grow_scale = pg_gs
+                if need_gp:
+                    sub._grow_point = pg_gp
                 self._send(sub, sub_rot, parent_alpha=effective_alpha, parent_offset=effective_sub_offset, parent_transforming=getattr(mob, '_transforming', False) or parent_transforming, parent_is_text=is_text)
+                if need_gs:
+                    del sub._grow_scale
+                if need_gp:
+                    del sub._grow_point
             return
 
         if getattr(mob, '_transforming', False) or parent_transforming:
@@ -481,7 +506,9 @@ class VulkanRender(ShapeMixin, TextMixin):
             elif isinstance(anim, (Transform, _ManimTransform)):
                 if anim.mobject not in all_mobjects:
                     all_mobjects.append(anim.mobject)
-                Transform._set_transforming(anim.mobject, True)
+                # Tag FocusOn starting dot so _send_dot caps opacity at 3%
+                if type(anim).__name__ == 'FocusOn':
+                    anim.mobject._dot_max_opacity = 0.03
                 if anim.replace_mobject_with_target_in_scene:
                     if anim.target_mobject not in all_mobjects:
                         all_mobjects.append(anim.target_mobject)
@@ -635,8 +662,10 @@ class VulkanRender(ShapeMixin, TextMixin):
         for a in real_anims:
             is_manim = type(a).__module__.startswith('manim')
             if is_manim:
-                if isinstance(a, _ManimTransform):
-                    a.mobject._transforming = True
+                # don't render an invisible source. The target was set to 0.0
+                # by the previous animation's target setup at line 513.
+                if getattr(a, 'mobject', None) is not None:
+                    set_anim_opacity(a.mobject, 1.0)
                 a.start_time = time.time()
                 a.begin()
                 tm = getattr(a, 'target_mobject', None)
@@ -751,9 +780,13 @@ class VulkanRender(ShapeMixin, TextMixin):
                             Transform._set_transforming(mob, False)
                             if hasattr(mob, '_was_transforming_text'):
                                 del mob._was_transforming_text
+                            if hasattr(mob, '_dot_max_opacity'):
+                                del mob._dot_max_opacity
                             target = getattr(a, 'target_mobject', None) or getattr(a, 'target', None)
                             if target and isinstance(mob, Text) and hasattr(mob, 'text') and hasattr(target, 'text'):
                                 mob.text = target.text
+                            if getattr(a, 'replace_mobject_with_target_in_scene', False):
+                                set_anim_opacity(mob, 1.0)
                         if hasattr(a, 'animations'):
                             for sub in a.animations:
                                 sub_mob = getattr(sub, 'mobject', None)
@@ -768,6 +801,9 @@ class VulkanRender(ShapeMixin, TextMixin):
                     a.interpolate(now)
                     if not a.finished and (now - a.start_time) >= a.run_time:
                         a.finish()
+                        a.finished = True
+                        if hasattr(a, 'clean_up_from_scene'):
+                            a.clean_up_from_scene(self.scene)
                 if not getattr(a, 'finished', False):
                     all_done = False
 
@@ -902,28 +938,12 @@ class VulkanRender(ShapeMixin, TextMixin):
         print(f"[Record] Recording to {self._record_path} at {fps} fps")
 
     def _record_worker(self):
-        try:
-            import mss as mss_mod
-            sct = mss_mod.MSS()
-        except Exception:
-            sct = None
-        bbox = self._get_screen_bbox()
-        if not bbox:
-            print("[Record] Cannot find window for recording.")
-            return
-        monitor = {'left': bbox[0], 'top': bbox[1], 'width': bbox[2]-bbox[0], 'height': bbox[3]-bbox[1]}
         interval = 1.0 / self._record_fps
         while not self._record_stop_event.is_set():
             t0 = time.time()
             try:
                 path = os.path.join(self._record_dir, f"frame_{self._record_frame_idx:06d}.bmp")
-                if sct:
-                    shot = sct.grab(monitor)
-                    from PIL import Image
-                    img = Image.frombytes('RGB', shot.size, shot.bgra, 'raw', 'BGRX')
-                    img.save(path)
-                else:
-                    self.screenshot(path)
+                self.screenshot_printwindow(path)
                 self._record_frame_idx += 1
             except Exception:
                 pass

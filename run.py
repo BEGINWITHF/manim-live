@@ -19,6 +19,9 @@ from scenes.demo_scene import (
     SpeedModifierUpdaterExample2, ApplyMatrixExample, WarpSquare, ClockwiseExample,
     CounterclockwiseTransform_vs_Transform, DemoCyclicReplace, DemoFadeToColor,
     DemoDifferentFadeTransforms, DemoFadeTransformPieces,
+    DemoMoveToTarget, DemoReplacementTransformOrTransform,
+    DemoRestore, DemoScaleInPlace, DemoShrinkToCenter,
+    DemoTransformPathArc, DemoAnagram, DemoMatchingEquationParts,
 )
 
 SCENES = [
@@ -91,6 +94,14 @@ SCENES = [
     ("67", "FadeToColor",                                            DemoFadeToColor),
     ("68", "FadeTransform",                                          DemoDifferentFadeTransforms),
     ("69", "FadeTransformPieces",                                     DemoFadeTransformPieces),
+    ("70", "MoveToTarget",                                             DemoMoveToTarget),
+    ("71", "ReplacementTransform vs Transform",                DemoReplacementTransformOrTransform),
+    ("72", "Restore",                                              DemoRestore),
+    ("73", "ScaleInPlace",                                        DemoScaleInPlace),
+    ("74", "ShrinkToCenter",                                     DemoShrinkToCenter),
+    ("75", "TransformPathArc",                                    DemoTransformPathArc),
+    ("76", "TransformMatchingShapes Anagram",                     DemoAnagram),
+    ("77", "TransformMatchingTex Equations",                  DemoMatchingEquationParts),
 ]
 
 

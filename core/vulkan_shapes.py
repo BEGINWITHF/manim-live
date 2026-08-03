@@ -420,6 +420,7 @@ class ShapeMixin:
         if fo <= 0:
             return
         r, g, b = self._color(mob, a)
+        fo = min(fo, getattr(mob, '_dot_max_opacity', 1.0))
         self.dll.AddCircle(sx, sy, rad, r, g, b, 0, 0, 0, 0.0, 1.0, a * fo)
 
     def _send_dashed_line(self, mob, a, w, h):

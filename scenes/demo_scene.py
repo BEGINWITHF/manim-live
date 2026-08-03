@@ -1048,7 +1048,7 @@ class DemoFocusOn(Scene):
         _title(render, "FocusOn")
         dot = Dot(color=PURE_YELLOW).shift(DOWN)
         self.add(Text("Focusing on the dot below:"), dot)
-        anim = FocusOn(dot, run_time=1, opacity=0.2)
+        anim = FocusOn(dot, run_time=1, opacity=3.0)
         anim.mobject.move_to(dot.get_center())
         render.play(anim)
         render.play(Wait(1.5))
@@ -1406,4 +1406,178 @@ class DemoFadeTransformPieces(Scene):
             FadeTransformPieces(src_copy, target_copy),
         )
         render.play(Wait(1))
+        render.close()
+
+
+class DemoMoveToTarget(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "MoveToTarget")
+
+        c = Circle()
+        self.add(c)
+
+        c.generate_target()
+        c.target.set_fill(color=GREEN, opacity=0.5)
+        c.target.shift(2 * RIGHT + UP).scale(0.5)
+
+        render.play(MoveToTarget(c))
+        render.play(Wait(1.5))
+        render.close()
+
+
+class DemoReplacementTransformOrTransform(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+
+        r_transform = VGroup(*[TextDecimalNumber(number=i, num_decimal_places=0) for i in range(1,4)])
+        text_1 = Text("ReplacementTransform", color=RED)
+        r_transform.add(text_1)
+
+        transform = VGroup(*[TextDecimalNumber(number=i, num_decimal_places=0) for i in range(4,7)])
+        text_2 = Text("Transform", color=BLUE)
+        transform.add(text_2)
+
+        ints = VGroup(r_transform, transform)
+        texts = VGroup(text_1, text_2).scale(0.75)
+        r_transform.arrange(direction=UP, buff=1)
+        transform.arrange(direction=UP, buff=1)
+
+        ints.arrange(buff=2)
+        self.add(ints, texts)
+
+        render.play(ReplacementTransform(r_transform[0], r_transform[1]))
+        render.play(ReplacementTransform(r_transform[2], texts[0]))
+
+        render.play(Transform(transform[0], transform[1]))
+        render.play(Transform(transform[1], transform[2]))
+        render.play(Wait(1.0))
+        render.close()
+
+
+class DemoRestore(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "Restore")
+
+        s = Square()
+        s.save_state()
+        self.add(s)
+        render.play(FadeIn(s))
+        render.play(s.animate.set_color(PURPLE).set_opacity(0.5).shift(2 * LEFT).scale(3))
+        render.play(s.animate.shift(5 * DOWN).rotate(PI / 4))
+        render.play(Wait(0.5))
+        render.play(Restore(s), run_time=2)
+        render.play(Wait(1.0))
+        render.close()
+
+
+class DemoScaleInPlace(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "ScaleInPlace")
+
+        t = Text("Hello World!")
+        self.add(t)
+        render.play(ScaleInPlace(t, 2))
+        render.play(Wait(1.0))
+        render.close()
+
+
+class DemoShrinkToCenter(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "ShrinkToCenter")
+
+        t = Text("Hello World!")
+        self.add(t)
+        render.play(ShrinkToCenter(t))
+        render.play(Wait(1.0))
+        render.close()
+
+
+class DemoTransformPathArc(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "TransformPathArc")
+
+        def make_arc_path(start, end, arc_angle):
+            points = []
+            p_fn = path_along_arc(arc_angle)
+            for alpha in range(0, 11):
+                points.append(p_fn(start, end, alpha / 10.0))
+            path = VMobject(stroke_color=YELLOW)
+            path.set_points_smoothly(points)
+            return path
+
+        left = Circle(stroke_color=BLUE_E, fill_opacity=1.0, radius=0.5).move_to(LEFT * 2)
+        colors = [TEAL_A, TEAL_B, TEAL_C, TEAL_D, TEAL_E, GREEN_A]
+        examples = [-90, 0, 30, 90, 180, 270]
+        anims = []
+        for idx, angle in enumerate(examples):
+            left_c = left.copy().shift((3 - idx) * UP)
+            left_c.fill_color = colors[idx]
+            right_c = left_c.copy().shift(4 * RIGHT)
+            path_arc = make_arc_path(left_c.get_center(), right_c.get_center(),
+                                     arc_angle=angle * DEGREES)
+            desc = Text('%d°' % examples[idx]).next_to(left_c, LEFT)
+            self.add(
+                path_arc.set_z_index(1),
+                desc.set_z_index(2),
+                left_c.set_z_index(3),
+            )
+            anims.append(Transform(left_c, right_c, path_arc=angle * DEGREES))
+
+        render.play(*anims, run_time=2)
+        render.play(Wait(1.0))
+        render.close()
+
+
+class DemoAnagram(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "TransformMatchingShapes Anagram")
+
+        src = Text("the morse code")
+        tar = Text("here come dots")
+        self.add(src)
+        render.play(Write(src))
+        render.play(Wait(0.5))
+        render.play(TransformMatchingShapes(src, tar, path_arc=PI / 2))
+        render.play(Wait(0.5))
+        render.close()
+
+
+class DemoMatchingEquationParts(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "TransformMatchingTex")
+
+        variables = VGroup(MathTex("a"), MathTex("b"), MathTex("c")).arrange(RIGHT).shift(UP)
+
+        eq1 = MathTex("{{x}}^2", "+", "{{y}}^2", "=", "{{z}}^2")
+        eq2 = MathTex("{{a}}^2", "+", "{{b}}^2", "=", "{{c}}^2")
+        eq3 = MathTex("{{a}}^2", "=", "{{c}}^2", "-", "{{b}}^2")
+
+        self.add(eq1)
+        render.play(Wait(0.5))
+        render.play(TransformMatchingTex(Group(eq1, variables), eq2))
+        render.play(Wait(0.5))
+        render.play(TransformMatchingTex(eq2, eq3))
+        render.play(Wait(0.5))
         render.close()
