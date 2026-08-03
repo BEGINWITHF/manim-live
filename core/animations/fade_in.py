@@ -23,17 +23,11 @@ class FadeIn(Animation):
     def begin(self, t):
         super().begin(t)
         self._start_positions = []
-        self._orig_radius = {}
-        self._orig_stroke_width = {}
         self._orig_points = {}
         for mob in self.mobjects:
             set_anim_opacity(mob, 0.0)
             self._start_positions.append(mob.get_center().copy())
-            if hasattr(mob, 'radius'):
-                self._orig_radius[id(mob)] = mob.radius
-            if hasattr(mob, 'stroke_width'):
-                self._orig_stroke_width[id(mob)] = mob.stroke_width
-            if self.fade_scale != 1.0 and not hasattr(mob, 'radius'):
+            if self.fade_scale != 1.0:
                 self._orig_points[id(mob)] = [
                     (fm, fm.get_points().copy())
                     for fm in mob.family_members_with_points()
@@ -55,11 +49,7 @@ class FadeIn(Animation):
 
             if self.fade_scale != 1.0:
                 target_scale = self.fade_scale + (1.0 - self.fade_scale) * alpha
-                if id(mob) in self._orig_radius:
-                    mob.radius = self._orig_radius[id(mob)] * target_scale
-                    if id(mob) in self._orig_stroke_width:
-                        mob.stroke_width = self._orig_stroke_width[id(mob)] * target_scale
-                elif id(mob) in self._orig_points:
+                if id(mob) in self._orig_points:
                     cx, cy = self._start_positions[i][0], self._start_positions[i][1]
                     for fm, orig in self._orig_points[id(mob)]:
                         scaled = orig.copy()

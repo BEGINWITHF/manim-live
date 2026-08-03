@@ -524,7 +524,7 @@ class VulkanRender(ShapeMixin, TextMixin):
                                 set_anim_opacity(mob, 0.0)
                             if mob not in all_mobjects:
                                 all_mobjects.append(mob)
-                    elif isinstance(sub, (Transform, _ManimTransform)):
+                    elif isinstance(sub, Transform):
                         if sub.mobject not in all_mobjects:
                             all_mobjects.append(sub.mobject)
                         if sub.target_mobject not in all_mobjects:
@@ -539,10 +539,31 @@ class VulkanRender(ShapeMixin, TextMixin):
                                 all_mobjects.append(sub.mobject)
                             sub.mobject._transforming = True
                         if hasattr(sub, 'target_mobject') and sub.target_mobject is not None:
-                            if sub.target_mobject not in all_mobjects:
-                                all_mobjects.append(sub.target_mobject)
+                            if not isinstance(sub, _ManimTransform) or type(sub) is _ManimTransform:
+                                if sub.target_mobject not in all_mobjects:
+                                    all_mobjects.append(sub.target_mobject)
+
+        def _is_descendant_of_scene(mob):
+            """Check if mob is already somewhere in the scene mobject tree."""
+            def _search(node, target):
+                if node is target:
+                    return True
+                for sub in getattr(node, 'submobjects', []):
+                    if _search(sub, target):
+                        return True
+                return False
+
+            for root in self.scene.mobjects:
+                if root is mob:
+                    continue
+                if _search(root, mob):
+                    return True
+            return False
 
         for mob in all_mobjects:
+            if _is_descendant_of_scene(mob):
+                self._skip_mob_ids.add(id(mob))
+                continue
             if mob not in self.scene.mobjects:
                 self.scene.add(mob)
 

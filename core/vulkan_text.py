@@ -418,22 +418,30 @@ class TextMixin:
 
         if do_stroke:
             seg_count = n // 4
-            prev_x, prev_y = None, None
-            for si in range(seg_count):
+            samples_per_seg = 8
+            vis_start = int(seg_count * progress_lower)
+            vis_end = int(seg_count * progress_upper)
+            stroke_pts = []
+            for si in range(vis_start, min(seg_count, vis_end + 1)):
                 idx = si * 4
                 p0x, p0y = flat[idx*3], flat[idx*3+1]
                 p1x, p1y = flat[(idx+1)*3], flat[(idx+1)*3+1]
                 p2x, p2y = flat[(idx+2)*3], flat[(idx+2)*3+1]
                 p3x, p3y = flat[(idx+3)*3], flat[(idx+3)*3+1]
-                steps = 4
-                for s in range(steps + 1):
-                    t = s / steps
+                for s in range(samples_per_seg + 1):
+                    t = s / samples_per_seg
                     u = 1.0 - t
                     bx = u*u*u*p0x + 3*u*u*t*p1x + 3*u*t*t*p2x + t*t*t*p3x
                     by = u*u*u*p0y + 3*u*u*t*p1y + 3*u*t*t*p2y + t*t*t*p3y
-                    if prev_x is not None:
-                        self.dll.AddLine(prev_x, prev_y, bx, by, 3, sri, sgi, sbi, a)
-                    prev_x, prev_y = bx, by
+                    stroke_pts.append((bx, by))
+            if len(stroke_pts) >= 2:
+                coords = (ctypes.c_float * (len(stroke_pts) * 2))()
+                alphas = (ctypes.c_float * len(stroke_pts))()
+                for i, (px, py) in enumerate(stroke_pts):
+                    coords[i * 2] = px
+                    coords[i * 2 + 1] = py
+                    alphas[i] = a
+                self.dll.AddLineStrip(coords, alphas, len(stroke_pts), int(stroke_w), sri, sgi, sbi, 1.0)
 
     def _send_text_stroke(self, mob, a, w, h, parent_offset=None):
         if not hasattr(mob, 'family_members_with_points'):
