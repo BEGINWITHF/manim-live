@@ -10,7 +10,7 @@ import numpy as np
 from manim import (
     Square, Circle, Line, Rectangle, Polygon, Polygram,
     Arrow, Dot, DashedLine,
-    Arc, Ellipse, Point, Text, VGroup, Group, OUT, ORIGIN, SVGMobject
+    Arc, Ellipse, Point, Text, VGroup, Group, OUT, ORIGIN
 )
 from manim.animation.transform import Transform as _ManimTransform
 from manim.animation.transform import FadeTransform as _ManimFadeTransform
@@ -57,6 +57,117 @@ import manim.animation.speedmodifier as _sm
 _sm.prepare_animation = _patched_prepare_animation
 import manim.animation.animation as _aa
 _aa.prepare_animation = _patched_prepare_animation
+
+# ── Monkey-patch MathTex to avoid \special{dvisvgm:raw} tags in TeX files ──
+# Standard manim wraps each tex_string in \special{dvisvgm:raw <g id='uniqueNNN'>}
+# so that dvisvgm produces named SVG groups.  We remove this wrapping and instead
+# assign SVG glyphs to tex_strings via positional matching (SVG elements appear in
+# the same order as the tex_strings they originate from).
+from manim.mobject.text.tex_mobject import MathTex as _OrigMathTex
+from manim.mobject.text.tex_mobject import MathTexPart, MATHTEX_SUBSTRING
+
+def _patched_join_tex_strings(self, tex_strings, substrings_to_isolate):
+    """Join tex_strings without \\special{dvisvgm:raw} wrapping.
+    Still populates matched_strings_and_ids so get_part_by_tex etc. can work."""
+    joined_string = ""
+    ssIdx = 0
+    for idx, tex_string in enumerate(tex_strings):
+        self.matched_strings_and_ids.append((tex_string, f"unique{idx:03d}"))
+        unprocessed_string = str(tex_string)
+        processed_string = ""
+        while len(unprocessed_string) > 0:
+            first_match = self._locate_first_match(
+                substrings_to_isolate, unprocessed_string
+            )
+            if first_match:
+                processed, unprocessed_string = self._patched_handle_match(
+                    ssIdx, first_match
+                )
+                processed_string = processed_string + processed
+                ssIdx += 1
+            else:
+                processed_string = processed_string + unprocessed_string
+                unprocessed_string = ""
+        string_part = processed_string
+        if idx < len(tex_strings) - 1:
+            string_part += self.arg_separator
+        joined_string = joined_string + string_part
+    return joined_string
+
+def _patched_handle_match(self, ssIdx, first_match):
+    """Handle substring isolation match without \\special wrapping."""
+    pre_match = first_match.group(1)
+    matched_string = first_match.group(2)
+    post_match = first_match.group(3)
+    self.matched_strings_and_ids.append(
+        (matched_string, f"unique{ssIdx:03d}{MATHTEX_SUBSTRING}")
+    )
+    processed_string = pre_match + matched_string
+    unprocessed_string = post_match
+    return processed_string, unprocessed_string
+
+def _patched_break_up_by_substrings(self):
+    """Reorganize submobjects into MathTexPart instances.
+    Falls back to positional matching when the SVG lacks named groups
+    (i.e. when \\special{dvisvgm:raw} was not used)."""
+    new_submobjects = []
+    try:
+        for tex_string, tex_string_id in self._main_matches:
+            mtp = MathTexPart()
+            mtp.tex_string = tex_string
+            mtp.add(*self.id_to_vgroup_dict[tex_string_id].submobjects)
+            new_submobjects.append(mtp)
+    except KeyError:
+        # ── positional fallback ──
+        # Collect leaf mobjects (SVG glyphs) from the root group.
+        # They appear in the same order as the tex_strings.
+        leaf_mobs = []
+        def _collect_leaves(vg):
+            for sub in (vg.submobjects if hasattr(vg, 'submobjects') else []):
+                has_subs = hasattr(sub, 'submobjects') and sub.submobjects
+                if has_subs:
+                    _collect_leaves(sub)
+                elif hasattr(sub, 'points') and len(sub.points) > 0:
+                    leaf_mobs.append(sub)
+        root = self.id_to_vgroup_dict.get("root")
+        if root is not None:
+            _collect_leaves(root)
+        if not leaf_mobs:
+            self.submobjects = new_submobjects
+            return self
+
+        main_matches = self._main_matches
+        total_chars = sum(max(1, len(ts)) for ts, _ in main_matches)
+        total_leaves = len(leaf_mobs)
+        leaf_idx = 0
+
+        for tex_string, tex_string_id in main_matches:
+            weight = max(1, len(tex_string))
+            alloc = max(1, round(total_leaves * weight / total_chars))
+            alloc = min(alloc, total_leaves - leaf_idx)
+            if alloc < 1:
+                alloc = 1
+            mtp = MathTexPart()
+            mtp.tex_string = tex_string
+            end = min(leaf_idx + alloc, total_leaves)
+            for i in range(leaf_idx, end):
+                mtp.add(leaf_mobs[i])
+            leaf_idx = end
+            new_submobjects.append(mtp)
+            # Populate id_to_vgroup_dict so get_part_by_tex etc. still work
+            self.id_to_vgroup_dict[tex_string_id] = mtp
+        # Give any stragglers to the last part
+        while leaf_idx < total_leaves and new_submobjects:
+            new_submobjects[-1].add(leaf_mobs[leaf_idx])
+            leaf_idx += 1
+
+    self.submobjects = new_submobjects
+    return self
+
+_OrigMathTex._join_tex_strings_with_unique_deliminters = _patched_join_tex_strings
+_OrigMathTex._handle_match = _patched_handle_match
+_OrigMathTex._patched_handle_match = _patched_handle_match  # used in patched_join above
+_OrigMathTex._break_up_by_substrings = _patched_break_up_by_substrings
 
 
 class BITMAPINFOHEADER(ctypes.Structure):
@@ -234,7 +345,10 @@ class VulkanRender(ShapeMixin, TextMixin):
 
     def sync(self, scene, angle=0.0):
         self.dll.ClearShapes()
+        skip_ids = getattr(self, '_skip_mob_ids', None)
         for mob in scene.mobjects:
+            if skip_ids and id(mob) in skip_ids:
+                continue
             self._send(mob, angle, parent_alpha=1.0)
 
     def _send(self, mob, angle=0.0, parent_alpha=1.0, parent_offset=None, parent_transforming=False, parent_is_text=False):
@@ -244,36 +358,29 @@ class VulkanRender(ShapeMixin, TextMixin):
         if a <= 0:
             return
 
-        rot = get_anim_rotation(mob) + angle
+        if hasattr(mob, '_rotation_about_point'):
+            rot = angle
+        else:
+            rot = get_anim_rotation(mob) + angle
         grow_rot = getattr(mob, '_grow_rot', 0.0)
         rot += grow_rot
 
         is_text = isinstance(mob, Text) or getattr(mob, '_is_text', False) or parent_is_text
 
-        if isinstance(mob, Text):
-            has_stroke = False
-            if hasattr(mob, 'family_members_with_points'):
-                for fm in mob.family_members_with_points():
-                    sw = fm.get_stroke_width() if hasattr(fm, 'get_stroke_width') else 0
-                    if sw > 0:
-                        try:
-                            sa = float(fm.stroke_rgbas[:, 3].max())
-                        except Exception:
-                            sa = 1.0
-                        if sa > 0:
-                            has_stroke = True
-                            break
-            if has_stroke:
-                self._send_text_stroke(mob, a, w, h, parent_offset)
-            elif getattr(mob, '_letter_alphas', None) is not None and hasattr(mob, 'submobjects') and mob.submobjects:
+        if isinstance(mob, Text) and hasattr(mob, 'submobjects') and mob.submobjects:
+            # Tag all text characters so they're recognized as text even
+            # when rendered through an intermediate Group (e.g. LaggedStartMap).
+            # This prevents the _transforming stroke logic in _send_vmobject
+            # from adding unwanted borders to text characters during animation.
+            for sub in mob.submobjects:
+                sub._is_text = True
+            if getattr(mob, '_letter_alphas', None) is not None:
                 self._send_text_write(mob, mob._letter_alphas, w, h, a)
-            elif hasattr(mob, 'submobjects') and mob.submobjects:
-                if a < 1.0:
-                    self._send_transformed_text(mob, w, h, alpha=a)
-                else:
-                    self._send_text_bitmap(mob, w, h, a)
+            else:
+                self._send_vmobject(mob, a, w, h, parent_offset, 0.0, is_text=is_text)
+            return
 
-        elif isinstance(mob, (VGroup, Group, SVGMobject)):
+        elif isinstance(mob, (VGroup, Group)):
             effective_alpha = parent_alpha * own_alpha
             if effective_alpha <= 0:
                 return
@@ -345,8 +452,6 @@ class VulkanRender(ShapeMixin, TextMixin):
                     lower = i * 1.0
                     sub_progress = max(0.0, min(1.0, value - lower))
                     sub._vulkan_progress = sub_progress
-                elif vgroup_progress < 1.0:
-                    sub._vulkan_progress = vgroup_progress
                 if about is not None:
                     sub_rot = rot
                 else:
@@ -375,6 +480,25 @@ class VulkanRender(ShapeMixin, TextMixin):
             return
 
         screen_rot = -rot
+
+        # For shapes with native dispatchers: if the mobject's points have been
+        # rotated (e.g. by .animate.rotate()), the native dispatcher won't show
+        # the rotation because it computes geometry from width/height/center.
+        # Detect rotated points and fall through to _send_vmobject.
+        _rot_check = isinstance(mob, (Square, Rectangle)) and not is_text
+        if _rot_check:
+            try:
+                pts = mob.get_points()
+                if len(pts) >= 4:
+                    edge = pts[1] - pts[0]  # first edge
+                    # Axis-aligned edges point at 0, π/2, π, or 3π/2.
+                    # sin(2θ) = 0 for all axis-aligned directions, ≠0 when rotated.
+                    if abs(math.sin(2.0 * math.atan2(float(edge[1]), float(edge[0])))) > 0.001:
+                        self._send_vmobject(mob, a, w, h, parent_offset, 0.0, is_text=is_text)
+                        return
+            except Exception:
+                pass
+
         if isinstance(mob, Square):
             self._send_square(mob, a, w, h, screen_rot, parent_offset)
         elif isinstance(mob, Rectangle):
@@ -404,14 +528,6 @@ class VulkanRender(ShapeMixin, TextMixin):
                 pts = mob.get_points()
                 if len(pts) >= 2:
                     self._send_vmobject(mob, a, w, h, parent_offset, rot, is_text=is_text)
-                elif hasattr(mob, 'submobjects') and mob.submobjects:
-                    # VMobject with 0 top-level points but has children
-                    # (e.g. MathTexPart → VMobjectFromSVGPath). Recurse.
-                    for sub in mob.submobjects:
-                        self._send(sub, rot, parent_alpha=a,
-                                   parent_offset=parent_offset,
-                                   parent_transforming=parent_transforming,
-                                   parent_is_text=is_text)
             except Exception:
                 pass
 
@@ -486,17 +602,23 @@ class VulkanRender(ShapeMixin, TextMixin):
             elif isinstance(anim, TransformMatchingAbstractBase):
                 if anim.mobject not in all_mobjects:
                     all_mobjects.append(anim.mobject)
-                # to_add (target) visible throughout — like old d4725b87f
-                ta = getattr(anim, 'to_add', None)
-                if ta is not None and ta not in all_mobjects:
-                    all_mobjects.append(ta)
-                # Add sub-animation mobjects to scene (Transform targets etc.)
-                for sub_anim in getattr(anim, 'animations', []):
-                    if isinstance(sub_anim, (Transform, _ManimTransform)):
-                        if sub_anim.mobject not in self.scene.mobjects:
-                            self.scene.add(sub_anim.mobject)
-                        if sub_anim.target_mobject not in self.scene.mobjects:
-                            self.scene.add(sub_anim.target_mobject)
+                # Don't add target_mobject here — clean_up_from_scene handles it
+                # after all transforms complete, to avoid premature rendering.
+                set_anim_opacity(anim.target_mobject, 0.0)
+                anim.mobject._transforming = True
+                for sub_anim in getattr(anim, '_anims', []):
+                    if isinstance(sub_anim, (FadeIn, FadeOut)):
+                        for mob in sub_anim.mobjects:
+                            if isinstance(sub_anim, FadeIn):
+                                set_anim_opacity(mob, 0.0)
+                            if mob not in all_mobjects:
+                                all_mobjects.append(mob)
+                    elif isinstance(sub_anim, (Transform, _ManimTransform)):
+                        if sub_anim.mobject not in all_mobjects:
+                            all_mobjects.append(sub_anim.mobject)
+                        if sub_anim.target_mobject not in all_mobjects:
+                            all_mobjects.append(sub_anim.target_mobject)
+                        set_anim_opacity(sub_anim.target_mobject, 0.0)
             elif isinstance(anim, FadeTransform):
                 if anim.mobject not in all_mobjects:
                     all_mobjects.append(anim.mobject)
@@ -517,6 +639,14 @@ class VulkanRender(ShapeMixin, TextMixin):
             elif isinstance(anim, (Transform, _ManimTransform)):
                 if anim.mobject not in all_mobjects:
                     all_mobjects.append(anim.mobject)
+                # ApplyMethod subclasses (Restore, ApplyPointwiseFunction, etc.)
+                # modify the mobject's points away from the original geometric shape.
+                # They need _transforming=True so the renderer uses _send_vmobject
+                # (point-based bezier path) instead of the shape-specific dispatcher
+                # (like _send_square) which ignores point changes.
+                from manim.animation.transform import ApplyMethod as _ManimApplyMethod
+                if isinstance(anim, _ManimApplyMethod):
+                    anim.mobject._transforming = True
                 # Tag FocusOn starting dot so _send_dot caps opacity at 3%
                 if type(anim).__name__ == 'FocusOn':
                     anim.mobject._dot_max_opacity = 0.03
@@ -530,11 +660,6 @@ class VulkanRender(ShapeMixin, TextMixin):
                             if sub is existing:
                                 self._skip_mob_ids.add(id(existing))
                                 break
-                # FadeTransform/FadeTransformPieces: pre-add target so it fades in
-                if hasattr(anim, 'to_add_on_completion') and anim.to_add_on_completion is not None:
-                    if anim.to_add_on_completion not in all_mobjects:
-                        all_mobjects.append(anim.to_add_on_completion)
-                        set_anim_opacity(anim.to_add_on_completion, 0.0)
             elif isinstance(anim, Succession):
                 for sub in anim.animations:
                     if isinstance(sub, (Create, Write, DrawBorderThenFill, FadeIn, Rotating, Rotate)) and sub.mobject:
@@ -618,23 +743,6 @@ class VulkanRender(ShapeMixin, TextMixin):
                             if not isinstance(sub, _ManimTransform) or type(sub) is _ManimTransform:
                                 if sub.target_mobject not in all_mobjects:
                                     all_mobjects.append(sub.target_mobject)
-                    # TransformMatchingTex etc.: pre-add to_add so it fades in
-                    if hasattr(anim, 'to_add') and anim.to_add is not None:
-                        if anim.to_add not in all_mobjects:
-                            all_mobjects.append(anim.to_add)
-                            set_anim_opacity(anim.to_add, 0.0)
-                    # Skip source mobjects that are part of sub-animations
-                    # to prevent double-rendering (e.g. TransformMatchingTex)
-                    for sub in anim.animations:
-                        sub_mob = getattr(sub, 'mobject', None)
-                        if sub_mob is not None:
-                            for existing in self.scene.mobjects:
-                                if sub_mob is existing:
-                                    self._skip_mob_ids.add(id(existing))
-                                    break
-                                for sm in getattr(sub_mob, 'submobjects', []):
-                                    if sm is existing:
-                                        self._skip_mob_ids.add(id(existing))
 
         def _is_descendant_of_scene(mob):
             """Check if mob is already somewhere in the scene mobject tree."""
@@ -720,6 +828,9 @@ class VulkanRender(ShapeMixin, TextMixin):
                             self.scene.add(sub_anim.mobject)
                         if sub_anim.target_mobject not in self.scene.mobjects:
                             self.scene.add(sub_anim.target_mobject)
+                        # Hide the target VGroup — it's only a shape reference;
+                        # the source mobject morphs into its shape during interpolate.
+                        set_anim_opacity(sub_anim.target_mobject, 0.0)
 
         self._active_anims = real_anims
         self._last_frame_time = time.time() - (1.0 / 30.0)
@@ -797,12 +908,6 @@ class VulkanRender(ShapeMixin, TextMixin):
                     alpha = elapsed / a.run_time if a.run_time > 0 else 1.0
                     alpha = max(0.0, min(1.0, alpha))
                     a.interpolate(alpha)
-                    # FadeTransform: fade in to_add_on_completion alongside the Group
-                    if hasattr(a, 'to_add_on_completion') and a.to_add_on_completion is not None:
-                        set_anim_opacity(a.to_add_on_completion, alpha)
-                    # TransformMatchingTex: fade in to_add alongside animation
-                    if hasattr(a, 'to_add') and a.to_add is not None:
-                        set_anim_opacity(a.to_add, alpha)
                     # interpolate() resets mobject points, erasing accumulated rotation.
                     # Clear _prev_vg_rotation so the delta loop reapplies the FULL rotation.
                     _maybe_clear_prev_vg_rotation(a)
@@ -811,29 +916,16 @@ class VulkanRender(ShapeMixin, TextMixin):
                         a.finish()
                         a.finished = True
                         if hasattr(a, 'clean_up_from_scene'):
-                            # Pre-added target via to_add_on_completion/to_add — suppress
-                            # duplicate add in manim's clean_up_from_scene
-                            toe = getattr(a, 'to_add_on_completion', None)
-                            if toe is not None and toe in self.scene.mobjects:
-                                self.scene.remove(toe)
-                            ta = getattr(a, 'to_add', None)
-                            if ta is not None and ta in self.scene.mobjects:
-                                self.scene.remove(ta)
                             a.clean_up_from_scene(self.scene)
-                            if toe is not None:
-                                set_anim_opacity(toe, 1.0)
-                            if ta is not None:
-                                set_anim_opacity(ta, 1.0)
                         mob = getattr(a, 'mobject', None)
                         if mob:
                             mob.resume_updating()
-                            # ApplyPointwiseFunction / ApplyMethod warp points
-                            # but the mobject is still a Square/Circle etc.
-                            # Keep _transforming=True so it renders via
-                            # _send_vmobject with actual points, not
-                            # the shape-specific renderer.
-                            from manim.animation.transform import ApplyMethod
-                            if not isinstance(a, ApplyMethod):
+                            # ApplyMethod subclasses (Restore, ApplyPointwiseFunction, etc.)
+                            # modify mobject points. Keep _transforming=True for most of them
+                            # (e.g. WarpSquare permanently warps the shape), but Restore
+                            # returns the mobject to its original shape — clear _transforming.
+                            from manim.animation.transform import ApplyMethod as _ManimApplyMethod2
+                            if not isinstance(a, _ManimApplyMethod2) or type(a).__name__ == 'Restore':
                                 Transform._set_transforming(mob, False)
                             if hasattr(mob, '_was_transforming_text'):
                                 del mob._was_transforming_text
@@ -860,10 +952,6 @@ class VulkanRender(ShapeMixin, TextMixin):
                         a.finish()
                         a.finished = True
                         if hasattr(a, 'clean_up_from_scene'):
-                            # Dedup target — already in scene from setup
-                            tgt = getattr(a, 'target_mobject', None)
-                            if tgt is not None and tgt in self.scene.mobjects:
-                                self.scene.remove(tgt)
                             a.clean_up_from_scene(self.scene)
                 if not getattr(a, 'finished', False):
                     all_done = False

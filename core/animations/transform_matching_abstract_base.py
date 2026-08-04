@@ -3,6 +3,7 @@ import numpy as np
 from manim import VGroup
 from core.animations.transform import Transform
 from core.animations.fade_out import FadeOut
+from core.animations.fade_in import FadeIn
 from core.animations.fade_transform import FadeTransform
 
 
@@ -21,7 +22,9 @@ class TransformMatchingAbstractBase(Animation):
         self.transform_mismatches = transform_mismatches
         self.fade_transform_mismatches = fade_transform_mismatches
         self.key_map = key_map or {}
+        self._transform_kwargs = kwargs
         self._anims = []
+        self._scene = None
         super().__init__(mobject, run_time=run_time, **kwargs)
 
     def get_shape_map(self, mobject):
@@ -43,18 +46,16 @@ class TransformMatchingAbstractBase(Animation):
         source_map = self.get_shape_map(self.mobject)
         target_map = self.get_shape_map(self.target_mobject)
 
-        # Matched parts: morph source→target
         transform_source = VGroup()
         transform_target = VGroup()
         for key in set(source_map).intersection(target_map):
             transform_source.add(source_map[key])
             transform_target.add(target_map[key])
-        if len(transform_source.submobjects) > 0:
-            self._anims.append(
-                Transform(transform_source, transform_target, run_time=self.run_time)
-            )
+        self._anims.append(
+            Transform(transform_source, transform_target, run_time=self.run_time,
+                      **self._transform_kwargs)
+        )
 
-        # Key-mapped parts
         key_mapped_source = VGroup()
         key_mapped_target = VGroup()
         for key1, key2 in self.key_map.items():
@@ -68,7 +69,6 @@ class TransformMatchingAbstractBase(Animation):
                 FadeTransform(key_mapped_source, key_mapped_target, run_time=self.run_time)
             )
 
-        # Unmatched parts
         fade_source = VGroup()
         fade_target = VGroup()
         for key in set(source_map).difference(target_map):
@@ -77,37 +77,29 @@ class TransformMatchingAbstractBase(Animation):
             fade_target.add(target_map[key])
 
         if self.transform_mismatches:
-            if len(fade_source.submobjects) > 0:
-                self._anims.append(
-                    Transform(fade_source, fade_target, run_time=self.run_time,
-                              replace_mobject_with_target_in_scene=True)
-                )
+            self._anims.append(
+                Transform(fade_source, fade_target, run_time=self.run_time,
+                          replace_mobject_with_target_in_scene=True,
+                          **self._transform_kwargs)
+            )
         elif self.fade_transform_mismatches:
-            if len(fade_source.submobjects) > 0:
-                self._anims.append(
-                    FadeTransform(fade_source, fade_target, run_time=self.run_time)
-                )
+            self._anims.append(
+                FadeTransform(fade_source, fade_target, run_time=self.run_time)
+            )
         else:
-            if len(fade_source.submobjects) > 0:
-                self._anims.append(
-                    FadeOut(fade_source, target_position=fade_target, run_time=self.run_time)
-                )
-
-        # Source visible (sub-animations modify its submobjects)
-        # Target fades in during interpolate
-        set_anim_opacity(self.mobject, 1.0)
-        set_anim_opacity(self.target_mobject, 0.0)
+            fade_target_copy = fade_target.copy()
+            self._anims.append(
+                FadeOut(fade_source, target_position=fade_target, run_time=self.run_time)
+            )
+            self._anims.append(
+                FadeIn(fade_target_copy, target_position=fade_target, run_time=self.run_time)
+            )
+            self._fade_target_copy = fade_target_copy
 
         for anim in self._anims:
             anim.begin(t)
 
     def interpolate(self, t):
-        alpha = (t - self.start_time) / self.run_time if self.run_time > 0 else 1.0
-        alpha = max(0.0, min(1.0, alpha))
-        if self.reverse_rate_function:
-            alpha = 1.0 - alpha
-        alpha = self.rate_func(alpha)
-        set_anim_opacity(self.target_mobject, alpha)
         for anim in self._anims:
             anim.interpolate(t)
 
@@ -117,11 +109,18 @@ class TransformMatchingAbstractBase(Animation):
             anim.finish()
 
     def get_all_mobjects(self):
-        return [self.mobject, self.target_mobject]
+        mobs = [self.mobject]
+        ftc = getattr(self, '_fade_target_copy', None)
+        if ftc is not None:
+            mobs.append(ftc)
+        return mobs
 
     def clean_up_from_scene(self, scene):
         if self.mobject in scene.mobjects:
             scene.remove(self.mobject)
+        ftc = getattr(self, '_fade_target_copy', None)
+        if ftc is not None and ftc in scene.mobjects:
+            scene.remove(ftc)
         if self.target_mobject not in scene.mobjects:
             scene.add(self.target_mobject)
         set_anim_opacity(self.target_mobject, 1.0)
