@@ -1,19 +1,16 @@
-# This might not cause a bug or issue, check for other place first --TT Noted
 from core.animations.base import Animation, set_anim_opacity, get_anim_opacity
 import numpy as np
 
 
 class FadeTransform(Animation):
-    def __init__(self, mobject, target_mobject, stretch=True, dim_to_match=1, run_time=1.0, **kwargs):
+    def __init__(self, mobject, target_mobject, run_time=1.0, **kwargs):
         self.target_mobject = target_mobject
         self.to_add_on_completion = target_mobject
-        self.stretch = stretch
-        self.dim_to_match = dim_to_match
         self._source_start_pos = None
         self._target_start_pos = None
         try:
             self._ghost = target_mobject.copy()
-            self._ghost._transforming = True
+            self._ghost.move_to(mobject.get_center())
         except Exception:
             self._ghost = None
         super().__init__(mobject, run_time=run_time, **kwargs)
@@ -26,9 +23,10 @@ class FadeTransform(Animation):
         self._target_start_pos = self.target_mobject.get_center().copy()
         if self._ghost is not None:
             self._ghost.move_to(self._source_start_pos)
-            set_anim_opacity(self._ghost, 0.0)
         set_anim_opacity(self.mobject, 1.0)
-        set_anim_opacity(self.target_mobject, 0.0)
+        set_anim_opacity(self.target_mobject, 1.0)
+        if self._ghost is not None:
+            set_anim_opacity(self._ghost, 0.0)
 
     def interpolate(self, t):
         alpha = (t - self.start_time) / self.run_time if self.run_time > 0 else 1.0
@@ -43,12 +41,9 @@ class FadeTransform(Animation):
         self.mobject.move_to(cur_pos)
         if self._ghost is not None:
             self._ghost.move_to(cur_pos)
-            if alpha >= 1.0:
-                self._ghost._transforming = False
-                for sub in self._ghost.submobjects:
-                    sub._transforming = False
-            set_anim_opacity(self._ghost, alpha)
+            set_anim_opacity(self._ghost, max(0.0, alpha))
         set_anim_opacity(self.mobject, max(0.0, 1.0 - alpha))
+        set_anim_opacity(self.target_mobject, 1.0)
 
     def finish(self):
         super().finish()
