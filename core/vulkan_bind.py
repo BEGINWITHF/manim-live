@@ -1,6 +1,7 @@
 import ctypes
 import inspect
 import os
+import re
 import math
 import time
 import shutil
@@ -168,6 +169,99 @@ _OrigMathTex._join_tex_strings_with_unique_deliminters = _patched_join_tex_strin
 _OrigMathTex._handle_match = _patched_handle_match
 _OrigMathTex._patched_handle_match = _patched_handle_match  # used in patched_join above
 _OrigMathTex._break_up_by_substrings = _patched_break_up_by_substrings
+
+# ── Replace MathTex rendering with native Pango Text (zero LaTeX) ──
+# MathTex.__init__ normally compiles TeX → DVI → SVG via tex_to_svg_file().
+# We monkey-patch __init__ on the original class so even previously-imported
+# references (e.g. `from manim import *` in the scene) use Text rendering.
+
+_SUPER_TRANS = str.maketrans('0123456789', '⁰¹²³⁴⁵⁶⁷⁸⁹')
+_SUB_TRANS = str.maketrans('0123456789', '₀₁₂₃₄₅₆₇₈₉')
+
+def _latex_to_unicode(tex_str):
+    """Convert simple LaTeX math notation to Unicode text.
+    Handles: ^n/^{n} → superscript, _n/_{n} → subscript."""
+    s = tex_str
+    s = re.sub(r'\^\{?(\d+)\}?', lambda m: m.group(1).translate(_SUPER_TRANS), s)
+    s = re.sub(r'_\{?(\d+)\}?', lambda m: m.group(1).translate(_SUB_TRANS), s)
+    return s
+
+_BRACE_RE = re.compile(r'\{\{(.+?)\}\}')
+
+def _split_tex_on_braces(tex_string):
+    """Split a tex_string on {{...}} isolation markers.
+
+    Returns a list of (tex_key, unicode_text) pairs.  Each {{X}} inside
+    the string is extracted as a separate key; the surrounding text
+    (including any non-isolated TeX) gets its own keys."""
+    parts = []
+    last_end = 0
+    for m in _BRACE_RE.finditer(tex_string):
+        prefix = tex_string[last_end:m.start()]
+        if prefix:
+            parts.append((prefix, _latex_to_unicode(prefix)))
+        iso = m.group(1)
+        parts.append((iso, _latex_to_unicode(iso)))
+        last_end = m.end()
+    suffix = tex_string[last_end:]
+    if suffix:
+        parts.append((suffix, _latex_to_unicode(suffix)))
+    return parts
+
+def _native_mathtex_init(self, *tex_strings, arg_separator=' ',
+                          substrings_to_isolate=None, tex_to_color_map=None,
+                          tex_environment='align*', **kwargs):
+    """Monkey-patched MathTex.__init__ — renders via Pango Text, no LaTeX.
+
+    Accepts the same arguments as the original MathTex (including {{X}}
+    isolation notation) and produces a VGroup of MathTexPart objects
+    keyed by tex_string, compatible with TransformMatchingTex."""
+    from manim import Text, VGroup, RIGHT
+    from manim.mobject.text.tex_mobject import MathTexPart
+
+    font_size = kwargs.pop('font_size', 48)
+
+    math_parts = []
+    for ts in tex_strings:
+        str_ts = str(ts)
+        brace_parts = _split_tex_on_braces(str_ts)
+        if not brace_parts:
+            # Plain string, no double-brace isolation
+            uni = _latex_to_unicode(str_ts)
+            text_mob = Text(uni, font_size=font_size, **kwargs)
+            mtp = MathTexPart()
+            mtp.fill_opacity = 1.0
+            mtp.tex_string = str_ts
+            mtp.add(*list(text_mob.submobjects))
+            math_parts.append(mtp)
+        else:
+            for key, uni in brace_parts:
+                text_mob = Text(uni, font_size=font_size, **kwargs)
+                mtp = MathTexPart()
+                mtp.fill_opacity = 1.0
+                mtp.tex_string = key
+                mtp.add(*list(text_mob.submobjects))
+                math_parts.append(mtp)
+
+    # Build result directly as VGroup — don't try to reuse self (broken state)
+    result = VGroup(*math_parts)
+    result.arrange(RIGHT, buff=0.15)
+
+    # MathTex-compatible attributes that TransformMatchingTex/scene code expect
+    result.tex_strings = list(tex_strings)
+    result.arg_separator = arg_separator
+    result.tex_environment = tex_environment
+    result.substrings_to_isolate = list(substrings_to_isolate or [])
+    result.tex_to_color_map = dict(tex_to_color_map or {})
+
+    # Transfer ownership: copy result's state into self
+    self.__dict__.update(result.__dict__)
+    self.__class__ = type(result)
+
+# Monkey-patch __init__ on the ORIGINAL MathTex class.
+# Because `from manim import *` in the scene already bound MathTex to this
+# exact class object, patching it in place catches all existing references.
+_OrigMathTex.__init__ = _native_mathtex_init
 
 
 class BITMAPINFOHEADER(ctypes.Structure):
@@ -346,6 +440,27 @@ class VulkanRender(ShapeMixin, TextMixin):
     def sync(self, scene, angle=0.0):
         self.dll.ClearShapes()
         skip_ids = getattr(self, '_skip_mob_ids', None)
+        # Also skip any root that is a descendant of another root (prevents double render)
+        def _search(node, target):
+            if node is target:
+                return True
+            for sub in getattr(node, 'submobjects', []):
+                if _search(sub, target):
+                    return True
+            return False
+        extra_skip = set()
+        roots = list(scene.mobjects)
+        for i, r in enumerate(roots):
+            for j, other in enumerate(roots):
+                if i == j:
+                    continue
+                if _search(other, r):
+                    extra_skip.add(id(r))
+                    break
+        if skip_ids is None:
+            skip_ids = extra_skip
+        else:
+            skip_ids |= extra_skip
         for mob in scene.mobjects:
             if skip_ids and id(mob) in skip_ids:
                 continue
@@ -358,10 +473,7 @@ class VulkanRender(ShapeMixin, TextMixin):
         if a <= 0:
             return
 
-        if hasattr(mob, '_rotation_about_point'):
-            rot = angle
-        else:
-            rot = get_anim_rotation(mob) + angle
+        rot = get_anim_rotation(mob) + angle
         grow_rot = getattr(mob, '_grow_rot', 0.0)
         rot += grow_rot
 
@@ -452,10 +564,7 @@ class VulkanRender(ShapeMixin, TextMixin):
                     lower = i * 1.0
                     sub_progress = max(0.0, min(1.0, value - lower))
                     sub._vulkan_progress = sub_progress
-                if about is not None:
-                    sub_rot = rot
-                else:
-                    sub_rot = get_anim_rotation(sub)
+                sub_rot = rot
                 sub_is_text = isinstance(sub, Text) or getattr(sub, '_is_text', False)
                 effective_sub_offset = None if sub_is_text else sub_offset
                 # Propagate _grow_scale/_grow_point from parent VGroup to submobjects
@@ -639,14 +748,12 @@ class VulkanRender(ShapeMixin, TextMixin):
             elif isinstance(anim, (Transform, _ManimTransform)):
                 if anim.mobject not in all_mobjects:
                     all_mobjects.append(anim.mobject)
-                # ApplyMethod subclasses (Restore, ApplyPointwiseFunction, etc.)
-                # modify the mobject's points away from the original geometric shape.
-                # They need _transforming=True so the renderer uses _send_vmobject
-                # (point-based bezier path) instead of the shape-specific dispatcher
-                # (like _send_square) which ignores point changes.
-                from manim.animation.transform import ApplyMethod as _ManimApplyMethod
-                if isinstance(anim, _ManimApplyMethod):
-                    anim.mobject._transforming = True
+                # All _ManimTransform subclasses (Transform, ClockwiseTransform,
+                # CounterclockwiseTransform, ApplyMethod, etc.) modify the mobject's
+                # points during interpolate(). They need _transforming=True so the
+                # renderer uses _send_vmobject (point-based bezier path) instead of
+                # the shape-specific dispatcher (like _send_dot) which ignores point changes.
+                anim.mobject._transforming = True
                 # Tag FocusOn starting dot so _send_dot caps opacity at 3%
                 if type(anim).__name__ == 'FocusOn':
                     anim.mobject._dot_max_opacity = 0.03
@@ -920,12 +1027,19 @@ class VulkanRender(ShapeMixin, TextMixin):
                         mob = getattr(a, 'mobject', None)
                         if mob:
                             mob.resume_updating()
-                            # ApplyMethod subclasses (Restore, ApplyPointwiseFunction, etc.)
-                            # modify mobject points. Keep _transforming=True for most of them
-                            # (e.g. WarpSquare permanently warps the shape), but Restore
-                            # returns the mobject to its original shape — clear _transforming.
+                            # After the animation ends, clear _transforming only when
+                            # the mobject's appearance reverts to its original shape.
+                            # Keep it for permanent morphs:
+                            #   - ApplyMethod (WarpSquare, etc.) except Restore
+                            #   - _ManimTransform without replacement (ClockwiseTransform
+                            #     permanently morphs the mobject's points to the target)
                             from manim.animation.transform import ApplyMethod as _ManimApplyMethod2
-                            if not isinstance(a, _ManimApplyMethod2) or type(a).__name__ == 'Restore':
+                            keep = False
+                            if isinstance(a, _ManimApplyMethod2):
+                                keep = type(a).__name__ != 'Restore'
+                            elif isinstance(a, _ManimTransform) and not getattr(a, 'replace_mobject_with_target_in_scene', False):
+                                keep = True
+                            if not keep:
                                 Transform._set_transforming(mob, False)
                             if hasattr(mob, '_was_transforming_text'):
                                 del mob._was_transforming_text

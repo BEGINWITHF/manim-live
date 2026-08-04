@@ -43,8 +43,7 @@ class FadeTransform(Animation):
             self._source_copy.align_data(self._target_copy)
             set_anim_opacity(self._ghost, 0.0)
         set_anim_opacity(self.mobject, 1.0)
-        # Target stays at full opacity so the circle on the right is always visible
-        set_anim_opacity(self.target_mobject, 1.0)
+        set_anim_opacity(self.target_mobject, 0.0)
 
     def interpolate(self, t):
         alpha = (t - self.start_time) / self.run_time if self.run_time > 0 else 1.0

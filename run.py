@@ -101,7 +101,7 @@ SCENES = [
     ("74", "ShrinkToCenter",                                     DemoShrinkToCenter),
     ("75", "TransformPathArc",                                    DemoTransformPathArc),
     ("76", "TransformMatchingShapes Anagram",                     DemoAnagram),
-    ("77", "TransformMatchingTex Equations",                  DemoMatchingEquationParts),
+    ("77", "TransformMatchingShapes Equations",             DemoMatchingEquationParts),
 ]
 
 
