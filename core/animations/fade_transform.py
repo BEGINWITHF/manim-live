@@ -57,7 +57,17 @@ class FadeTransform(Animation):
         )
         self.mobject.move_to(cur_pos)
         if self._ghost is not None:
-            self._ghost.interpolate(self._source_copy, self._target_copy, alpha)
+            # VGroup.interpolate() doesn't propagate to submobjects, so
+            # interpolate each child individually for proper shape morphing.
+            if hasattr(self._ghost, 'submobjects') and self._ghost.submobjects:
+                for gs, ss, ts in zip(
+                    self._ghost.submobjects,
+                    self._source_copy.submobjects,
+                    self._target_copy.submobjects,
+                ):
+                    gs.interpolate(ss, ts, alpha)
+            else:
+                self._ghost.interpolate(self._source_copy, self._target_copy, alpha)
             self._ghost.move_to(cur_pos)
             if alpha >= 1.0:
                 self._ghost._transforming = False

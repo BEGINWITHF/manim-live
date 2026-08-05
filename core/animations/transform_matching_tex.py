@@ -7,19 +7,24 @@ class TransformMatchingTex(TransformMatchingAbstractBase):
     def get_mobject_parts(mobject):
         """Recursively extract MathTexPart leaf submobjects.
 
-        For Groups/VGroups, recurse into each direct child.  For non-group
-        mobjects (MathTex), return their submobjects — these are the
-        MathTexPart instances with tex_string attributes that serve as
-        matching keys.  This matches the original manim behaviour so that
-        ``Group(eq1, variables)`` yields the individual parts of eq1
-        AND the parts of each MathTex inside variables, not just the
-        two top-level items."""
+        For Groups/VGroups, recurse into each direct child.  MathTex
+        instances (which now carry tex_strings after the vulkan_bind
+        monkeypatch) yield their MathTexPart submobjects directly.
+        Individual MathTexPart objects (which carry tex_string) are
+        returned as-is — never recursed into their Text children."""
+        # MathTex (now VGroup via class reassignment): has tex_strings list
+        # Must check BEFORE tex_string, because MathTex also has tex_string
+        if hasattr(mobject, 'tex_strings'):
+            return list(mobject.submobjects)
+        # MathTexPart: has its own tex_string but no tex_strings — return it directly
+        if hasattr(mobject, 'tex_string'):
+            return [mobject]
         if isinstance(mobject, (Group, VGroup)):
             parts = []
             for s in mobject.submobjects:
                 parts.extend(TransformMatchingTex.get_mobject_parts(s))
             return parts
-        # MathTex / SingleStringMathTex: return its MathTexPart submobjects
+        # Fallback: any leftover mobject with children
         if hasattr(mobject, 'submobjects') and mobject.submobjects:
             return list(mobject.submobjects)
         return [mobject]

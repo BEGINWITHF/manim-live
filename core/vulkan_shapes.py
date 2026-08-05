@@ -459,13 +459,16 @@ class ShapeMixin:
         sw = max(1, round(self._stroke_width(mob)))
         self.dll.AddArc(sx, sy, rad, sa, ang, r, g, b, sw, a)
 
-    def _send_polygon(self, mob, verts, alpha=1.0):
+    def _send_polygon(self, mob, verts, alpha=1.0, rot_override=None, parent_offset=None):
         w, h = self.win_w, self.win_h
         cx, cy, _ = mob.get_center()
+        if parent_offset is not None:
+            cx += parent_offset[0]
+            cy += parent_offset[1]
         sx, sy = manim_to_screen(cx, cy, w, h)
         br, bg, bb = self._stroke_color(mob)
         bw = self._stroke_width(mob)
-        rot = -get_anim_rotation(mob)
+        rot = -get_anim_rotation(mob) if rot_override is None else rot_override
         progress = getattr(mob, '_vulkan_progress', 1.0)
         has_bounds = hasattr(mob, '_vulkan_progress_upper')
         if has_bounds:
@@ -483,7 +486,12 @@ class ShapeMixin:
         if fo <= 0:
             flat = []
             for v in verts:
-                vx, vy = manim_to_screen(v[0], v[1], w, h)
+                vx = float(v[0])
+                vy = float(v[1])
+                if parent_offset is not None:
+                    vx += parent_offset[0]
+                    vy += parent_offset[1]
+                vx, vy = manim_to_screen(vx, vy, w, h)
                 vx, vy = self._rotate_point(vx, vy, sx, sy, rot)
                 flat.append(vx)
                 flat.append(vy)
@@ -533,7 +541,12 @@ class ShapeMixin:
         else:
             flat = []
             for v in verts:
-                vx, vy = manim_to_screen(v[0], v[1], w, h)
+                vx = float(v[0])
+                vy = float(v[1])
+                if parent_offset is not None:
+                    vx += parent_offset[0]
+                    vy += parent_offset[1]
+                vx, vy = manim_to_screen(vx, vy, w, h)
                 vx, vy = self._rotate_point(vx, vy, sx, sy, rot)
                 flat.append(vx)
                 flat.append(vy)

@@ -69,30 +69,42 @@ class TransformMatchingAbstractBase(Animation):
                 FadeTransform(key_mapped_source, key_mapped_target, run_time=self.run_time)
             )
 
-        fade_source = VGroup()
-        fade_target = VGroup()
+        fade_source_parts = []
+        fade_target_parts = []
         for key in set(source_map).difference(target_map):
-            fade_source.add(source_map[key])
+            fade_source_parts.extend(source_map[key].submobjects)
         for key in set(target_map).difference(source_map):
-            fade_target.add(target_map[key])
+            fade_target_parts.extend(target_map[key].submobjects)
 
         if self.transform_mismatches:
+            fade_source = VGroup(*fade_source_parts)
+            fade_target = VGroup(*fade_target_parts)
             self._anims.append(
                 Transform(fade_source, fade_target, run_time=self.run_time,
                           replace_mobject_with_target_in_scene=True,
                           **self._transform_kwargs)
             )
         elif self.fade_transform_mismatches:
+            fade_source = VGroup(*fade_source_parts)
+            fade_target = VGroup(*fade_target_parts)
             self._anims.append(
                 FadeTransform(fade_source, fade_target, run_time=self.run_time)
             )
         else:
-            fade_target_copy = fade_target.copy()
+            # Fade out mismatched source parts, fade in mismatched target parts.
+            # Use VGroup wrappers (like original manim) so the scene.add at line
+            # 1011-1012 picks up the entire Group, not just the first part.
+            fade_source = VGroup(*fade_source_parts)
+            fade_target_copy = VGroup(*fade_target_parts).copy()
             self._anims.append(
-                FadeOut(fade_source, target_position=fade_target, run_time=self.run_time)
+                FadeOut(fade_source, shift=None,
+                        target_position=fade_target_copy,
+                        run_time=self.run_time)
             )
             self._anims.append(
-                FadeIn(fade_target_copy, target_position=fade_target, run_time=self.run_time)
+                FadeIn(fade_target_copy, shift=None,
+                       target_position=fade_target_copy,
+                       run_time=self.run_time)
             )
             self._fade_target_copy = fade_target_copy
 
@@ -121,6 +133,12 @@ class TransformMatchingAbstractBase(Animation):
         ftc = getattr(self, '_fade_target_copy', None)
         if ftc is not None and ftc in scene.mobjects:
             scene.remove(ftc)
+        # Remove sub-anims' transform_source/transform_target VGroups
+        for sub_anim in getattr(self, '_anims', []):
+            if hasattr(sub_anim, 'mobject') and sub_anim.mobject in scene.mobjects:
+                scene.remove(sub_anim.mobject)
+            if hasattr(sub_anim, 'target_mobject') and sub_anim.target_mobject in scene.mobjects:
+                scene.remove(sub_anim.target_mobject)
         if self.target_mobject not in scene.mobjects:
             scene.add(self.target_mobject)
         set_anim_opacity(self.target_mobject, 1.0)

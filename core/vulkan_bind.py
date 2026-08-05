@@ -11,7 +11,7 @@ import numpy as np
 from manim import (
     Square, Circle, Line, Rectangle, Polygon, Polygram,
     Arrow, Dot, DashedLine,
-    Arc, Ellipse, Point, Text, VGroup, Group, OUT, ORIGIN
+    Arc, Ellipse, Point, Text, VGroup, Group, OUT, ORIGIN, WHITE
 )
 from manim.animation.transform import Transform as _ManimTransform
 from manim.animation.transform import FadeTransform as _ManimFadeTransform
@@ -170,91 +170,163 @@ _OrigMathTex._handle_match = _patched_handle_match
 _OrigMathTex._patched_handle_match = _patched_handle_match  # used in patched_join above
 _OrigMathTex._break_up_by_substrings = _patched_break_up_by_substrings
 
-# ── Replace MathTex rendering with native Pango Text (zero LaTeX) ──
+# ── Replace MathTex rendering with native Text layout (zero LaTeX) ──
 # MathTex.__init__ normally compiles TeX → DVI → SVG via tex_to_svg_file().
 # We monkey-patch __init__ on the original class so even previously-imported
-# references (e.g. `from manim import *` in the scene) use Text rendering.
+# references (e.g. `from manim import *` in the scene) avoid LaTeX.
 
-_SUPER_TRANS = str.maketrans('0123456789', '⁰¹²³⁴⁵⁶⁷⁸⁹')
-_SUB_TRANS = str.maketrans('0123456789', '₀₁₂₃₄₅₆₇₈₉')
+_SUPER_TRANS = str.maketrans('0123456789+-=()', '⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾')
+_SUB_TRANS = str.maketrans('0123456789+-=()', '₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎')
+_SCRIPT_SCALE = 0.62
+_SCRIPT_X_TIGHTEN = 0.08
+_NORMAL_PART_BUFF = 0.15
 
-def _latex_to_unicode(tex_str):
-    """Convert simple LaTeX math notation to Unicode text.
-    Handles: ^n/^{n} → superscript, _n/_{n} → subscript."""
-    s = tex_str
-    s = re.sub(r'\^\{?(\d+)\}?', lambda m: m.group(1).translate(_SUPER_TRANS), s)
-    s = re.sub(r'_\{?(\d+)\}?', lambda m: m.group(1).translate(_SUB_TRANS), s)
+def _convert_visible_math_text(text, translate_table=None):
+    s = str(text)
+    s = s.replace(r'\cdot', '·').replace(r'\times', '×')
+    s = s.replace(r'\to', '→').replace(r'\rightarrow', '→')
+    s = s.replace(r'\left', '').replace(r'\right', '')
+    s = s.replace('{', '').replace('}', '')
+    if translate_table is not None:
+        s = s.translate(translate_table)
     return s
 
-_BRACE_RE = re.compile(r'\{\{(.+?)\}\}')
+def _consume_script_content(tex_string, start_index):
+    if start_index >= len(tex_string):
+        return '', start_index
+    if tex_string[start_index] != '{':
+        return tex_string[start_index], start_index + 1
 
-def _split_tex_on_braces(tex_string):
-    """Split a tex_string on {{...}} isolation markers.
+    depth = 1
+    idx = start_index + 1
+    while idx < len(tex_string) and depth > 0:
+        ch = tex_string[idx]
+        if ch == '{':
+            depth += 1
+        elif ch == '}':
+            depth -= 1
+        idx += 1
+    return tex_string[start_index + 1:idx - 1], idx
 
-    Returns a list of (tex_key, unicode_text) pairs.  Each {{X}} inside
-    the string is extracted as a separate key; the surrounding text
-    (including any non-isolated TeX) gets its own keys."""
-    parts = []
-    last_end = 0
-    for m in _BRACE_RE.finditer(tex_string):
-        prefix = tex_string[last_end:m.start()]
-        if prefix:
-            parts.append((prefix, _latex_to_unicode(prefix)))
-        iso = m.group(1)
-        parts.append((iso, _latex_to_unicode(iso)))
-        last_end = m.end()
-    suffix = tex_string[last_end:]
-    if suffix:
-        parts.append((suffix, _latex_to_unicode(suffix)))
-    return parts
+def _tokenize_math_text(tex_string):
+    tokens = []
+    idx = 0
+    while idx < len(tex_string):
+        ch = tex_string[idx]
+        if ch in '^_':
+            content, idx = _consume_script_content(tex_string, idx + 1)
+            if content:
+                tokens.append(('sup' if ch == '^' else 'sub', content))
+            continue
+
+        start = idx
+        while idx < len(tex_string) and tex_string[idx] not in '^_':
+            idx += 1
+        if idx > start:
+            tokens.append(('base', tex_string[start:idx]))
+    return tokens or [('base', tex_string)]
+
+def _make_text_token(text, font_size, **kwargs):
+    return Text(_convert_visible_math_text(text), font_size=font_size, fill_color=WHITE, **kwargs)
+
+def _make_script_token(text, font_size, role, **kwargs):
+    translate = _SUPER_TRANS if role == 'sup' else _SUB_TRANS
+    visible = _convert_visible_math_text(text, translate_table=translate)
+    return Text(visible, font_size=font_size * _SCRIPT_SCALE, fill_color=WHITE, **kwargs)
+
+def _position_script_token(mob, anchor, role):
+    x = anchor.get_right()[0] + mob.width * 0.20 - _SCRIPT_X_TIGHTEN
+    if role == 'sup':
+        y = anchor.get_top()[1] - mob.height * 0.05
+    else:
+        y = anchor.get_bottom()[1] + mob.height * 0.05
+    mob.move_to([x + mob.width / 2, y, 0])
+
+def _build_math_part(tex_string, font_size, **kwargs):
+    tokens = _tokenize_math_text(str(tex_string))
+    part = MathTexPart()
+    part.tex_string = str(tex_string)
+    part.fill_opacity = 1.0
+
+    cursor_x = 0.0
+    baseline_anchor = None
+    part_role = 'normal'
+
+    for idx, (role, content) in enumerate(tokens):
+        mob = _make_text_token(content, font_size, **kwargs) if role == 'base' else _make_script_token(content, font_size, role, **kwargs)
+
+        if role == 'base':
+            mob.move_to([cursor_x + mob.width / 2, 0, 0])
+            cursor_x = mob.get_right()[0] + 0.02
+            baseline_anchor = mob
+            part_role = 'normal'
+        else:
+            if baseline_anchor is None and idx == 0 and len(tokens) == 1:
+                mob.move_to([mob.width / 2, 0, 0])
+                part_role = role
+            else:
+                anchor = baseline_anchor if baseline_anchor is not None else mob
+                _position_script_token(mob, anchor, role)
+                cursor_x = max(cursor_x, mob.get_right()[0] + 0.02)
+
+        part.add(mob)
+
+    part._math_role = part_role
+    return part
+
+def _layout_math_parts(parts):
+    cursor_x = 0.0
+    anchor_part = None
+
+    for part in parts:
+        role = getattr(part, '_math_role', 'normal')
+        if role in ('sup', 'sub') and anchor_part is not None:
+            _position_script_token(part, anchor_part, role)
+            cursor_x = max(cursor_x, part.get_right()[0] + _NORMAL_PART_BUFF)
+            continue
+
+        part.move_to([cursor_x + part.width / 2, 0, 0])
+        cursor_x = part.get_right()[0] + _NORMAL_PART_BUFF
+        anchor_part = part
+
+    result = VGroup(*parts)
+    result.move_to(ORIGIN)
+    return result
 
 def _native_mathtex_init(self, *tex_strings, arg_separator=' ',
                           substrings_to_isolate=None, tex_to_color_map=None,
                           tex_environment='align*', **kwargs):
-    """Monkey-patched MathTex.__init__ — renders via Pango Text, no LaTeX.
+    """Monkey-patched MathTex.__init__ — renders simple math via Text, no LaTeX.
 
-    Accepts the same arguments as the original MathTex (including {{X}}
-    isolation notation) and produces a VGroup of MathTexPart objects
-    keyed by tex_string, compatible with TransformMatchingTex."""
-    from manim import Text, VGroup, RIGHT
-    from manim.mobject.text.tex_mobject import MathTexPart
+    It preserves Manim's top-level brace splitting so TransformMatchingTex can
+    still match equation parts, but lays out superscripts/subscripts manually
+    instead of relying on TeX compilation."""
 
     font_size = kwargs.pop('font_size', 48)
 
-    math_parts = []
-    for ts in tex_strings:
-        str_ts = str(ts)
-        brace_parts = _split_tex_on_braces(str_ts)
-        if not brace_parts:
-            # Plain string, no double-brace isolation
-            uni = _latex_to_unicode(str_ts)
-            text_mob = Text(uni, font_size=font_size, **kwargs)
-            mtp = MathTexPart()
-            mtp.fill_opacity = 1.0
-            mtp.tex_string = str_ts
-            mtp.add(*list(text_mob.submobjects))
-            math_parts.append(mtp)
-        else:
-            for key, uni in brace_parts:
-                text_mob = Text(uni, font_size=font_size, **kwargs)
-                mtp = MathTexPart()
-                mtp.fill_opacity = 1.0
-                mtp.tex_string = key
-                mtp.add(*list(text_mob.submobjects))
-                math_parts.append(mtp)
+    self.arg_separator = arg_separator
+    self.substrings_to_isolate = [] if substrings_to_isolate is None else list(substrings_to_isolate)
+    self.tex_to_color_map = dict(tex_to_color_map or {})
+    self.substrings_to_isolate.extend(self.tex_to_color_map.keys())
+    self.tex_environment = tex_environment
+    self.brace_notation_split_occurred = False
+    self.tex_strings = self._prepare_tex_strings(tex_strings)
 
-    # Build result directly as VGroup — don't try to reuse self (broken state)
-    result = VGroup(*math_parts)
-    result.arrange(RIGHT, buff=0.15)
+    math_parts = [_build_math_part(ts, font_size, **kwargs) for ts in self.tex_strings]
+    result = _layout_math_parts(math_parts)
 
-    # MathTex-compatible attributes that TransformMatchingTex/scene code expect
-    result.tex_strings = list(tex_strings)
+    result.tex_string = self.arg_separator.join(self.tex_strings)
+    result.tex_strings = list(self.tex_strings)
     result.arg_separator = arg_separator
     result.tex_environment = tex_environment
-    result.substrings_to_isolate = list(substrings_to_isolate or [])
-    result.tex_to_color_map = dict(tex_to_color_map or {})
+    result.substrings_to_isolate = list(self.substrings_to_isolate)
+    result.tex_to_color_map = dict(self.tex_to_color_map)
 
-    # Transfer ownership: copy result's state into self
+    for tex, color in result.tex_to_color_map.items():
+        for part in result.submobjects:
+            if getattr(part, 'tex_string', None) == tex:
+                part.set_color(color)
+
     self.__dict__.update(result.__dict__)
     self.__class__ = type(result)
 
@@ -492,7 +564,9 @@ class VulkanRender(ShapeMixin, TextMixin):
                 self._send_vmobject(mob, a, w, h, parent_offset, 0.0, is_text=is_text)
             return
 
-        elif isinstance(mob, (VGroup, Group)):
+        # MathTexPart is a VMobject (not VGroup) but holds Text submobjects
+        # added by _build_math_part; its children carry the actual glyph data.
+        elif isinstance(mob, (VGroup, Group, MathTexPart)):
             effective_alpha = parent_alpha * own_alpha
             if effective_alpha <= 0:
                 return
@@ -590,10 +664,12 @@ class VulkanRender(ShapeMixin, TextMixin):
 
         screen_rot = -rot
 
-        # For shapes with native dispatchers: if the mobject's points have been
-        # rotated (e.g. by .animate.rotate()), the native dispatcher won't show
-        # the rotation because it computes geometry from width/height/center.
-        # Detect rotated points and fall through to _send_vmobject.
+        # For squares/rectangles whose points are already rotated (e.g. by
+        # .animate.rotate()), the native rect dispatcher computes from the
+        # axis-aligned width/height and would lose the true corner geometry.
+        # Route those through the polygon path rather than _send_vmobject so
+        # the fill stays a full convex quad instead of going through Bezier
+        # tessellation.
         _rot_check = isinstance(mob, (Square, Rectangle)) and not is_text
         if _rot_check:
             try:
@@ -603,7 +679,13 @@ class VulkanRender(ShapeMixin, TextMixin):
                     # Axis-aligned edges point at 0, π/2, π, or 3π/2.
                     # sin(2θ) = 0 for all axis-aligned directions, ≠0 when rotated.
                     if abs(math.sin(2.0 * math.atan2(float(edge[1]), float(edge[0])))) > 0.001:
-                        self._send_vmobject(mob, a, w, h, parent_offset, 0.0, is_text=is_text)
+                        self._send_polygon(
+                            mob,
+                            mob.get_vertices(),
+                            a,
+                            rot_override=screen_rot,
+                            parent_offset=parent_offset,
+                        )
                         return
             except Exception:
                 pass
@@ -748,12 +830,16 @@ class VulkanRender(ShapeMixin, TextMixin):
             elif isinstance(anim, (Transform, _ManimTransform)):
                 if anim.mobject not in all_mobjects:
                     all_mobjects.append(anim.mobject)
-                # All _ManimTransform subclasses (Transform, ClockwiseTransform,
-                # CounterclockwiseTransform, ApplyMethod, etc.) modify the mobject's
-                # points during interpolate(). They need _transforming=True so the
-                # renderer uses _send_vmobject (point-based bezier path) instead of
-                # the shape-specific dispatcher (like _send_dot) which ignores point changes.
-                anim.mobject._transforming = True
+                # ApplyMethod subclasses (Restore, ApplyPointwiseFunction, etc.)
+                # modify the mobject's points away from the original geometric shape.
+                # They need _transforming=True so the renderer uses _send_vmobject
+                # (point-based bezier path) instead of the shape-specific dispatcher
+                # (like _send_square) which ignores point changes.
+                # Restore interpolates BACK to the original shape — the native
+                # dispatcher handles it fine.
+                from manim.animation.transform import ApplyMethod as _ManimApplyMethod
+                if isinstance(anim, _ManimApplyMethod) and type(anim).__name__ != 'Restore':
+                    anim.mobject._transforming = True
                 # Tag FocusOn starting dot so _send_dot caps opacity at 3%
                 if type(anim).__name__ == 'FocusOn':
                     anim.mobject._dot_max_opacity = 0.03
@@ -929,6 +1015,14 @@ class VulkanRender(ShapeMixin, TextMixin):
 
         for a in real_anims:
             if isinstance(a, TransformMatchingAbstractBase):
+                # Remove the source VGroup from scene — sub-anims' Transform
+                # handles rendering of individual MathTexPart children.
+                # This prevents ghost copies where eq2's own submobjects
+                # render at original positions while transform_source
+                # renders copies at interpolated positions.
+                if a.mobject in self.scene.mobjects:
+                    self.scene.remove(a.mobject)
+                set_anim_opacity(a.mobject, 0.0)
                 for sub_anim in getattr(a, '_anims', []):
                     if isinstance(sub_anim, (Transform, _ManimTransform)):
                         if sub_anim.mobject not in self.scene.mobjects:
@@ -938,6 +1032,17 @@ class VulkanRender(ShapeMixin, TextMixin):
                         # Hide the target VGroup — it's only a shape reference;
                         # the source mobject morphs into its shape during interpolate.
                         set_anim_opacity(sub_anim.target_mobject, 0.0)
+                    elif isinstance(sub_anim, FadeOut):
+                        # Add fade_source VGroup so unmatched source parts
+                        # (e.g. x, y, z) render and fade progressively.
+                        if sub_anim.mobject not in self.scene.mobjects:
+                            self.scene.add(sub_anim.mobject)
+                    elif isinstance(sub_anim, FadeIn):
+                        # Add fade_target_copy so unmatched target parts
+                        # fade in. Start fully transparent.
+                        if sub_anim.mobject not in self.scene.mobjects:
+                            self.scene.add(sub_anim.mobject)
+                        set_anim_opacity(sub_anim.mobject, 0.0)
 
         self._active_anims = real_anims
         self._last_frame_time = time.time() - (1.0 / 30.0)
