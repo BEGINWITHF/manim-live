@@ -1652,6 +1652,7 @@ class VulkanRender(ShapeMixin, TextMixin):
         self._record_dir = tempfile.mkdtemp(prefix="manim_record_")
         self._record_frame_idx = 0
         self._recording = True
+        self._record_start_time = time.time()
         import threading
         self._record_stop_event = threading.Event()
         self._record_thread = threading.Thread(target=self._record_worker, daemon=True)
@@ -1684,9 +1685,13 @@ class VulkanRender(ShapeMixin, TextMixin):
             self._record_thread = None
         frame_dir = self._record_dir
         output = self._record_path
-        fps = self._record_fps
         total = self._record_frame_idx
-        print(f"[Record] Captured {total} frames, encoding to {output} ...")
+        duration = time.time() - getattr(self, '_record_start_time', time.time())
+        # Use actual capture fps as input framerate so video duration
+        # matches wall-clock scene time — avoids speed-up from slow GDI.
+        fps = max(total / duration, 1.0) if duration > 0 else float(self._record_fps)
+        print(f"[Record] Captured {total} frames in {duration:.1f}s "
+              f"({fps:.1f} fps), encoding to {output} ...")
         if total == 0:
             print("[Record] No frames captured, aborting.")
             if os.path.isdir(frame_dir):
@@ -1698,6 +1703,7 @@ class VulkanRender(ShapeMixin, TextMixin):
             "ffmpeg", "-y",
             "-framerate", str(fps),
             "-i", pattern,
+            "-r", "60",
             "-c:v", "libx264",
             "-pix_fmt", "yuv420p",
             "-crf", "18",
