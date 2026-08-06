@@ -1,4 +1,6 @@
 import sys
+import os
+import shutil
 from scenes.demo_scene import (
     DemoCreate, DemoWriteUnwrite, DemoTransform, DemoReplacementTransform,
     DemoFadeInFadeOut, DemoFadeTransform, DemoRotating,
@@ -22,6 +24,7 @@ from scenes.demo_scene import (
     DemoMoveToTarget, DemoReplacementTransformOrTransform,
     DemoRestore, DemoScaleInPlace, DemoShrinkToCenter,
     DemoTransformPathArc, DemoAnagram, DemoMatchingEquationParts,
+    DemoTangentAnimation, DemoLatexWithoutLatex,
 )
 
 SCENES = [
@@ -102,6 +105,8 @@ SCENES = [
     ("75", "TransformPathArc",                                    DemoTransformPathArc),
     ("76", "TransformMatchingShapes Anagram",                     DemoAnagram),
     ("77", "TransformMatchingShapes Equations",             DemoMatchingEquationParts),
+    ("78", "TangentLine - sliding tangent",                   DemoTangentAnimation),
+    ("79", "All LaTeX features - without LaTeX",               DemoLatexWithoutLatex),
 ]
 
 
@@ -114,6 +119,55 @@ def show_menu():
     print("=" * 50)
 
 
+PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
+TEX_CACHE_DIR = os.path.join(PROJECT_DIR, "tex_cache")
+
+
+def _restore_tex_cache():
+    """Copy cached SVGs into media/Tex/ so manim skips LaTeX compilation."""
+    media_tex = os.path.join(PROJECT_DIR, "media", "Tex")
+    if not os.path.exists(TEX_CACHE_DIR):
+        return
+    os.makedirs(media_tex, exist_ok=True)
+    for fname in os.listdir(TEX_CACHE_DIR):
+        src = os.path.join(TEX_CACHE_DIR, fname)
+        dst = os.path.join(media_tex, fname)
+        if not os.path.exists(dst):
+            shutil.copy2(src, dst)
+    cached = len(os.listdir(media_tex))
+    print(f"[Cache] Restored {cached} files from tex_cache/")
+
+
+def _save_tex_cache():
+    """Save new SVGs from media/Tex/ back to tex_cache/."""
+    media_tex = os.path.join(PROJECT_DIR, "media", "Tex")
+    if not os.path.exists(media_tex):
+        return
+    os.makedirs(TEX_CACHE_DIR, exist_ok=True)
+    new_count = 0
+    for fname in os.listdir(media_tex):
+        src = os.path.join(media_tex, fname)
+        dst = os.path.join(TEX_CACHE_DIR, fname)
+        if not os.path.exists(dst):
+            shutil.copy2(src, dst)
+            new_count += 1
+    if new_count:
+        print(f"[Cache] Saved {new_count} new files to tex_cache/")
+
+
+def _clean_media():
+    """Delete media output directory after each test to keep workspace clean."""
+    media_dir = os.path.join(PROJECT_DIR, "media")
+    if os.path.exists(media_dir):
+        try:
+            shutil.rmtree(media_dir)
+            print(f"[Clean] Deleted {media_dir}")
+        except PermissionError:
+            print(f"[Clean] Could not delete {media_dir} (files in use)")
+        except Exception as e:
+            print(f"[Clean] Error deleting {media_dir}: {e}")
+
+
 def main():
     if len(sys.argv) > 1:
         num = sys.argv[1]
@@ -124,8 +178,11 @@ def main():
     for n, desc, cls in SCENES:
         if n == num:
             print(f"Running: {desc}")
+            _restore_tex_cache()
             scene = cls()
             scene.construct()
+            _save_tex_cache()
+            _clean_media()
             return
 
     print(f"Invalid option: {num}")

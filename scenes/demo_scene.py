@@ -1570,9 +1570,9 @@ class DemoMatchingEquationParts(Scene):
 
         variables = VGroup(MathTex("a"), MathTex("b"), MathTex("c")).arrange(RIGHT).shift(UP)
 
-        eq1 = MathTex("{{x}}^2", "+", "{{y}}^2", "=", "{{z}}^2")
-        eq2 = MathTex("{{a}}^2", "+", "{{b}}^2", "=", "{{c}}^2")
-        eq3 = MathTex("{{a}}^2", "=", "{{c}}^2", "-", "{{b}}^2")
+        eq1 = MathTex("{{x}}^2", "+", "{{d}}^2", "=", "{{v}}^2")
+        eq2 = MathTex("{{a}}^2", "+", "{{w}}^2", "=", "{{l}}^2")
+        eq3 = MathTex("{{a}}^2", "=", "{{p}}^2", "-", "{{u}}^2")
 
         self.add(eq1)
         render.play(Wait(0.5))
@@ -1580,4 +1580,270 @@ class DemoMatchingEquationParts(Scene):
         render.play(Wait(0.5))
         render.play(TransformMatchingTex(eq2, eq3))
         render.play(Wait(0.5))
+        render.close()
+
+class DemoTangentAnimation(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "TangentLine - sliding tangent")
+
+        ax = Axes(
+            x_range=[-7, 7, 1],
+            y_range=[-4, 4, 1],
+            x_length=8,
+            y_length=5,
+            axis_config={"include_tip": True, "font_size": 24},
+        )
+        sine = ax.plot(np.sin, color=RED)
+        alpha = ValueTracker(0)
+        point = always_redraw(
+            lambda: Dot(
+                sine.point_from_proportion(alpha.get_value()),
+                color=BLUE
+            )
+        )
+        tangent = always_redraw(
+            lambda: TangentLine(
+                sine,
+                alpha=alpha.get_value(),
+                color=YELLOW,
+                length=4,
+            )
+        )
+        self.add(ax, sine, point, tangent)
+        render.play(alpha.animate.set_value(1), rate_func=linear, run_time=3)
+        render.play(Wait(1.0))
+        render.close()
+
+
+class DemoLatexWithoutLatex(Scene):
+    def construct(self):
+        import core.vulkan_bind as _vb
+        _vb._USE_NATIVE_MATHTEX = True
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "All LaTeX commands")
+
+        FS = 28
+
+        def sym(s):
+            return MathTex(s, font_size=FS)
+
+        def vg(*strings):
+            return VGroup(*[sym(t) for t in strings]).arrange(RIGHT, buff=0.3)
+
+        def stacked(*rows):
+            return VGroup(*rows).arrange(DOWN, buff=0.35)
+
+        _R = chr(92)
+        _ra = _R + "rangle"
+        _rf = _R + "rfloor"
+        _rc = _R + "rceil"
+        _ri = _R + "right"
+        _rar = _R + "rightarrow"
+        _rrp = _R + "rightleftharpoons"
+
+        # Each pair: (group_A, group_B) where each symbol is its own MathTex
+        # TransformMatchingTex will morph symbol-by-symbol
+
+        pairs = []
+        W = max  # width placeholder — ignore
+
+        # 1. Greek lowercase → uppercase
+        greek_low = ["\\alpha","\\beta","\\gamma","\\delta","\\epsilon","\\zeta","\\eta","\\theta"]
+        greek_low2 = ["\\iota","\\kappa","\\lambda","\\mu","\\nu","\\xi","\\pi","\\rho"]
+        greek_low3 = ["\\sigma","\\tau","\\upsilon","\\phi","\\chi","\\psi","\\omega",
+                      "\\varepsilon"]
+        greek_up = ["\\Gamma","\\Delta","\\Theta","\\Lambda","\\Xi","\\Pi","\\Sigma",
+                    "\\Upsilon"]
+        greek_up2 = ["\\Phi","\\Psi","\\Omega","\\aleph","\\beth","\\daleth","\\gimel",
+                     "\\digamma"]
+        g1 = stacked(vg(*greek_low), vg(*greek_low2), vg(*greek_low3))
+        g2 = stacked(vg(*greek_up), vg(*greek_up2)).move_to(g1)
+        pairs.append((g1, g2))
+
+        # 2. Structures: frac→sqrt→overbrace→binom→int
+        s1 = stacked(
+            vg(r"\frac{a}{b}", r"\sqrt{x}", r"\sqrt[n]{x}"),
+            vg(r"\overline{AB}", r"\underline{CD}"),
+            vg(r"\overrightarrow{EF}", r"\hat{x}", r"\tilde{y}"),
+        )
+        s2 = stacked(
+            vg(r"\overbrace{a+b+c}", r"\underbrace{x+y+z}"),
+            vg(r"\frac{\partial f}{\partial x}", r"\frac{d}{dx}"),
+            vg(r"\binom{n}{k}", r"\int_a^b f(x)\,dx"),
+        ).move_to(s1)
+        pairs.append((s1, s2))
+
+        # 3. Delimiters
+        d1 = stacked(
+            vg("|x|", r"\Vert x\Vert", "\\langle x" + _ra),
+            vg("\\{x\\}", "\\lfloor x" + _rf, "\\lceil x" + _rc),
+            vg(r"\backslash", r"\uparrow", r"\downarrow"),
+        )
+        d2 = stacked(
+            vg("\\left(\\frac{a}{b}" + _ri + ")", "\\left[\\frac{a}{b}" + _ri + "]"),
+            vg("\\left\\{\\frac{a}{b}" + _ri + "\\}", "\\left|\\frac{a}{b}" + _ri + "|"),
+            vg(r"\Uparrow", r"\Downarrow", r"\Updownarrow"),
+        ).move_to(d1)
+        pairs.append((d1, d2))
+
+        # 4. Large operators
+        o1 = stacked(
+            vg(r"\sum_{i=1}^n i", r"\prod_{i=1}^n i"),
+            vg(r"\int_0^\infty", r"\oint", r"\iint", r"\iiint"),
+            vg(r"\bigcap", r"\bigcup", r"\bigsqcup", r"\bigvee", r"\bigwedge"),
+        )
+        o2 = stacked(
+            vg(r"\coprod", r"\biguplus", r"\bigoplus", r"\bigotimes", r"\bigodot"),
+            vg(r"\sum\nolimits_{i=1}^n", r"\int\nolimits_0^1"),
+            vg(r"\displaystyle\sum_{i=1}^\infty \frac{1}{i^2} = \frac{\pi^2}{6}"),
+        ).move_to(o1)
+        pairs.append((o1, o2))
+
+        # 5. Functions
+        f1 = stacked(
+            vg(r"\sin x", r"\cos x", r"\tan x"),
+            vg(r"\arcsin x", r"\arccos x", r"\arctan x"),
+            vg(r"\sinh x", r"\cosh x", r"\tanh x"),
+        )
+        f2 = stacked(
+            vg(r"\lim_{x\to 0}\frac{\sin x}{x}=1", r"\limsup", r"\liminf"),
+            vg(r"\log x", r"\ln x", r"\lg x", r"\exp x"),
+            vg(r"\max", r"\min", r"\sup", r"\inf", r"\gcd", r"\det", r"\dim", r"\ker",
+               r"\arg", r"\deg", r"\Pr"),
+        ).move_to(f1)
+        pairs.append((f1, f2))
+
+        # 6. Binary ops → relations
+        b1 = stacked(
+            vg(r"\pm", r"\mp", r"\times", r"\div", r"\ast", r"\star", r"\cdot"),
+            vg(r"\circ", r"\bullet", r"\oplus", r"\ominus", r"\otimes", r"\odot"),
+            vg(r"\cap", r"\cup", r"\sqcap", r"\sqcup", r"\wedge", r"\vee"),
+        )
+        b2 = stacked(
+            vg(r"\leq", r"\geq", r"\ll", r"\gg", r"\equiv", r"\sim", r"\simeq"),
+            vg(r"\approx", r"\cong", r"\neq", r"\doteq", r"\propto", r"\prec", r"\succ"),
+            vg(r"\subset", r"\supset", r"\subseteq", r"\supseteq", r"\in", r"\ni", r"\notin"),
+        ).move_to(b1)
+        pairs.append((b1, b2))
+
+        # 7. More relations → negations
+        r1 = stacked(
+            vg(r"\mid", r"\parallel", r"\nmid", r"\nparallel", r"\perp", r"\bowtie", r"\Join"),
+            vg(r"\vdash", r"\dashv", r"\models", r"\Vdash", r"\vDash", r"\Vvdash"),
+            vg(r"\lll", r"\ggg", r"\preceq", r"\succeq", r"\precsim", r"\succsim"),
+        )
+        r2 = stacked(
+            vg(r"\nsim", r"\ncong", r"\nleq", r"\ngeq", r"\nprec", r"\nsucc", r"\nsupseteq"),
+            vg(r"\lneqq", r"\gneqq", r"\lnsim", r"\gnsim", r"\lvertneqq", r"\gvertneqq"),
+            vg(r"\ntriangleleft", r"\ntriangleright", r"\nVDash", r"\nvDash", r"\nvdash"),
+        ).move_to(r1)
+        pairs.append((r1, r2))
+
+        # 8. Arrows
+        a1 = stacked(
+            vg("\\leftarrow" + _rar, "\\leftrightarrow"),
+            vg(r"\Leftarrow", r"\Rightarrow", r"\Leftrightarrow"),
+            vg(r"\longleftarrow", r"\longrightarrow", r"\longleftrightarrow"),
+        )
+        a2 = stacked(
+            vg(r"\mapsto", r"\longmapsto", r"\hookrightarrow", r"\hookleftarrow"),
+            vg(r"\uparrow", r"\downarrow", r"\updownarrow", r"\Uparrow", r"\Downarrow", r"\Updownarrow"),
+            vg("\\nLeftarrow", "\\nRightarrow", "\\nLeftrightarrow" + _rrp),
+        ).move_to(a1)
+        pairs.append((a1, a2))
+
+        # 9. Misc symbols
+        m1 = stacked(
+            vg(r"\infty", r"\forall", r"\exists", r"\nexists", r"\emptyset", r"\varnothing"),
+            vg(r"\nabla", r"\partial", r"\eth", r"\angle", r"\measuredangle"),
+            vg(r"\triangle", r"\triangledown", r"\vartriangle", r"\lozenge", r"\blacklozenge"),
+        )
+        m2 = stacked(
+            vg(r"\cdots", r"\vdots", r"\ddots", r"\ldots", r"\prime", r"\sharp", r"\flat"),
+            vg(r"\natural", r"\surd", r"\hbar", r"\ell", r"\wp", r"\imath", r"\jmath"),
+            vg(r"\clubsuit", r"\diamondsuit", r"\heartsuit", r"\spadesuit", r"\bigstar"),
+        ).move_to(m1)
+        pairs.append((m1, m2))
+
+        # 10. More misc → blackboard
+        mm1 = stacked(
+            vg(r"\Game", r"\Finv", r"\Bbbk", r"\circledS", r"\complement"),
+            vg(r"\blacksquare", r"\square", r"\blacktriangle", r"\blacktriangledown"),
+            vg(r"\Re", r"\Im", r"\mho", r"\hslash", r"\backprime"),
+        )
+        mm2 = stacked(
+            vg(r"\mathbb{R}", r"\mathbb{C}", r"\mathbb{N}", r"\mathbb{Z}", r"\mathbb{Q}"),
+            vg(r"\mathcal{A}", r"\mathcal{B}", r"\mathcal{C}", r"\mathcal{D}", r"\mathcal{E}"),
+            vg(r"\mathfrak{A}", r"\mathfrak{B}", r"\mathfrak{C}", r"\mathfrak{D}", r"\mathfrak{E}"),
+        ).move_to(mm1)
+        pairs.append((mm1, mm2))
+
+        # 11. Accents
+        ac1 = stacked(
+            vg(r"\hat{x}", r"\tilde{x}", r"\bar{x}", r"\vec{x}", r"\dot{x}", r"\ddot{x}"),
+            vg(r"\acute{x}", r"\grave{x}", r"\check{x}", r"\breve{x}"),
+        )
+        ac2 = stacked(
+            vg(r"\widehat{abc}", r"\widetilde{abc}", r"\overline{abc}"),
+            vg(r"\Hat{x}", r"\Tilde{x}", r"\Bar{x}", r"\Vec{x}", r"\Dot{x}", r"\Ddot{x}"),
+            vg(r"\Acute{x}", r"\Grave{x}", r"\Check{x}", r"\Breve{x}", r"\underrightarrow{abc}"),
+        ).move_to(ac1)
+        pairs.append((ac1, ac2))
+
+        # 12. Arrays + matrices
+        arr1 = stacked(
+            vg(r"\begin{array}{cc} a & b \\ c & d \end{array}"),
+            vg(r"\begin{array}{|c|c|} x & y \\ z & w \end{array}"),
+        )
+        arr2 = stacked(
+            vg(r"\begin{pmatrix} a & b \\ c & d \end{pmatrix}"),
+            vg(r"\begin{bmatrix} x & y \\ z & w \end{bmatrix}"),
+        ).move_to(arr1)
+        pairs.append((arr1, arr2))
+
+        # 13. Fonts
+        ft1 = stacked(
+            vg(r"\mathbf{A}", r"\mathbf{B}", r"\mathbf{C}"),
+            vg(r"\mathsf{A}", r"\mathsf{B}", r"\mathsf{C}"),
+        )
+        ft2 = stacked(
+            vg(r"\textbf{ABC}", r"\textit{ABC}", r"\texttt{ABC}"),
+            vg(r"\underline{ABC}", r"\overline{ABC}"),
+        ).move_to(ft1)
+        pairs.append((ft1, ft2))
+
+        center = ORIGIN + UP * 0.3
+        for sa, sb in pairs:
+            sa.move_to(center)
+            sb.move_to(center)
+
+        page_names = [
+            "1/13 Greek & Hebrew", "2/13 Structures", "3/13 Delimiters",
+            "4/13 Large operators", "5/13 Functions", "6/13 Binary ops → Relations",
+            "7/13 Relations → Negations", "8/13 Arrows", "9/13 Misc symbols",
+            "10/13 Misc → Blackboard", "11/13 Accents", "12/13 Arrays & matrices",
+            "13/13 Fonts",
+        ]
+        page_label = Text(page_names[0], font_size=20, fill_color=GREY).to_edge(DOWN, buff=0.3)
+        self.add(page_label)
+
+        self.add(pairs[0][0])
+        render.play(Wait(0.5))
+
+        for i, ((sa, sb), (na, _)) in enumerate(zip(pairs, pairs[1:] + pairs[:1])):
+            next_label = Text(page_names[(i + 1) % 13], font_size=20, fill_color=GREY).to_edge(DOWN, buff=0.3)
+            render.play(TransformMatchingTex(sa, sb, run_time=0.8))
+            render.play(Wait(0.1))
+            render.play(TransformMatchingTex(sb, na, run_time=0.8))
+            self.remove(page_label)
+            self.add(next_label)
+            page_label = next_label
+            render.play(Wait(0.1))
+
+        render.play(Wait(1.5))
         render.close()

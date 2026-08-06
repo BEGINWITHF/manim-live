@@ -181,12 +181,155 @@ _SCRIPT_SCALE = 0.62
 _SCRIPT_X_TIGHTEN = 0.08
 _NORMAL_PART_BUFF = 0.15
 
+# ── LaTeX command → Unicode mapping (comprehensive) ──
+_LATEX_UNICODE = {
+    # Greek lowercase
+    r"\alpha": 'α', r"\beta": 'β', r"\gamma": 'γ', r"\delta": 'δ',
+    r"\epsilon": 'ε', r"\zeta": 'ζ', r"\eta": 'η', r"\theta": 'θ',
+    r"\iota": 'ι', r"\kappa": 'κ', r"\lambda": 'λ', r"\mu": 'μ',
+    r"\nu": 'ν', r"\xi": 'ξ', r"\omicron": 'o', r"\pi": 'π',
+    r"\rho": 'ρ', r"\sigma": 'σ', r"\tau": 'τ', r"\upsilon": 'υ',
+    r"\phi": 'φ', r"\chi": 'χ', r"\psi": 'ψ', r"\omega": 'ω',
+    # Greek variant
+    r"\varepsilon": 'ε', r"\vartheta": 'ϑ', r"\varkappa": 'ϰ',
+    r"\varpi": 'ϖ', r"\varrho": 'ϱ', r"\varsigma": 'ς',
+    r"\varphi": 'ϕ', r"\digamma": 'ϝ',
+    # Greek uppercase
+    r"\Gamma": 'Γ', r"\Delta": 'Δ', r"\Theta": 'Θ', r"\Lambda": 'Λ',
+    r"\Xi": 'Ξ', r"\Pi": 'Π', r"\Sigma": 'Σ', r"\Upsilon": 'Υ',
+    r"\Phi": 'Φ', r"\Psi": 'Ψ', r"\Omega": 'Ω',
+    # Hebrew
+    r"\aleph": 'ℵ', r"\beth": 'ℶ', r"\daleth": 'ℸ', r"\gimel": 'ℷ',
+    # Binary ops
+    r"\pm": '±', r"\mp": '∓', r"\div": '÷',
+    r"\ast": '∗', r"\star": '⋆', r"\cdot": '·',
+    r"\circ": '∘', r"\bullet": '•', r"\diamond": '◇',
+    r"\oplus": '⊕', r"\ominus": '⊖', r"\otimes": '⊗', r"\odot": '⊙',
+    r"\oslash": '⊘', r"\bigcirc": '○', r"\circledcirc": '⊚',
+    r"\circledast": '⊛', r"\circleddash": '⊝', r"\circledS": 'Ⓢ',
+    r"\centerdot": '·', r"\dotplus": '∔',
+    r"\Box": '□', r"\square": '□', r"\blacksquare": '■',
+    # Set ops
+    r"\cap": '∩', r"\cup": '∪', r"\sqcap": '⊓', r"\sqcup": '⊔',
+    r"\wedge": '∧', r"\vee": '∨', r"\setminus": '∖',
+    r"\wr": '≀', r"\amalg": '⨿', r"\dagger": '†', r"\ddagger": '‡',
+    r"\veebar": '⊻', r"\barwedge": '⊼',
+    r"\boxminus": '⊟', r"\boxtimes": '⊠', r"\boxdot": '⊡',
+    r"\Cap": '⋒', r"\Cup": '⋓',
+    r"\leftthreetimes": '⋋', r"\rightthreetimes": '⋌',
+    r"\ltimes": '⋉', r"\rtimes": '⋊', r"\divideontimes": '⋇',
+    r"\intercal": '⊺',
+    # Relations
+    r"\leq": '≤', r"\geq": '≥', r"\ll": '≪', r"\gg": '≫',
+    r"\equiv": '≡', r"\sim": '∼', r"\simeq": '≃', r"\approx": '≈',
+    r"\cong": '≅', r"\neq": '≠', r"\doteq": '≐', r"\propto": '∝',
+    r"\asymp": '≍', r"\bowtie": '⋈', r"\Join": '⋈',
+    r"\subset": '⊂', r"\supset": '⊃', r"\subseteq": '⊆', r"\supseteq": '⊇',
+    r"\sqsubset": '⊏', r"\sqsupset": '⊐',
+    r"\sqsubseteq": '⊑', r"\sqsupseteq": '⊒',
+    r"\in": '∈', r"\ni": '∋', r"\notin": '∉',
+    r"\mid": '∣', r"\parallel": '∥', r"\nmid": '∤', r"\nparallel": '∦',
+    r"\perp": '⊥',
+    r"\prec": '≺', r"\succ": '≻', r"\preceq": '≼', r"\succeq": '≽',
+    r"\lll": '⋘', r"\ggg": '⋙',
+    r"\vdash": '⊢', r"\dashv": '⊣', r"\models": '⊨',
+    r"\Vdash": '⊩', r"\vDash": '⊨', r"\Vvdash": '⊪',
+    r"\neg": '¬', r"\lnot": '¬',
+    r"\smile": '⌣', r"\frown": '⌢',
+    # Extended relations
+    r"\leqq": '≦', r"\geqq": '≧', r"\leqslant": '⩽', r"\geqslant": '⩾',
+    r"\lessgtr": '≶', r"\gtrless": '≷', r"\lesseqgtr": '⋚', r"\gtreqqless": '⋛',
+    r"\lessapprox": '⪅', r"\gtrapprox": '⪆', r"\lesssim": '≲', r"\gtrsim": '≳',
+    r"\lessdot": '⋖', r"\gtrdot": '⋗',
+    r"\triangleq": '≜', r"\circeq": '≗', r"\thicksim": '∼', r"\thickapprox": '≈',
+    r"\backsim": '∽', r"\backsimeq": '⋍', r"\approxeq": '≊',
+    r"\bumpeq": '≏', r"\Bumpeq": '≎', r"\between": '≬',
+    r"\precsim": '≾', r"\succsim": '≿',
+    r"\precapprox": '⪷', r"\succapprox": '⪸',
+    r"\curlyeqprec": '⋞', r"\curlyeqsucc": '⋟',
+    r"\preccurlyeq": '≼', r"\succcurlyeq": '≽',
+    r"\subseteqq": '⫅', r"\supseteqq": '⫆',
+    r"\Subset": '⋐', r"\Supset": '⋑',
+    r"\fallingdotseq": '≒', r"\risingdotseq": '≓',
+    r"\varpropto": '∝', r"\pitchfork": '⋔',
+    r"\shortmid": '∣', r"\shortparallel": '∥',
+    r"\nshortmid": '∤', r"\nshortparallel": '∦',
+    r"\therefore": '∴', r"\because": '∵',
+    r"\vartriangleleft": '⊲', r"\vartriangleright": '⊳',
+    r"\trianglelefteq": '⊴', r"\trianglerighteq": '⊵',
+    r"\blacktriangleleft": '◂', r"\blacktriangleright": '▸',
+    r"\lhd": '◁', r"\rhd": '▷', r"\unlhd": '⊴', r"\unrhd": '⊵',
+    r"\triangleleft": '◃', r"\triangleright": '▹',
+    # Negated relations
+    r"\ncong": '≇', r"\nsim": '≁',
+    r"\nleq": '≰', r"\ngeq": '≱', r"\nleqslant": '≰', r"\ngeqslant": '≱',
+    r"\nleqq": '≰', r"\ngeqq": '≱',
+    r"\nprec": '⊀', r"\nsucc": '⊁', r"\npreceq": '⋠', r"\nsucceq": '⋡',
+    r"\nsubseteq": '⊈', r"\nsupseteq": '⊉', r"\nsubseteqq": '⊈', r"\nsupseteqq": '⊉',
+    r"\subsetneq": '⊊', r"\supsetneq": '⊋',
+    r"\varsubsetneq": '⊊', r"\varsupsetneq": '⊋',
+    r"\varsubsetneqq": '⫋', r"\varsupsetneqq": '⫌',
+    r"\lnapprox": '⪉', r"\gnapprox": '⪊', r"\lneqq": '≨', r"\gneqq": '≩',
+    r"\lnsim": '⋦', r"\gnsim": '⋧', r"\lvertneqq": '≨', r"\gvertneqq": '≩',
+    r"\ntriangleleft": '⋪', r"\ntriangleright": '⋫',
+    r"\ntrianglelefteq": '⋬', r"\ntrianglerighteq": '⋭',
+    r"\nVDash": '⊯', r"\nvDash": '⊭', r"\nvdash": '⊬',
+    r"\precnapprox": '⪹', r"\precnsim": '⋨', r"\succnapprox": '⪺', r"\succnsim": '⋩',
+    r"\nless": '≮', r"\ngtr": '≯',
+    # Arrows
+    r"\to": '→',
+    r"\leftarrow": '←', r"\rightarrow": '→', r"\leftrightarrow": '↔',
+    r"\Leftarrow": '⇐', r"\Rightarrow": '⇒', r"\Leftrightarrow": '⇔',
+    r"\longleftarrow": '←', r"\longrightarrow": '→',
+    r"\longleftrightarrow": '↔',
+    r"\mapsto": '↦', r"\longmapsto": '↦',
+    r"\hookrightarrow": '↪', r"\hookleftarrow": '↩',
+    r"\uparrow": '↑', r"\downarrow": '↓', r"\updownarrow": '↕',
+    r"\Uparrow": '⇑', r"\Downarrow": '⇓', r"\Updownarrow": '⇕',
+    r"\rightleftharpoons": '⇋',
+    r"\nLeftarrow": '⇍', r"\nRightarrow": '⇏', r"\nLeftrightarrow": '⇎',
+    r"\rightharpoonup": '⇀', r"\rightharpoondown": '⇁',
+    r"\leftharpoonup": '↼', r"\leftharpoondown": '↽',
+    # Misc symbols
+    r"\infty": '∞', r"\forall": '∀', r"\exists": '∃', r"\nexists": '∄',
+    r"\emptyset": '∅', r"\varnothing": '∅',
+    r"\nabla": '∇', r"\partial": '∂', r"\eth": 'ð',
+    r"\angle": '∠', r"\measuredangle": '∡',
+    r"\triangle": '△', r"\triangledown": '▽', r"\vartriangle": '△',
+    r"\blacktriangle": '▲', r"\blacktriangledown": '▼',
+    r"\bigtriangleup": '△', r"\bigtriangledown": '▽',
+    r"\lozenge": '◊', r"\blacklozenge": '⧫',
+    r"\cdots": '⋯', r"\vdots": '⋮', r"\ddots": '⋱', r"\ldots": '…',
+    r"\prime": '′', r"\backprime": '‵',
+    r"\sharp": '♯', r"\flat": '♭', r"\natural": '♮',
+    r"\surd": '√', r"\hbar": 'ℏ', r"\ell": 'ℓ', r"\wp": '℘',
+    r"\imath": 'ı', r"\jmath": 'ȷ', r"\hslash": 'ℏ',
+    r"\clubsuit": '♣', r"\diamondsuit": '♢', r"\heartsuit": '♡',
+    r"\spadesuit": '♠',
+    r"\bigstar": '★', r"\Game": '⅁', r"\Finv": 'Ⅎ', r"\Bbbk": '𝕜',
+    r"\complement": '∁', r"\mho": '℧',
+    r"\Re": 'ℜ', r"\Im": 'ℑ',
+    r"\diagup": '╱', r"\diagdown": '╲',
+    # Delimiters (keep structural commands, these are handled specially)
+    r"\backslash": '\\',
+    # Math fonts (these become prefix modifiers — handle in processing)
+    # Standard function names — keep as text
+}
+
 def _convert_visible_math_text(text, translate_table=None):
     s = str(text)
-    s = s.replace(r'\cdot', '·').replace(r'\times', '×')
-    s = s.replace(r'\to', '→').replace(r'\rightarrow', '→')
+
+    # 1. Apply LaTeX → Unicode mapping FIRST (longer patterns first to avoid
+    #    \left eating \leftarrow, etc.)
+    for cmd, uni in sorted(_LATEX_UNICODE.items(), key=lambda x: -len(x[0])):
+        s = s.replace(cmd, uni)
+
+    # 2. Strip remaining structural commands
     s = s.replace(r'\left', '').replace(r'\right', '')
+    s = s.replace(r'\quad', '  ').replace(r'\qquad', '    ')
     s = s.replace('{', '').replace('}', '')
+    s = s.replace('\\\\', '\n')  # array row separator → newline
+
     if translate_table is not None:
         s = s.translate(translate_table)
     return s
@@ -330,10 +473,22 @@ def _native_mathtex_init(self, *tex_strings, arg_separator=' ',
     self.__dict__.update(result.__dict__)
     self.__class__ = type(result)
 
-# Monkey-patch __init__ on the ORIGINAL MathTex class.
-# Because `from manim import *` in the scene already bound MathTex to this
-# exact class object, patching it in place catches all existing references.
-_OrigMathTex.__init__ = _native_mathtex_init
+# NOTE: Keep real Manim MathTex enabled by default.
+# The old native-text fallback rendered many commands literally (e.g. \\frac,
+# \\sqrt, \\mathbb, matrices, accents) instead of as math glyphs/layout.
+# Set _USE_NATIVE_MATHTEX = True to bypass LaTeX entirely (fast, Unicode-only).
+_OrigMathTexInit = _OrigMathTex.__init__
+_USE_NATIVE_MATHTEX = False
+
+
+def _mathtex_init_dispatch(self, *args, **kwargs):
+    if _USE_NATIVE_MATHTEX:
+        _native_mathtex_init(self, *args, **kwargs)
+    else:
+        _OrigMathTexInit(self, *args, **kwargs)
+
+
+_OrigMathTex.__init__ = _mathtex_init_dispatch
 
 
 class BITMAPINFOHEADER(ctypes.Structure):
@@ -722,6 +877,15 @@ class VulkanRender(ShapeMixin, TextMixin):
             except Exception:
                 pass
 
+        # Some non-VGroup types (e.g. NumberLine) hold submobjects
+        # (tick marks, etc.) that must be rendered separately. Arrow is
+        # already fully handled by _send_arrow.
+        if (not isinstance(mob, (Text, VGroup, Group, MathTexPart, Arrow, DashedLine))
+                and hasattr(mob, 'submobjects') and mob.submobjects):
+            for sub in mob.submobjects:
+                self._send(sub, rot, parent_alpha=a, parent_offset=parent_offset,
+                           parent_transforming=parent_transforming, parent_is_text=is_text)
+
     def tick(self):
         self.frame_count += 1
         result = self.dll.Vulkan_Tick()
@@ -840,6 +1004,12 @@ class VulkanRender(ShapeMixin, TextMixin):
                 from manim.animation.transform import ApplyMethod as _ManimApplyMethod
                 if isinstance(anim, _ManimApplyMethod) and type(anim).__name__ != 'Restore':
                     anim.mobject._transforming = True
+                # Manim Transform subclasses (ClockwiseTransform, CounterclockwiseTransform,
+                # and plain manim Transform) modify mobject points but don't set _transforming.
+                # Without _transforming=True the renderer ignores point changes and draws
+                # the native shape (e.g. _send_dot instead of _send_vmobject).
+                if isinstance(anim, _ManimTransform) and not isinstance(anim, Transform):
+                    Transform._set_transforming(anim.mobject, True)
                 # Tag FocusOn starting dot so _send_dot caps opacity at 3%
                 if type(anim).__name__ == 'FocusOn':
                     anim.mobject._dot_max_opacity = 0.03
