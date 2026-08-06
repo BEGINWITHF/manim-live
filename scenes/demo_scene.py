@@ -1570,9 +1570,9 @@ class DemoMatchingEquationParts(Scene):
 
         variables = VGroup(MathTex("a"), MathTex("b"), MathTex("c")).arrange(RIGHT).shift(UP)
 
-        eq1 = MathTex("{{x}}^2", "+", "{{d}}^2", "=", "{{v}}^2")
-        eq2 = MathTex("{{a}}^2", "+", "{{w}}^2", "=", "{{l}}^2")
-        eq3 = MathTex("{{a}}^2", "=", "{{p}}^2", "-", "{{u}}^2")
+        eq1 = MathTex("{{x}}^2", "+", "{{y}}^2", "=", "{{z}}^2")
+        eq2 = MathTex("{{a}}^2", "+", "{{b}}^2", "=", "{{c}}^2")
+        eq3 = MathTex("{{a}}^2", "=", "{{b}}^2", "-", "{{c}}^2")
 
         self.add(eq1)
         render.play(Wait(0.5))
