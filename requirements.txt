@@ -1,0 +1,2 @@
+manim>=0.20.0
+numpy
