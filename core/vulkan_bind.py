@@ -531,6 +531,14 @@ class VulkanRender(ShapeMixin, TextMixin):
         self._record_path = None
         self._record_fps = 60
 
+        # Fast offline record — renders at full speed via simulated time
+        self._fast_record = False
+        self._fast_record_path = None
+        self._fast_record_fps = 60
+        self._fast_record_sim_time = 0.0
+        self._fast_record_frame_idx = 0
+        self._fast_record_segment = None  # (start_frame, end_frame) or None for all
+
         base_dir = os.path.dirname(os.path.abspath(__file__))
         dll_path = os.path.normpath(os.path.join(base_dir, "..", "dist", "release", "vulkan_core.dll"))
         if not os.path.exists(dll_path):
@@ -813,9 +821,34 @@ class VulkanRender(ShapeMixin, TextMixin):
                     del sub._grow_point
             return
 
+        # During generic VMobject transforms we default to bezier path rendering.
+        # However, axis-aligned quads (Square/Rectangle) render more robustly
+        # via the polygon path — unless they're morphing into a curved shape
+        # (e.g. square→circle) which produces many vertices and needs bezier
+        # smoothing.  Use vertex count to distinguish: 4-vert quad = rotating
+        # (test 72, polygon path); >4 verts = morphing (test 3, bezier path).
         if getattr(mob, '_transforming', False) or parent_transforming:
-            self._send_vmobject(mob, a, w, h, None if is_text else parent_offset, 0.0, is_text=is_text)
-            return
+            try:
+                vert_count = len(mob.get_vertices()) if hasattr(mob, 'get_vertices') else 0
+            except AttributeError:
+                vert_count = 0
+            is_quad_morph = (isinstance(mob, (Square, Rectangle)) and vert_count <= 4
+                             and not getattr(mob, '_apply_method', False))
+            if not is_quad_morph:
+                # FocusOn: route through _send_dot so the dot renders
+                # as a proper circle instead of bezier path
+                if getattr(mob, '_focus_on_dot', False):
+                    self._send_dot(mob, a, w, h)
+                    return
+                # Arrow: during Rotating/transforms, _send_vmobject only
+                # renders the shaft bezier — the tip polygon is a submobject
+                # that never gets drawn. Route through _send_arrow instead.
+                if isinstance(mob, Arrow):
+                    screen_rot = -rot
+                    self._send_arrow(mob, a, w, h, screen_rot, None if is_text else parent_offset)
+                    return
+                self._send_vmobject(mob, a, w, h, None if is_text else parent_offset, 0.0, is_text=is_text)
+                return
 
         screen_rot = -rot
 
@@ -825,23 +858,19 @@ class VulkanRender(ShapeMixin, TextMixin):
         # Route those through the polygon path rather than _send_vmobject so
         # the fill stays a full convex quad instead of going through Bezier
         # tessellation.
-        _rot_check = isinstance(mob, (Square, Rectangle)) and not is_text
-        if _rot_check:
+        if isinstance(mob, (Square, Rectangle)) and not is_text:
             try:
-                pts = mob.get_points()
-                if len(pts) >= 4:
-                    edge = pts[1] - pts[0]  # first edge
-                    # Axis-aligned edges point at 0, π/2, π, or 3π/2.
-                    # sin(2θ) = 0 for all axis-aligned directions, ≠0 when rotated.
-                    if abs(math.sin(2.0 * math.atan2(float(edge[1]), float(edge[0])))) > 0.001:
-                        self._send_polygon(
-                            mob,
-                            mob.get_vertices(),
-                            a,
-                            rot_override=screen_rot,
-                            parent_offset=parent_offset,
-                        )
-                        return
+                # Always route axis-aligned quads through the polygon path.
+                # This keeps fills solid both for .animate.rotate() (points already
+                # rotated) and for Rotating/Rotate (rotation supplied in screen_rot).
+                self._send_polygon(
+                    mob,
+                    mob.get_vertices(),
+                    a,
+                    rot_override=screen_rot,
+                    parent_offset=parent_offset,
+                )
+                return
             except Exception:
                 pass
 
@@ -1004,14 +1033,20 @@ class VulkanRender(ShapeMixin, TextMixin):
                 from manim.animation.transform import ApplyMethod as _ManimApplyMethod
                 if isinstance(anim, _ManimApplyMethod) and type(anim).__name__ != 'Restore':
                     anim.mobject._transforming = True
+                    # ApplyMethod warps bezier handles into curves — _send_polygon
+                    # (straight edges) can't represent them.  Route through
+                    # _send_vmobject instead so the bezier path is preserved.
+                    anim.mobject._apply_method = True
                 # Manim Transform subclasses (ClockwiseTransform, CounterclockwiseTransform,
                 # and plain manim Transform) modify mobject points but don't set _transforming.
                 # Without _transforming=True the renderer ignores point changes and draws
                 # the native shape (e.g. _send_dot instead of _send_vmobject).
                 if isinstance(anim, _ManimTransform) and not isinstance(anim, Transform):
                     Transform._set_transforming(anim.mobject, True)
-                # Tag FocusOn starting dot so _send_dot caps opacity at 3%
+                # Tag FocusOn starting dot so it routes through _send_dot
+                # (not the generic _send_vmobject) — renders as a proper circle
                 if type(anim).__name__ == 'FocusOn':
+                    anim.mobject._focus_on_dot = True
                     anim.mobject._dot_max_opacity = 0.03
                 if anim.replace_mobject_with_target_in_scene:
                     if anim.target_mobject not in all_mobjects:
@@ -1162,6 +1197,11 @@ class VulkanRender(ShapeMixin, TextMixin):
                     continue
                 a.rate_func = shared_rf
 
+        # Fast record: seed simulated time so start_time uses a consistent clock
+        if self._fast_record:
+            self._fast_record_sim_time = time.time()
+            _frame_interval = 1.0 / self._fast_record_fps
+
         for a in real_anims:
             is_manim = type(a).__module__.startswith('manim')
             if is_manim:
@@ -1169,7 +1209,7 @@ class VulkanRender(ShapeMixin, TextMixin):
                 # by the previous animation's target setup at line 513.
                 if getattr(a, 'mobject', None) is not None:
                     set_anim_opacity(a.mobject, 1.0)
-                a.start_time = time.time()
+                a.start_time = self._fast_record_sim_time if self._fast_record else time.time()
                 a.begin()
                 tm = getattr(a, 'target_mobject', None)
                 if tm is not None and hasattr(tm, 'get_updaters') and tm.get_updaters():
@@ -1181,7 +1221,7 @@ class VulkanRender(ShapeMixin, TextMixin):
                 if a.mobject is not None and a.mobject not in self.scene.mobjects:
                     self.scene.mobjects.append(a.mobject)
             else:
-                a.begin(time.time())
+                a.begin(self._fast_record_sim_time if self._fast_record else time.time())
 
         for a in real_anims:
             if isinstance(a, TransformMatchingAbstractBase):
@@ -1216,6 +1256,12 @@ class VulkanRender(ShapeMixin, TextMixin):
 
         self._active_anims = real_anims
         self._last_frame_time = time.time() - (1.0 / 30.0)
+
+        # Fast record: align _last_frame_time with simulated clock so the
+        # first frame's dt equals _frame_interval.
+        if self._fast_record:
+            self._last_frame_time = self._fast_record_sim_time - _frame_interval
+
         _orig_vgroup_rotate = {}
         _prev_vg_rotation = {}
 
@@ -1271,9 +1317,15 @@ class VulkanRender(ShapeMixin, TextMixin):
         # Mutable container so _patch_vgroup's closure reads the latest alpha
         _anim_alpha = [1.0]
         while True:
-            frame_start = time.time()
-            now = frame_start
-            dt = now - self._last_frame_time
+            if self._fast_record:
+                now = self._fast_record_sim_time
+                dt = _frame_interval
+                self._fast_record_sim_time += _frame_interval
+            else:
+                frame_start = time.time()
+                now = frame_start
+                dt = now - self._last_frame_time
+
             self._last_frame_time = now
             all_done = True
 
@@ -1320,6 +1372,10 @@ class VulkanRender(ShapeMixin, TextMixin):
                                 del mob._was_transforming_text
                             if hasattr(mob, '_dot_max_opacity'):
                                 del mob._dot_max_opacity
+                            if hasattr(mob, '_focus_on_dot'):
+                                del mob._focus_on_dot
+                            if hasattr(mob, '_apply_method') and not keep:
+                                del mob._apply_method
                             target = getattr(a, 'target_mobject', None) or getattr(a, 'target', None)
                             if target and isinstance(mob, Text) and hasattr(mob, 'text') and hasattr(target, 'text'):
                                 mob.text = target.text
@@ -1384,10 +1440,35 @@ class VulkanRender(ShapeMixin, TextMixin):
                 if isinstance(mob, (VGroup, Group)) and id(mob) in _orig_vgroup_rotate:
                     _unpatch_vgroup(mob)
 
-            if not self.tick():
-                break
-            self.sync(self.scene)
-            self._capture_frame()
+            if self._fast_record:
+                seg = self._fast_record_segment
+                idx = self._fast_record_frame_idx
+                
+                if seg is not None and idx >= seg[1]:
+                    break
+                
+                in_segment = (seg is None) or (seg[0] <= idx < seg[1])
+                if in_segment:
+                    if getattr(self, '_fast_record_count_only', False):
+                        pass  # count only — no GPU
+                    else:
+                        if not self.tick():
+                            break
+                        self.sync(self.scene)
+                        if getattr(self, '_fast_record_pipe_mode', True):
+                            self._capture_screenshot_to_pipe()
+                        else:
+                            bmp = os.path.join(
+                                self._fast_record_path,
+                                f"frame_{idx:06d}.bmp")
+                            self.screenshot(bmp)
+                
+                self._fast_record_frame_idx += 1
+            else:
+                if not self.tick():
+                    break
+                self.sync(self.scene)
+                self._capture_frame()
 
             frame_count += 1
 
@@ -1406,9 +1487,10 @@ class VulkanRender(ShapeMixin, TextMixin):
             if all_done:
                 break
 
-            elapsed = time.time() - frame_start
-            if elapsed < FRAME_DURATION:
-                time.sleep(FRAME_DURATION - elapsed)
+            if not self._fast_record:
+                elapsed = time.time() - frame_start
+                if elapsed < FRAME_DURATION:
+                    time.sleep(FRAME_DURATION - elapsed)
 
         for a in real_anims:
             if hasattr(a, 'clean_up_from_scene'):
@@ -1424,15 +1506,27 @@ class VulkanRender(ShapeMixin, TextMixin):
         gdi32 = ctypes.windll.gdi32
         hwnd = user32.FindWindowW(None, "Manim Vulkan")
         if not hwnd:
-            return False
+            hwnd = self.hwnd
+            if not hwnd:
+                return False
+
+        # Client area dimensions
         rc = wt.RECT()
         user32.GetClientRect(hwnd, ctypes.byref(rc))
-        w, h = rc.right, rc.bottom
-        hdc_window = user32.GetDC(hwnd)
-        hdc_mem = gdi32.CreateCompatibleDC(hdc_window)
-        hbitmap = gdi32.CreateCompatibleBitmap(hdc_window, w, h)
+        w, h = rc.right - rc.left, rc.bottom - rc.top
+
+        # Client area screen position
+        pt = wt.POINT(0, 0)
+        user32.ClientToScreen(hwnd, ctypes.byref(pt))
+        x, y = pt.x, pt.y
+
+        # Capture from screen at client area position
+        hdc_screen = user32.GetDC(None)
+        hdc_mem = gdi32.CreateCompatibleDC(hdc_screen)
+        hbitmap = gdi32.CreateCompatibleBitmap(hdc_screen, w, h)
         gdi32.SelectObject(hdc_mem, hbitmap)
-        user32.PrintWindow(hwnd, hdc_mem, 2)
+        gdi32.BitBlt(hdc_mem, 0, 0, w, h, hdc_screen, x, y, 0x00CC0020)  # SRCCOPY
+
         bi = BITMAPINFOHEADER()
         bi.biSize = ctypes.sizeof(BITMAPINFOHEADER)
         bi.biWidth = w
@@ -1455,11 +1549,100 @@ class VulkanRender(ShapeMixin, TextMixin):
             f.write(ctypes.string_at(ctypes.addressof(buf), len(buf)))
         gdi32.DeleteObject(hbitmap)
         gdi32.DeleteDC(hdc_mem)
-        user32.ReleaseDC(hwnd, hdc_window)
+        user32.ReleaseDC(None, hdc_screen)
         return True
+
+    def enable_fast_record(self, path, fps=60, segment=None, hidden=True, count_only=False):
+        """Enable fast offline recording.
+
+        Args:
+            path: Output path (MP4 file for pipe mode, directory for BMP mode)
+            fps: Frame rate
+            segment: (start_frame, end_frame) for multi-segment BMP mode,
+                     None for single-process pipe mode
+            hidden: Hide the Vulkan window
+            count_only: Only count frames — no capture, no GPU rendering
+        """
+        self._fast_record = True
+        self._fast_record_path = os.path.abspath(path) if path else ""
+        self._fast_record_fps = fps
+        self._fast_record_segment = segment
+        self._fast_record_frame_idx = 0
+        self._fast_record_count_only = count_only
+        w, h = self.win_w, self.win_h
+
+        # Hide window for faster rendering (no compositing)
+        if hidden:
+            import ctypes.wintypes
+            user32 = ctypes.windll.user32
+            hwnd = user32.FindWindowW(None, "Manim Vulkan")
+            if hwnd:
+                user32.ShowWindow(hwnd, 0)  # SW_HIDE
+
+        if count_only:
+            self._fast_record_pipe_mode = False
+        elif segment is not None:
+            # BMP mode: each frame saved via SaveScreenshot (no pipe overhead)
+            os.makedirs(self._fast_record_path, exist_ok=True)
+            self._fast_record_pipe_mode = False
+            print(f"[FastRecord] BMP mode {segment} → {path}/")
+        else:
+            # Pipe mode: SaveScreenshot → parse BMP → pipe BGR to ffmpeg
+            self._fast_record_pipe_mode = True
+            self._fast_w = w
+            self._fast_h = h
+            self._fast_row_size = w * 3
+            self._fast_row_padded = ((w * 3 + 3) // 4) * 4
+            ffmpeg_cmd = [
+                "ffmpeg", "-y",
+                "-f", "rawvideo", "-pixel_format", "bgr24",
+                "-video_size", f"{w}x{h}",
+                "-framerate", str(fps),
+                "-i", "-",
+                "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                "-crf", "18", "-preset", "fast",
+                self._fast_record_path,
+            ]
+            self._ffmpeg = subprocess.Popen(
+                ffmpeg_cmd, stdin=subprocess.PIPE, stderr=subprocess.DEVNULL)
+            self._fast_tmp_bmp = os.path.join(tempfile.gettempdir(),
+                f"manim_fast_{os.getpid()}_{id(self)}.bmp")
+            print(f"[FastRecord] Pipe: {w}x{h} @ {fps} fps → {path}")
 
     def close(self):
         self.dll.Vulkan_Shutdown()
+
+    def _capture_screenshot_to_pipe(self):
+        """SaveScreenshot → parse BMP → pipe BGR to ffmpeg."""
+        tmp = self._fast_tmp_bmp
+        self.dll.SaveScreenshot(tmp.encode('utf-8'))
+        with open(tmp, 'rb') as f:
+            f.seek(54)
+            self._ffmpeg.stdin.write(f.read())
+
+    def _finish_fast_record(self):
+        """Finish recording: close ffmpeg pipe or report BMP count."""
+        if not self._fast_record:
+            return
+        if getattr(self, '_fast_record_count_only', False):
+            print(f"[FastRecord] Count: {self._fast_record_frame_idx} frames")
+        elif getattr(self, '_fast_record_pipe_mode', False):
+            try:
+                self._ffmpeg.stdin.close()
+                self._ffmpeg.wait()
+                sz = os.path.getsize(self._fast_record_path) / 1024
+                print(f"[FastRecord] Saved: {self._fast_record_path} "
+                      f"({self._fast_record_frame_idx} frames, {sz:.0f} KB)")
+            except Exception as e:
+                print(f"[FastRecord] ffmpeg failed: {e}")
+            try:
+                os.unlink(self._fast_tmp_bmp)
+            except Exception:
+                pass
+        else:
+            bmps = [f for f in os.listdir(self._fast_record_path) if f.endswith('.bmp')]
+            print(f"[FastRecord] BMP: {len(bmps)} frames in {self._fast_record_path}")
+        self._fast_record = False
 
     def start_record(self, path="output.mp4", fps=60):
         if self._recording:

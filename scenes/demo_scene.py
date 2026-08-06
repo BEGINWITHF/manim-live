@@ -1620,8 +1620,6 @@ class DemoTangentAnimation(Scene):
 
 class DemoLatexWithoutLatex(Scene):
     def construct(self):
-        import core.vulkan_bind as _vb
-        _vb._USE_NATIVE_MATHTEX = True
         render = VulkanRender(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
@@ -1847,3 +1845,363 @@ class DemoLatexWithoutLatex(Scene):
 
         render.play(Wait(1.5))
         render.close()
+
+
+class DemoFourierTransform(Scene):
+    """Epicycles tracing a heart via Fourier series — 20 harmonics."""
+
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "Fourier Transform — Epicycles")
+
+        # ── 1. Heart path DFT ─────────────────────────────────────
+        N = 256
+        t = np.linspace(0, 2 * np.pi, N, endpoint=False)
+        x = 16 * np.sin(t) ** 3
+        y = 13 * np.cos(t) - 5 * np.cos(2 * t) - 2 * np.cos(3 * t) - np.cos(4 * t)
+        pts = (x + 1j * y) / 22  # scale to ~2-unit span
+
+        coeffs = np.fft.fft(pts) / N
+        order = np.argsort(-np.abs(coeffs))
+        coeffs, freqs = coeffs[order], order - N // 2
+
+        K = 20
+        coeffs, freqs = coeffs[:K], freqs[:K]
+        span = float(np.sum(np.abs(coeffs))) * 2.2
+        coeffs = (coeffs / span) * 3.5  # normalize visual span
+
+        # ── 2. Build epicycle components ──────────────────────────
+        colors = color_gradient([BLUE_E, PURPLE_E, RED_E, ORANGE, YELLOW], K)
+        circles, arms = [], []
+        for i in range(K):
+            c = Circle(radius=0.08, color=colors[i], stroke_width=1.0)
+            c.set_fill(colors[i], opacity=0.08)
+            circles.append(c)
+            arms.append(Line(ORIGIN, RIGHT * 0.1, color=colors[i], stroke_width=1.5))
+
+        pen = Dot(radius=0.06, color=WHITE)
+        trace = TracedPath(pen.get_center, stroke_color=YELLOW, stroke_width=2.5)
+
+        epi = VGroup(*circles, *arms, pen)
+        self.add(epi, trace)
+
+        # ── 3. Updater ────────────────────────────────────────────
+        start_t = time.time()
+        period = 8.0
+
+        def updater(g, dt):
+            elapsed = time.time() - start_t
+            pos = np.array([0.0, 0.0, 0.0])
+            for i in range(K):
+                mag = float(np.abs(coeffs[i]))
+                phi = (2 * np.pi * float(freqs[i]) * elapsed / period
+                       + float(np.angle(coeffs[i])))
+                tip = pos + np.array([mag * np.cos(phi), mag * np.sin(phi), 0.0])
+                circles[i].move_to(pos)
+                arms[i].set_points_as_corners([pos, tip])
+                pos = tip
+            pen.move_to(pos)
+
+        epi.add_updater(updater)
+
+        # ── 4. Animate ────────────────────────────────────────────
+        render.play(Wait(period + 1))
+        epi.clear_updaters()
+        render.play(Wait(1.0))
+        render.close()
+
+
+class DemoLorenzButterfly(Scene):
+    """Lorenz attractor — 5 particles, rotating view, dissipating trails."""
+
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "Lorenz Attractor")
+
+        # ── Lorenz params ──────────────────────────────────────────
+        sigma, rho, beta = 10.0, 28.0, 8 / 3
+        dt, N = 0.0015, 40000
+        num_parts = 5
+        run_time = 20.0
+
+        # ── Seeds (butterfly effect!) ──────────────────────────────
+        base = np.array([-8.0, 8.0, 27.0])
+        rng = np.random.RandomState(42)
+        seeds = [base + rng.normal(0, 0.25, 3) for _ in range(num_parts)]
+
+        # ── Pre-compute trajectories ───────────────────────────────
+        all_3d = []
+        for start in seeds:
+            path = [start.copy()]
+            p = start.copy()
+            for _ in range(N - 1):
+                dx = sigma * (p[1] - p[0])
+                dy = p[0] * (rho - p[2]) - p[1]
+                dz = p[0] * p[1] - beta * p[2]
+                p = p + np.array([dx, dy, dz]) * dt
+                path.append(p.copy())
+            all_3d.append(np.array(path))
+
+        # ── Color palette ──────────────────────────────────────────
+        colors = [BLUE_D, TEAL_D, PURPLE_D, MAROON_D, GOLD_D]
+
+        # ── Dots, glows & trails ───────────────────────────────────
+        dots, glows, traces = [], [], []
+        for i in range(num_parts):
+            d = Dot(radius=0.05, color=colors[i])
+            g = Circle(radius=0.18, color=colors[i],
+                       fill_opacity=0.06, stroke_width=0)
+            t = TracedPath(d.get_center, stroke_color=colors[i],
+                           stroke_width=1.6, dissipating_time=4.0)
+            dots.append(d)
+            glows.append(g)
+            traces.append(t)
+            self.add(d, g, t)
+
+        # ── Updaters ───────────────────────────────────────────────
+        start_t = time.time()
+
+        for i in range(num_parts):
+            _traj = all_3d[i]
+            _glow = glows[i]
+
+            def updater(d, _i=i):
+                elapsed = time.time() - start_t
+                frac = min(elapsed / run_time, 1.0)
+                ang = frac * np.pi * 2
+                fidx = frac * (N - 1)
+                lo = int(fidx)
+                hi = min(lo + 1, N - 1)
+                t = fidx - lo
+                p = _traj[lo] * (1 - t) + _traj[hi] * t
+                c, s = np.cos(ang), np.sin(ang)
+                rx = p[0] * c - p[1] * s
+                ry = p[0] * s + p[1] * c
+                sx = rx * 0.11
+                sy = (ry * 0.3 + p[2] * 0.8) * 0.09
+                pos = np.array([sx, sy, 0.0])
+                d.move_to(pos)
+                _glow.move_to(pos)
+
+            dots[i].add_updater(updater)
+
+        # ── Animate ────────────────────────────────────────────────
+        render.play(Wait(run_time + 1))
+        for d in dots:
+            d.clear_updaters()
+        render.play(Wait(1.0))
+        render.close()
+
+
+# ====================================================================
+# Download all demo scenes to MP4 (mss screen capture)
+# Run: python scenes/demo_scene.py
+# ====================================================================
+if __name__ == "__main__":
+    import os, time, subprocess, tempfile, threading, shutil, ctypes, ctypes.wintypes as wt
+    import mss
+    from PIL import Image
+
+    PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
+    OUTPUT_DIR = os.path.join(os.path.dirname(PROJECT_DIR), "downloaded_videos")
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+    user32 = ctypes.windll.user32
+    _rec_state = [None, None, None, 0, None, None, ""]  # stop, thread, dir, count, mon, sct, path
+
+    def find_win():
+        h = user32.FindWindowW(None, "Manim Vulkan")
+        if not h: return None
+        r = wt.RECT(); user32.GetClientRect(h, ctypes.byref(r))
+        pt = wt.POINT(0, 0); user32.ClientToScreen(h, ctypes.byref(pt))
+        return {"left": pt.x, "top": pt.y, "width": r.right, "height": r.bottom}
+
+    _orig_init = VulkanRender.__init__
+    _orig_close = VulkanRender.close
+    _scene_name, _scene_num = "", 0
+
+    def _rec_init(self, w=1920, h=1080):
+        global _scene_name, _scene_num
+        _orig_init(self, w, h)
+        safe = "".join(c if c.isalnum() or c in "._" else "_" for c in _scene_name)
+        _rec_state[6] = os.path.join(OUTPUT_DIR, f"{_scene_num:02d}_{safe}.mp4")
+        print(f"[{_scene_num:02d}] {_scene_name}  →  {os.path.basename(_rec_state[6])}")
+        time.sleep(0.3)
+        mon = find_win()
+        if not mon: print("     ⚠ window not found"); return
+        _rec_state[4], _rec_state[5] = mon, mss.MSS()
+        _rec_state[2] = tempfile.mkdtemp(prefix="mb_rec_")
+        _rec_state[3] = 0
+        _rec_state[0] = threading.Event()
+        def worker():
+            idx, iv = 0, 1.0 / 30.0
+            while not _rec_state[0].is_set():
+                t0 = time.time()
+                try:
+                    f = _rec_state[5].grab(_rec_state[4])
+                    img = Image.frombytes("RGB", f.size, f.bgra, "raw", "BGRX")
+                    img.save(os.path.join(_rec_state[2], f"f_{idx:06d}.bmp"))
+                    idx += 1
+                except: pass
+                rem = iv - (time.time() - t0)
+                if rem > 0: _rec_state[0].wait(rem)
+            _rec_state[3] = idx
+        _rec_state[1] = threading.Thread(target=worker, daemon=True)
+        _rec_state[1].start()
+
+    def _rec_close(self):
+        if _rec_state[0] is not None:
+            _rec_state[0].set()
+            if _rec_state[1]: _rec_state[1].join(timeout=5)
+            total = _rec_state[3]
+            if total > 0 and _rec_state[2] and _rec_state[6]:
+                p = os.path.join(_rec_state[2], "f_%06d.bmp")
+                cmd = ["ffmpeg", "-y", "-framerate", "30", "-i", p,
+                       "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                       "-crf", "18", "-preset", "fast", _rec_state[6]]
+                try:
+                    subprocess.run(cmd, check=True, capture_output=True)
+                    sz = os.path.getsize(_rec_state[6]) / 1024
+                    print(f"     ✓ saved ({total} frames, {sz:.0f} KB)")
+                except FileNotFoundError:
+                    print("     ✗ ffmpeg not found")
+                except subprocess.CalledProcessError as e:
+                    print(f"     ✗ ffmpeg: {(e.stderr or b'')[:200]}")
+            elif total == 0: print("     ⚠ 0 frames")
+            _rec_state[0], _rec_state[1] = None, None
+            if _rec_state[5]: _rec_state[5].close(); _rec_state[5] = None
+            if _rec_state[2]: shutil.rmtree(_rec_state[2], ignore_errors=True)
+            _rec_state[2], _rec_state[3], _rec_state[4], _rec_state[6] = None, 0, None, ""
+        _orig_close(self)
+
+    VulkanRender.__init__ = _rec_init
+    VulkanRender.close = _rec_close
+
+    # -- cache helpers --
+    TEX_CACHE = os.path.join(os.path.dirname(PROJECT_DIR), "tex_cache")
+    media_tex = os.path.join(os.path.dirname(PROJECT_DIR), "media", "Tex")
+
+    def restore_tex():
+        if not os.path.exists(TEX_CACHE): return
+        os.makedirs(media_tex, exist_ok=True)
+        for fn in os.listdir(TEX_CACHE):
+            s, d = os.path.join(TEX_CACHE, fn), os.path.join(media_tex, fn)
+            if not os.path.exists(d): shutil.copy2(s, d)
+
+    def save_tex():
+        if not os.path.exists(media_tex): return
+        os.makedirs(TEX_CACHE, exist_ok=True)
+        for fn in os.listdir(media_tex):
+            s, d = os.path.join(media_tex, fn), os.path.join(TEX_CACHE, fn)
+            if not os.path.exists(d): shutil.copy2(s, d)
+
+    def clean_media():
+        d = os.path.join(os.path.dirname(PROJECT_DIR), "media")
+        if os.path.exists(d):
+            for _ in range(3):
+                try: shutil.rmtree(d); break
+                except: time.sleep(0.5)
+
+    ALL_SCENES = [
+        (1, "Create", DemoCreate),
+        (2, "Write_Unwrite", DemoWriteUnwrite),
+        (3, "Transform", DemoTransform),
+        (4, "ReplacementTransform", DemoReplacementTransform),
+        (5, "FadeIn_FadeOut", DemoFadeInFadeOut),
+        (6, "FadeTransform", DemoFadeTransform),
+        (7, "Rotating", DemoRotating),
+        (8, "TransformMatchingShapes", DemoTransformMatchingShapes),
+        (9, "VGroup", DemoVGroup),
+        (10, "AllShapes", DemoAllShapes),
+        (11, "Succession", DemoSuccession),
+        (12, "FadeInShift", DemoFadeInShift),
+        (13, "TextFeatures", DemoTextFeatures),
+        (14, "Combined", DemoCombined),
+        (15, "DefaultAdd", DemoDefaultAdd),
+        (16, "AddWithRunTime", DemoAddWithRunTime),
+        (17, "LagRatios", DemoLagRatios),
+        (18, "ChangeDefaultAnimation", DemoChangeDefaultAnimation),
+        (19, "AnimatedBoundary", DemoAnimatedBoundary),
+        (20, "TracedPath", DemoTracedPath),
+        (21, "DissipatingPath", DemoDissipatingPath),
+        (22, "LaggedStart", DemoLaggedStart),
+        (23, "LaggedStartMap", DemoLaggedStartMap),
+        (24, "SuccessionDots", DemoSuccessionDots),
+        (25, "CreateSquare", DemoCreateSquare),
+        (26, "DrawBorderThenFill", DemoDrawBorderThenFill),
+        (27, "ShowIncreasingSubsets", DemoShowIncreasingSubsets),
+        (28, "SpiralIn", DemoSpiralIn),
+        (29, "TypeWithCursor", DemoTypeWithCursor),
+        (30, "UntypeWithCursor", DemoUntypeWithCursor),
+        (31, "Uncreate", DemoUncreate),
+        (32, "Unwrite_RevTrue", DemoUnwriteReverseTrue),
+        (33, "Unwrite_RevFalse", DemoUnwriteReverseFalse),
+        (34, "ShowWrite", DemoShowWrite),
+        (35, "ShowWriteReversed", DemoShowWriteReversed),
+        (36, "FadeInExample", DemoFadeInExample),
+        (37, "FadeOutExample", DemoFadeOutExample),
+        (38, "GrowFromCenter", DemoGrowFromCenter),
+        (39, "GrowArrow", DemoGrowArrow),
+        (40, "GrowFromEdge", DemoGrowFromEdge),
+        (41, "GrowFromPoint", DemoGrowFromPoint),
+        (42, "SpinInFromNothing", DemoSpinInFromNothing),
+        (43, "ApplyingWaves", DemoApplyingWaves),
+        (44, "Blinking", DemoBlinking),
+        (45, "Circumscribe", DemoCircumscribe),
+        (46, "UsingFlash", DemoUsingFlash),
+        (47, "FlashOnCircle", DemoFlashOnCircle),
+        (48, "FocusOn", DemoFocusOn),
+        (49, "UsingIndicate", DemoUsingIndicate),
+        (50, "TimeWidthValues", DemoTimeWidthValues),
+        (51, "Wiggle", DemoWiggle),
+        (52, "Homotopy", DemoHomotopy),
+        (53, "MoveAlongPath", DemoMoveAlongPath),
+        (54, "ChangeDecimalToValue", DemoChangeDecimalToValue),
+        (55, "ChangingDecimal", DemoChangingDecimal),
+        (56, "UsingRotate", DemoUsingRotate),
+        (57, "RotatingAbout", DemoRotatingAbout),
+        (58, "Broadcast", BroadcastExample),
+        (59, "SpeedModifier", SpeedModifierExample),
+        (60, "SpeedModifierUpdater", SpeedModifierUpdaterExample),
+        (61, "SpeedModifierUpdater2", SpeedModifierUpdaterExample2),
+        (62, "ApplyMatrix", ApplyMatrixExample),
+        (63, "WarpSquare", WarpSquare),
+        (64, "ClockwiseTransform", ClockwiseExample),
+        (65, "Counterclockwise", CounterclockwiseTransform_vs_Transform),
+        (66, "CyclicReplace", DemoCyclicReplace),
+        (67, "FadeToColor", DemoFadeToColor),
+        (68, "DifferentFadeTransforms", DemoDifferentFadeTransforms),
+        (69, "FadeTransformPieces", DemoFadeTransformPieces),
+        (70, "MoveToTarget", DemoMoveToTarget),
+        (71, "ReplacementTransformOr", DemoReplacementTransformOrTransform),
+        (72, "Restore", DemoRestore),
+        (73, "ScaleInPlace", DemoScaleInPlace),
+        (74, "ShrinkToCenter", DemoShrinkToCenter),
+        (75, "TransformPathArc", DemoTransformPathArc),
+        (76, "Anagram", DemoAnagram),
+        (77, "MatchingEquationParts", DemoMatchingEquationParts),
+        (78, "TangentAnimation", DemoTangentAnimation),
+        (79, "LatexWithoutLatex", DemoLatexWithoutLatex),
+        (80, "FourierTransform", DemoFourierTransform),
+        (81, "LorenzButterfly", DemoLorenzButterfly),
+    ]
+
+    print("=" * 55)
+    print("  Manim Vulkan — Download All Demo Scenes")
+    print("=" * 55)
+    ok, fail = [], []
+    for num, name, cls in ALL_SCENES:
+        _scene_name, _scene_num = name, num
+        restore_tex()
+        try:
+            s = cls(); s.construct(); ok.append(name)
+        except Exception as e:
+            fail.append((name, str(e)))
+            print(f"     ✗ ERROR: {e}")
+        save_tex(); clean_media(); time.sleep(2.0)
+    print(); print(f"  Done: {len(ok)}/{len(ALL_SCENES)}")
+    for n, e in fail: print(f"    ✗ {n}: {e[:120]}")

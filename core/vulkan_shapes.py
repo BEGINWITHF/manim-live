@@ -202,6 +202,7 @@ class ShapeMixin:
             cg = int(cg * so)
             cb = int(cb * so)
             sw = max(1, round(self._stroke_width(mob)))
+            # Match legacy behavior: fixed segment tessellation (segs=48)
             segs = 48
             circumference = math.pi * (3 * (rx + ry) - math.sqrt((3 * rx + ry) * (rx + 3 * ry)))
             drawn = circumference * progress
@@ -268,6 +269,7 @@ class ShapeMixin:
             cg = int(cg * so)
             cb = int(cb * so)
             sw = max(1, round(self._stroke_width(mob)))
+            # Match legacy behavior: fixed segment tessellation (segs=48)
             segs = 48
             circumference = 2.0 * math.pi * sr
             drawn = circumference * progress
@@ -465,6 +467,21 @@ class ShapeMixin:
         if parent_offset is not None:
             cx += parent_offset[0]
             cy += parent_offset[1]
+
+        # GrowFromCenter / GrowArrow / GrowFromEdge / GrowFromPoint support
+        grow_scale = getattr(mob, '_grow_scale', 1.0)
+        grow_pt = getattr(mob, '_grow_point', None)
+        if grow_scale != 1.0 and grow_pt is not None:
+            new_verts = []
+            for v in verts:
+                vx = float(v[0]); vy = float(v[1])
+                vx = grow_pt[0] + (vx - grow_pt[0]) * grow_scale
+                vy = grow_pt[1] + (vy - grow_pt[1]) * grow_scale
+                new_verts.append([vx, vy, float(v[2])])
+            verts = new_verts
+            cx = grow_pt[0] + (cx - grow_pt[0]) * grow_scale
+            cy = grow_pt[1] + (cy - grow_pt[1]) * grow_scale
+
         sx, sy = manim_to_screen(cx, cy, w, h)
         br, bg, bb = self._stroke_color(mob)
         bw = self._stroke_width(mob)
@@ -505,39 +522,38 @@ class ShapeMixin:
                 el = math.sqrt(dx * dx + dy * dy)
                 edge_lens.append(el)
                 perimeter += el
-            if alpha >= 1.0:
-                sr, sg, sb = br, bg, bb
-                sw = max(1, round(bw))
-                lower_dist = perimeter * progress_lower
-                upper_dist = perimeter * progress_upper
-                skip = lower_dist
-                remaining = upper_dist
-                for j in range(n):
-                    if remaining <= 0:
-                        break
-                    j2 = (j + 1) % n
-                    el = edge_lens[j]
-                    x0, y0 = flat[j * 2], flat[j * 2 + 1]
-                    x1, y1 = flat[j2 * 2], flat[j2 * 2 + 1]
-                    if skip >= el:
-                        skip -= el
-                        continue
-                    seg_start = el - skip
-                    if seg_start > 0:
-                        frac_start = (el - seg_start) / el if el > 0 else 0
-                        x0 = x0 + (x1 - x0) * frac_start
-                        y0 = y0 + (y1 - y0) * frac_start
-                        skip = 0
-                        el = seg_start
-                    if remaining >= el:
-                        self.dll.AddLine(x0, y0, x1, y1, sw, sr, sg, sb, alpha)
-                        remaining -= el
-                    else:
-                        frac = remaining / el if el > 0 else 0
-                        ex = x0 + (x1 - x0) * frac
-                        ey = y0 + (y1 - y0) * frac
-                        self.dll.AddLine(x0, y0, ex, ey, sw, sr, sg, sb, alpha)
-                        remaining = 0
+            sr, sg, sb = br, bg, bb
+            sw = max(1, round(bw))
+            lower_dist = perimeter * progress_lower
+            upper_dist = perimeter * progress_upper
+            skip = lower_dist
+            remaining = upper_dist
+            for j in range(n):
+                if remaining <= 0:
+                    break
+                j2 = (j + 1) % n
+                el = edge_lens[j]
+                x0, y0 = flat[j * 2], flat[j * 2 + 1]
+                x1, y1 = flat[j2 * 2], flat[j2 * 2 + 1]
+                if skip >= el:
+                    skip -= el
+                    continue
+                seg_start = el - skip
+                if seg_start > 0:
+                    frac_start = (el - seg_start) / el if el > 0 else 0
+                    x0 = x0 + (x1 - x0) * frac_start
+                    y0 = y0 + (y1 - y0) * frac_start
+                    skip = 0
+                    el = seg_start
+                if remaining >= el:
+                    self.dll.AddLine(x0, y0, x1, y1, sw, sr, sg, sb, alpha)
+                    remaining -= el
+                else:
+                    frac = remaining / el if el > 0 else 0
+                    ex = x0 + (x1 - x0) * frac
+                    ey = y0 + (y1 - y0) * frac
+                    self.dll.AddLine(x0, y0, ex, ey, sw, sr, sg, sb, alpha)
+                    remaining = 0
         else:
             flat = []
             for v in verts:

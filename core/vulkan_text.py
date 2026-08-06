@@ -315,6 +315,42 @@ class TextMixin:
 
         n = len(flat) // 3
         if n < 8:
+            # Fill: render as a convex polygon when the mobject has fill opacity
+            fo = 0.0
+            try:
+                frgbas = mob.get_fill_rgbas()
+                if len(frgbas) > 0:
+                    fo = float(frgbas[0][3])
+            except Exception:
+                fo = mob.get_fill_opacity() if hasattr(mob, 'get_fill_opacity') else 0.0
+            if fo > 0.01 and n >= 3:
+                fr, fg, fb = 0, 0, 0
+                try:
+                    frgbas = mob.get_fill_rgbas()
+                    if len(frgbas) > 0:
+                        fr = float(frgbas[0][0])
+                        fg = float(frgbas[0][1])
+                        fb = float(frgbas[0][2])
+                except Exception:
+                    pass
+                if fr == 0 and fg == 0 and fb == 0:
+                    try:
+                        c = mob.get_color()
+                        fr, fg, fb = float(c[0]), float(c[1]), float(c[2])
+                    except Exception:
+                        fr, fg, fb = 1.0, 1.0, 1.0
+                fri = round(fr * 255)
+                fgi = round(fg * 255)
+                fbi = round(fb * 255)
+                fill_alpha = min(1.0, fo * a)
+                fverts = (ctypes.c_float * (n * 2))()
+                for i in range(n):
+                    fverts[i * 2] = flat[i * 3]
+                    fverts[i * 2 + 1] = flat[i * 3 + 1]
+                self.dll.AddPolygon(
+                    flat[0], flat[1], fri, fgi, fbi, fri, fgi, fbi, 0,
+                    n, fverts, 1.0, fill_alpha, 1,
+                )
             if n >= 2:
                 sr, sg, sb = 1, 1, 1
                 try:

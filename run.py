@@ -24,7 +24,8 @@ from scenes.demo_scene import (
     DemoMoveToTarget, DemoReplacementTransformOrTransform,
     DemoRestore, DemoScaleInPlace, DemoShrinkToCenter,
     DemoTransformPathArc, DemoAnagram, DemoMatchingEquationParts,
-    DemoTangentAnimation, DemoLatexWithoutLatex,
+    DemoTangentAnimation, DemoLatexWithoutLatex, DemoFourierTransform,
+    DemoLorenzButterfly,
 )
 
 SCENES = [
@@ -107,6 +108,8 @@ SCENES = [
     ("77", "TransformMatchingShapes Equations",             DemoMatchingEquationParts),
     ("78", "TangentLine - sliding tangent",                   DemoTangentAnimation),
     ("79", "All LaTeX features - without LaTeX",               DemoLatexWithoutLatex),
+    ("80", "Fourier Transform - epicycles heart",             DemoFourierTransform),
+    ("81", "Lorenz Attractor - butterfly effect",              DemoLorenzButterfly),
 ]
 
 
@@ -177,12 +180,38 @@ def main():
 
     for n, desc, cls in SCENES:
         if n == num:
+            safe = "".join(c if c.isalnum() or c in "._" else "_" for c in desc)
+            out_dir = os.path.join(PROJECT_DIR, "downloaded_videos")
+            os.makedirs(out_dir, exist_ok=True)
+            out_path = os.path.join(out_dir, f"{n.zfill(2)}_{safe}.mp4")
+
+            # Monkey-patch VulkanRender to capture instance + auto-start record
+            import core.vulkan_bind as vb
+            _render_ref = [None]
+            _orig_init = vb.VulkanRender.__init__
+            _orig_close = vb.VulkanRender.close
+
+            def _patched_init(self, *args, **kwargs):
+                _orig_init(self, *args, **kwargs)
+                _render_ref[0] = self
+                self.start_record(out_path, fps=60)
+
+            def _patched_close(self):
+                self.stop_record()
+                _orig_close(self)
+
+            vb.VulkanRender.__init__ = _patched_init
+            vb.VulkanRender.close = _patched_close
+
             print(f"Running: {desc}")
             _restore_tex_cache()
             scene = cls()
             scene.construct()
             _save_tex_cache()
             _clean_media()
+
+            vb.VulkanRender.__init__ = _orig_init
+            vb.VulkanRender.close = _orig_close
             return
 
     print(f"Invalid option: {num}")
