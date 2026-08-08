@@ -675,7 +675,16 @@ class VulkanRender(ShapeMixin, TextMixin):
         if self.dll.Vulkan_Init(w, h) != 1:
             raise RuntimeError("Vulkan_Init failed")
 
-        font_paths = [r"C:\Windows\Fonts\times.ttf", r"C:\Windows\Fonts\arial.ttf"]
+        import sys
+        if sys.platform == 'darwin':
+            font_paths = [
+                "/System/Library/Fonts/Times.ttc",
+                "/System/Library/Fonts/Helvetica.ttc",
+                "/System/Library/Fonts/Supplemental/Arial.ttf",
+                "/Library/Fonts/Arial.ttf",
+            ]
+        else:
+            font_paths = [r"C:\Windows\Fonts\times.ttf", r"C:\Windows\Fonts\arial.ttf"]
         font_loaded = False
         for fp in font_paths:
             try:
@@ -1640,6 +1649,11 @@ class VulkanRender(ShapeMixin, TextMixin):
         return self.dll.SaveScreenshot(path_bytes)
 
     def screenshot_printwindow(self, path):
+        import sys
+        if sys.platform == 'darwin':
+            path_bytes = path.encode('utf-8') if isinstance(path, str) else path
+            return self.dll.SaveScreenshot(path_bytes) == 1
+
         import ctypes.wintypes as wt
         user32 = ctypes.windll.user32
         gdi32 = ctypes.windll.gdi32

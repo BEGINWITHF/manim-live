@@ -56,9 +56,12 @@ VkBuffer g_vert_buf = VK_NULL_HANDLE;
 
 VkDeviceMemory g_vert_buf_mem = VK_NULL_HANDLE;
 
+#ifdef _WIN32
 HWND g_hwnd = NULL;
-
 HINSTANCE g_hinst = NULL;
+#else
+void* g_metalLayer = NULL;
+#endif
 
 bool g_is_ready = false;
 
@@ -168,13 +171,19 @@ static void CreateInstance(void) {
 
     app_info.apiVersion = VK_API_VERSION_1_0;
 
+#ifdef _WIN32
     const char *extensions[] = {
-
         VK_KHR_SURFACE_EXTENSION_NAME,
-
         VK_KHR_WIN32_SURFACE_EXTENSION_NAME
-
     };
+    uint32_t extCount = 2;
+#else
+    const char *extensions[] = {
+        VK_KHR_SURFACE_EXTENSION_NAME,
+        VK_EXT_METAL_SURFACE_EXTENSION_NAME,
+    };
+    uint32_t extCount = 2;
+#endif
 
     VkInstanceCreateInfo ci = {0};
 
@@ -182,7 +191,10 @@ static void CreateInstance(void) {
 
     ci.pApplicationInfo = &app_info;
 
-    ci.enabledExtensionCount = 2;
+#ifdef __APPLE__
+    ci.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+#endif
+    ci.enabledExtensionCount = extCount;
 
     ci.ppEnabledExtensionNames = extensions;
 
@@ -198,21 +210,24 @@ static void CreateInstance(void) {
 
 static void CreateSurface(void) {
 
+#ifdef _WIN32
     VkWin32SurfaceCreateInfoKHR ci = {0};
-
     ci.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-
     ci.hinstance = g_hinst;
-
     ci.hwnd = g_hwnd;
-
     if (vkCreateWin32SurfaceKHR(g_inst, &ci, NULL, &g_surface) != VK_SUCCESS) {
-
         fprintf(stderr, "Failed to create Win32 surface!\n");
-
         exit(-1);
-
     }
+#else
+    VkMetalSurfaceCreateInfoEXT ci = {0};
+    ci.sType = VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT;
+    ci.pLayer = (CAMetalLayer *)g_metalLayer;
+    if (vkCreateMetalSurfaceEXT(g_inst, &ci, NULL, &g_surface) != VK_SUCCESS) {
+        fprintf(stderr, "Failed to create Metal surface!\n");
+        exit(-1);
+    }
+#endif
 
 }
 
@@ -248,7 +263,16 @@ static void CreateLogicalDevice(void) {
 
     qci.pQueuePriorities = &prio;
 
+#ifdef __APPLE__
+    const char *exts[] = {
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+        "VK_KHR_portability_subset"
+    };
+    uint32_t extCount = 2;
+#else
     const char *exts[] = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+    uint32_t extCount = 1;
+#endif
 
     VkDeviceCreateInfo dci = {0};
 
@@ -258,7 +282,7 @@ static void CreateLogicalDevice(void) {
 
     dci.pQueueCreateInfos = &qci;
 
-    dci.enabledExtensionCount = 1;
+    dci.enabledExtensionCount = extCount;
 
     dci.ppEnabledExtensionNames = exts;
 
@@ -689,11 +713,17 @@ static void CreateVertexBuffer(void) {
 
 }
 
+#ifdef _WIN32
 void Render_Init(HWND hwnd, int width, int height, HINSTANCE hinst) {
 
     g_hwnd = hwnd;
 
     g_hinst = hinst;
+#else
+void Render_Init(void* metalLayer, int width, int height) {
+
+    g_metalLayer = metalLayer;
+#endif
 
     g_swapchain_ext = (VkExtent2D){(uint32_t)width, (uint32_t)height};
 
@@ -762,11 +792,16 @@ void CleanupSwapchain(void) {
 
 void RecreateSwapchain(void) {
     int width = 0, height = 0;
+#ifdef _WIN32
     RECT rect;
     if (GetClientRect(g_hwnd, &rect)) {
         width = rect.right - rect.left;
         height = rect.bottom - rect.top;
     }
+#else
+    width = (int)g_swapchain_ext.width;
+    height = (int)g_swapchain_ext.height;
+#endif
     if (width == 0 || height == 0) return;
 
     vkDeviceWaitIdle(g_dev);
