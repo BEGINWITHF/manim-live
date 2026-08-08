@@ -64,7 +64,6 @@ class TextMixin:
             pts = sub.get_points()
             if len(pts) < 8:
                 continue
-
             flat = []
             for p in pts:
                 sx, sy = manim_to_screen(p[0], p[1], w, h)
@@ -87,6 +86,10 @@ class TextMixin:
             sr, sg, sb = base_r, base_g, base_b
             stroke_width = 2.0 * stroke_fade
             show_stroke = 1 if stroke_width > 0.001 else 0
+
+            # Once the fill is present, stop drawing the (by then black)
+            # stroke on top of it — otherwise glyphs read as outlines.
+            show_stroke = 0 if fill_alpha > 0.01 else 1
 
             self.dll.AddBezierPath(
                 arr, n,

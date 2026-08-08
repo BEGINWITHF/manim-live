@@ -713,6 +713,54 @@ static void CreateVertexBuffer(void) {
 
 }
 
+// ── Framebuffer readback (for screenshots / offline recording) ──
+VkBuffer g_staging_buf = VK_NULL_HANDLE;
+VkDeviceMemory g_staging_mem = VK_NULL_HANDLE;
+VkDeviceSize g_staging_size = 0;
+uint32_t g_last_image_idx = 0;
+uint32_t g_readback_requested = 0;   // set by Vulkan_ReadPixels; draw loop copies frame
+uint32_t g_readback_available = 0;   // staging buffer holds a fresh frame
+
+static void CreateReadbackResources(void) {
+    g_staging_size = (VkDeviceSize)g_swapchain_ext.width * g_swapchain_ext.height * 4;
+    CreateBuffer(g_staging_size,
+                 VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                 &g_staging_buf, &g_staging_mem);
+}
+
+// Two-phase API:
+//   call 1: requests a copy of the NEXT drawn frame, returns 0 ("pending")
+//   call 2 (after Vulkan_Tick drew that frame): maps staging, returns 1
+int Render_ReadPixels(unsigned char *out, int *w, int *h) {
+    if (!g_is_ready || !g_staging_buf) return 0;
+    if (w) *w = (int)g_swapchain_ext.width;
+    if (h) *h = (int)g_swapchain_ext.height;
+
+    if (g_readback_available) {
+        vkDeviceWaitIdle(g_dev);
+        void *mapped = NULL;
+        vkMapMemory(g_dev, g_staging_mem, 0, g_staging_size, 0, &mapped);
+        if (!mapped) return 0;
+        // BGRA in memory (VK_FORMAT_B8G8R8A8); output RGBA
+        size_t px_count = (size_t)g_swapchain_ext.width * g_swapchain_ext.height;
+        const unsigned char *src = (const unsigned char *)mapped;
+        for (size_t i = 0; i < px_count; i++) {
+            out[i*4+0] = src[i*4+2]; // R
+            out[i*4+1] = src[i*4+1]; // G
+            out[i*4+2] = src[i*4+0]; // B
+            out[i*4+3] = src[i*4+3]; // A
+        }
+        vkUnmapMemory(g_dev, g_staging_mem);
+        g_readback_available = 0;
+        return 1;
+    }
+
+    // Request: the next Vulkan_Tick frame will copy into staging.
+    g_readback_requested = 1;
+    return 0;
+}
+
 #ifdef _WIN32
 void Render_Init(HWND hwnd, int width, int height, HINSTANCE hinst) {
 
@@ -752,6 +800,8 @@ void Render_Init(void* metalLayer, int width, int height) {
     CreateSyncObjects();
 
     CreateVertexBuffer();
+
+    CreateReadbackResources();
 
     g_is_ready = true;
 
@@ -814,6 +864,37 @@ void RecreateSwapchain(void) {
     CreateFramebuffers();
 }
 
+// Resize the swapchain to an explicit size (used on macOS where the window
+// size must follow the actual view in physical pixels).
+void ResizeSwapchain(int width, int height) {
+    if (!g_is_ready || width <= 0 || height <= 0) return;
+    if ((uint32_t)width == g_swapchain_ext.width &&
+        (uint32_t)height == g_swapchain_ext.height) return;
+
+    vkDeviceWaitIdle(g_dev);
+
+    CleanupSwapchain();
+
+    // Recreate the readback staging buffer at the new size.
+    if (g_staging_buf) {
+        vkDestroyBuffer(g_dev, g_staging_buf, NULL);
+        vkFreeMemory(g_dev, g_staging_mem, NULL);
+        g_staging_buf = VK_NULL_HANDLE;
+        g_readback_requested = 0;
+        g_readback_available = 0;
+    }
+    g_staging_size = (VkDeviceSize)width * height * 4;
+    CreateBuffer(g_staging_size,
+                 VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                 &g_staging_buf, &g_staging_mem);
+
+    g_swapchain_ext = (VkExtent2D){(uint32_t)width, (uint32_t)height};
+    CreateSwapchain();
+    CreateImageViews();
+    CreateFramebuffers();
+}
+
 void Render_Cleanup(void) {
 
     if (!g_is_ready) return;
@@ -841,6 +922,12 @@ void Render_Cleanup(void) {
 
     vkDestroyBuffer(g_dev, g_vert_buf, NULL);
     vkFreeMemory(g_dev, g_vert_buf_mem, NULL);
+
+    if (g_staging_buf) {
+        vkDestroyBuffer(g_dev, g_staging_buf, NULL);
+        vkFreeMemory(g_dev, g_staging_mem, NULL);
+        g_staging_buf = VK_NULL_HANDLE;
+    }
 
     vkDestroySurfaceKHR(g_inst, g_surface, NULL);
     vkDestroyDevice(g_dev, NULL);

@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <dlfcn.h>
 
 // ============================================================
 // Shape buffers and draw commands (same as Windows platform.c)
@@ -126,11 +127,20 @@ int Vulkan_Init(int w, int h) {
     // Create CAMetalLayer
     g_metal_layer = [CAMetalLayer layer];
     g_metal_layer.device = MTLCreateSystemDefaultDevice();
-    g_metal_layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
+    // Must match the Vulkan swapchain format (VK_FORMAT_B8G8R8A8_SRGB)
+    // or sRGB-encoded colors are displayed as linear -> washed out.
+    g_metal_layer.pixelFormat = MTLPixelFormatBGRA8Unorm_sRGB;
     g_metal_layer.framebufferOnly = NO;
     g_metal_layer.frame = g_view.bounds;
     g_metal_layer.opaque = YES;
-    g_metal_layer.drawableSize = CGSizeMake(w, h);
+    g_metal_layer.contentsScale = [g_window backingScaleFactor];
+    // Render at physical pixel resolution (points x retina scale) so edges
+    // stay crisp instead of being upscaled.
+    CGFloat scale = g_metal_layer.contentsScale;
+    if (scale < 1.0) scale = 1.0;
+    int px_w = (int)(NSWidth([g_view bounds]) * scale + 0.5);
+    int px_h = (int)(NSHeight([g_view bounds]) * scale + 0.5);
+    g_metal_layer.drawableSize = CGSizeMake(px_w, px_h);
 
     [g_view setLayer:g_metal_layer];
     [g_view setWantsLayer:YES];
@@ -139,11 +149,11 @@ int Vulkan_Init(int w, int h) {
     g_delegate = [[ManimWindowDelegate alloc] init];
     [g_window setDelegate:g_delegate];
 
-    g_win_w = w;
-    g_win_h = h;
+    g_win_w = px_w;
+    g_win_h = px_h;
 
-    // Initialize Vulkan renderer with the CAMetalLayer
-    Render_Init((__bridge void*)g_metal_layer, w, h);
+    // Initialize Vulkan renderer with the CAMetalLayer (physical pixel size)
+    Render_Init((__bridge void*)g_metal_layer, px_w, px_h);
 
     if (!Render_IsReady()) {
         fprintf(stderr, "[ERROR] Vulkan renderer failed to initialize\n");
@@ -173,10 +183,17 @@ int Vulkan_Tick(void) {
         return 0;
     }
 
-    if (g_framebuffer_resized) {
-        g_framebuffer_resized = false;
-        RecreateSwapchain();
+    // Keep the swapchain in sync with the actual view size (physical pixels).
+    // On Retina the view is in points; the layer's drawableSize is pixels.
+    CGFloat scale = [g_window backingScaleFactor];
+    if (scale < 1.0) scale = 1.0;
+    int dw = (int)(NSWidth([g_view bounds]) * scale + 0.5);
+    int dh = (int)(NSHeight([g_view bounds]) * scale + 0.5);
+    g_metal_layer.drawableSize = CGSizeMake(dw, dh);
+    if (dw != (int)g_swapchain_ext.width || dh != (int)g_swapchain_ext.height) {
+        ResizeSwapchain(dw, dh);
     }
+    g_framebuffer_resized = false;
 
     Render_DrawScene(
         g_rects, g_rect_count,
@@ -193,11 +210,10 @@ int Vulkan_Tick(void) {
     extern uint32_t g_vertex_count;
     Render_DrawFrame(g_vertex_count);
 
-    // Return window size as packed int (same as Windows version)
-    NSRect contentRect = [g_view bounds];
-    int cw = (int)contentRect.size.width;
-    int ch = (int)contentRect.size.height;
-    return (cw << 16) | (ch & 0xFFFF);
+    // Return the swapchain size (physical pixels) packed as int, so the
+    // Python side computes coordinates in the same space as the viewport.
+    return (((int)g_swapchain_ext.width & 0xFFFF) << 16) |
+           ((int)g_swapchain_ext.height & 0xFFFF);
 }
 
 // ============================================================
@@ -220,25 +236,79 @@ void Vulkan_Shutdown(void) {
 int SaveScreenshot(const char *path) {
     if (!g_window || ![g_window isVisible]) return 0;
 
-    NSView *view = [g_window contentView];
-    NSRect bounds = [view bounds];
-    NSBitmapImageRep *rep = [view bitmapImageRepForCachingDisplayInRect:bounds];
-    if (!rep) return 0;
+    // CGWindowListCreateImage is deprecated (unavailable) in the macOS 15 SDK
+    // but still present at runtime; call it via dlsym to capture the
+    // CAMetalLayer window contents (NSView cacheDisplay does NOT capture
+    // Metal layer content).
+    CGImageRef image = NULL;
+    typedef CGImageRef (*CGWindowListCreateImageFn)(CGRect, CGWindowListOption, CGWindowID, CGWindowImageOption);
+    CGWindowListCreateImageFn fn = (CGWindowListCreateImageFn)dlsym(RTLD_DEFAULT, "CGWindowListCreateImage");
+    if (fn) {
+        CGWindowID windowID = (CGWindowID)[g_window windowNumber];
+        // Retry: the window may still be appearing / not yet presented.
+        for (int attempt = 0; attempt < 6 && !image; attempt++) {
+            image = fn(CGRectNull,
+                       kCGWindowListOptionIncludingWindow,
+                       windowID,
+                       kCGWindowImageBoundsIgnoreFraming);
+            if (!image) usleep(50 * 1000);
+        }
+        // Black-frame guard: if the captured image is entirely black the
+        // window was likely not presented yet — retry a couple of times.
+        // Only active until the first frame with real content has been seen;
+        // otherwise legitimately mostly-black frames (e.g. the early frames
+        // of a Write animation on a black background) would be discarded.
+        static int saw_content = 0;
+        for (int attempt = 0; image && !saw_content && attempt < 4; attempt++) {
+            CGDataProviderRef prov = CGImageGetDataProvider(image);
+            CFDataRef cf = prov ? CGDataProviderCopyData(prov) : NULL;
+            bool allBlack = true;
+            if (cf) {
+                const uint8_t *p = CFDataGetBytePtr(cf);
+                size_t n = CFDataGetLength(cf) / 4;  // 32bpp
+                for (size_t i = 0; i < n; i += 199) {  // sparse sample
+                    if (p[i*4+0] || p[i*4+1] || p[i*4+2]) { allBlack = false; break; }
+                }
+                CFRelease(cf);
+            }
+            if (!allBlack) { saw_content = 1; break; }
+            CFRelease(image); image = NULL;
+            usleep(50 * 1000);
+            image = fn(CGRectNull,
+                       kCGWindowListOptionIncludingWindow,
+                       windowID,
+                       kCGWindowImageBoundsIgnoreFraming);
+        }
+    }
+    if (!image) return 0;
 
-    [view cacheDisplayInRect:bounds toBitmapImageRep:rep];
+    size_t width = CGImageGetWidth(image);
+    size_t height = CGImageGetHeight(image);
+    size_t bmpRowBytes = width * 4;          // 32-bit RGBA context rows
+    size_t outRowBytes = ((width * 3 + 3) & ~3);  // 24-bit BMP rows
+    size_t imgSize = outRowBytes * height;
 
-    size_t width = (size_t)[rep pixelsWide];
-    size_t height = (size_t)[rep pixelsHigh];
-    size_t rowBytes = ((width * 3 + 3) & ~3);
-    size_t imgSize = rowBytes * height;
-    unsigned char *srcData = [rep bitmapData];
-    size_t srcRowBytes = [rep bytesPerRow];
-    NSUInteger srcBPP = [rep bitsPerPixel] / 8;
+    // Read the CGImage's raw pixel data via its data provider.
+    // The CGImage from CGWindowListCreateImage is typically 32bpp
+    // premultiplied; get the native bytes and channel layout.
+    CGDataProviderRef provider = CGImageGetDataProvider(image);
+    CFDataRef cfData = CGDataProviderCopyData(provider);
+    if (!cfData) return 0;
+    const uint8_t *raw = CFDataGetBytePtr(cfData);
+    size_t rawBytesPerRow = CGImageGetBytesPerRow(image);
+    size_t bitsPerPixel = CGImageGetBitsPerPixel(image);
+    size_t bytesPerPixel = bitsPerPixel / 8;
+    CGBitmapInfo bitmapInfo = CGImageGetBitmapInfo(image);
+    // Determine channel order from byte-order flags
+    bool littleEndian = (bitmapInfo & kCGBitmapByteOrder32Little) != 0;
 
     FILE *fp = fopen(path, "wb");
-    if (!fp) return 0;
+    if (!fp) {
+        CFRelease(cfData);
+        CGImageRelease(image);
+        return 0;
+    }
 
-    // Write BMP header
     uint32_t bfType = 0x4D42;
     uint32_t bfOffBits = 54;
     uint32_t bfSize = bfOffBits + (uint32_t)imgSize;
@@ -250,6 +320,8 @@ int SaveScreenshot(const char *path) {
     uint32_t biCompression = 0;
     uint32_t biSizeImage = (uint32_t)imgSize;
     uint16_t reserved = 0;
+    uint32_t rowPad = (4 - (uint32_t)(width * 3 % 4)) % 4;
+    uint8_t padBytes[3] = {0, 0, 0};
 
     fwrite(&bfType, 2, 1, fp);
     fwrite(&bfSize, 4, 1, fp);
@@ -269,18 +341,27 @@ int SaveScreenshot(const char *path) {
     fwrite(&zero32, 4, 1, fp);
     fwrite(&zero32, 4, 1, fp);
 
-    // Write pixel data: NSBitmapImageRep is RGBA, BMP expects BGR (bottom-up)
-    for (int32_t y = 0; y < (int32_t)height; y++) {
-        unsigned char *row = srcData + y * srcRowBytes;
+    // Write pixel rows: raw data is premultiplied; byte order flags decide
+    // whether it is RGBA or BGRA. BMP wants BGR.
+    if (bytesPerPixel < 3) bytesPerPixel = 4;
+    for (size_t y = 0; y < height; y++) {
+        const uint8_t *row = raw + y * rawBytesPerRow;
         for (size_t x = 0; x < width; x++) {
-            // RGBA -> BGR
-            unsigned char *px = row + x * srcBPP;
-            uint8_t bgr[3] = { px[2], px[1], px[0] };
+            const uint8_t *px = row + x * bytesPerPixel;
+            uint8_t bgr[3];
+            if (littleEndian) {      // BGRA storage
+                bgr[0] = px[0]; bgr[1] = px[1]; bgr[2] = px[2];
+            } else {                 // RGBA storage
+                bgr[0] = px[2]; bgr[1] = px[1]; bgr[2] = px[0];
+            }
             fwrite(bgr, 3, 1, fp);
         }
+        if (rowPad) fwrite(padBytes, rowPad, 1, fp);
     }
 
     fclose(fp);
+    CFRelease(cfData);
+    CGImageRelease(image);
     return 1;
 }
 
@@ -391,4 +472,9 @@ void ClearShapes(void) {
     g_point_count = 0;
     g_text_count = 0;
     g_draw_cmd_count = 0;
+}
+
+// Direct framebuffer readback (RGBA, exact rendered pixels)
+int Vulkan_ReadPixels(unsigned char *out, int *w, int *h) {
+    return Render_ReadPixels(out, w, h);
 }

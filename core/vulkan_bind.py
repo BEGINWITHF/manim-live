@@ -1648,6 +1648,60 @@ class VulkanRender(ShapeMixin, TextMixin):
         path_bytes = path.encode('utf-8') if isinstance(path, str) else path
         return self.dll.SaveScreenshot(path_bytes)
 
+    def _screenshot_readback(self, path):
+        """macOS: capture via Vulkan framebuffer readback (two-phase).
+
+        Phase 1 call requests the copy of the NEXT drawn frame and returns
+        None; the caller retries and phase 2 returns the RGBA pixels, which
+        we write as a BMP. This avoids CGWindowList compositing (unreliable,
+        washed colors, slow) and gives exact framebuffer content.
+        """
+        dll = self.dll
+        if not hasattr(dll, 'Vulkan_ReadPixels'):
+            return False
+        if not hasattr(self, '_rb_w'):
+            self._rb_w = ctypes.c_int(0)
+            self._rb_h = ctypes.c_int(0)
+            self._rb_buf = (ctypes.c_ubyte * (4 * 4096 * 4096))()  # max 4K
+            dll.Vulkan_ReadPixels.restype = ctypes.c_int
+            dll.Vulkan_ReadPixels.argtypes = [
+                ctypes.POINTER(ctypes.c_ubyte),
+                ctypes.POINTER(ctypes.c_int),
+                ctypes.POINTER(ctypes.c_int),
+            ]
+        w, h, buf = self._rb_w, self._rb_h, self._rb_buf
+        rc = dll.Vulkan_ReadPixels(buf, ctypes.byref(w), ctypes.byref(h))
+        if rc != 1:
+            return False  # pending — next drawn frame will be copied
+        width, height = w.value, h.value
+        if width <= 0 or height <= 0:
+            return False
+        # RGBA buffer -> BMP (BGR, top-down, 4-byte row padding)
+        row_bytes = ((width * 3 + 3) // 4) * 4
+        img_size = row_bytes * height
+        header = bytearray(54)
+        header[0:2] = b'BM'
+        header[2:6] = (54 + img_size).to_bytes(4, 'little')
+        header[10:14] = (54).to_bytes(4, 'little')
+        header[14:18] = (40).to_bytes(4, 'little')
+        header[18:22] = width.to_bytes(4, 'little')
+        header[22:26] = (-height & 0xFFFFFFFF).to_bytes(4, 'little')  # top-down
+        header[26:28] = (1).to_bytes(2, 'little')
+        header[28:30] = (24).to_bytes(2, 'little')
+        header[34:38] = img_size.to_bytes(4, 'little')
+        try:
+            with open(path, 'wb') as f:
+                f.write(header)
+                for y in range(height):
+                    row = y * width * 4
+                    for x in range(width):
+                        i = row + x * 4
+                        f.write(bytes((buf[i + 2], buf[i + 1], buf[i])))  # BGR
+                    f.write(b'\x00' * (row_bytes - width * 3))
+        except Exception:
+            return False
+        return True
+
     def screenshot_printwindow(self, path):
         import sys
         if sys.platform == 'darwin':
@@ -1752,6 +1806,7 @@ class VulkanRender(ShapeMixin, TextMixin):
                 "-video_size", f"{w}x{h}",
                 "-framerate", str(fps),
                 "-i", "-",
+                "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
                 "-c:v", "libx264", "-pix_fmt", "yuv420p",
                 "-crf", "18", "-preset", "fast",
                 self._fast_record_path,
@@ -1859,6 +1914,7 @@ class VulkanRender(ShapeMixin, TextMixin):
             "ffmpeg", "-y",
             "-framerate", str(fps),
             "-i", pattern,
+            "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
             "-r", "60",
             "-c:v", "libx264",
             "-pix_fmt", "yuv420p",

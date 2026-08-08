@@ -54,6 +54,16 @@ class DrawBorderThenFill(Animation):
                 sub = mob.submobjects[i]
                 sub_alpha = self.get_sub_alpha(alpha, i, num_subs)
                 self._apply_single_two_phase(sub, sub_alpha)
+                # The Vulkan renderer draws the LEAF glyphs (family members
+                # with points), not the container parts — propagate the
+                # two-phase effect to them so MathTex/Tex actually write
+                # progressively instead of popping in fully-formed.
+                try:
+                    for fm in sub.family_members_with_points():
+                        if fm is not sub:
+                            self._apply_single_two_phase(fm, sub_alpha)
+                except Exception:
+                    pass
             mob._letter_alphas = {i: self.get_sub_alpha(alpha, i, num_subs) for i in range(num_subs)}
         else:
             self._apply_single_two_phase(mob, alpha)

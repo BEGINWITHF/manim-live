@@ -68,6 +68,25 @@ class DemoWriteUnwrite(Scene):
         render.close()
 
 
+class WriteFormula(Scene):
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "Write / Unwrite - LaTeX")
+
+        formula = MathTex(
+            r"I_{Cleo}=\int_{-1}^{1}\frac{1}{x}\sqrt{\frac{1+x}{1-x}}\ln\left(\frac{2x^2+2x+1}{2x^2-2x+1}\right)\,dx=4\pi \cot^{-1}\left(\sqrt{\phi}\right)",
+            font_size=28,
+        ).shift(UP * 0.2)
+
+        render.play(Write(formula, run_time=3.0))
+        render.play(Wait(0.8))
+        render.play(Unwrite(formula, run_time=2.0))
+        render.play(Wait(0.5))
+        render.close()
+
+
 class DemoTransform(Scene):
     def construct(self):
         render = VulkanRender(1920, 1080)
@@ -2214,6 +2233,7 @@ if __name__ == "__main__":
         (79, "LatexWithoutLatex", DemoLatexWithoutLatex),
         (80, "FourierTransform", DemoFourierTransform),
         (81, "LorenzButterfly", DemoLorenzButterfly),
+        (82, "WriteFormula", WriteFormula),
     ]
 
     print("=" * 55)

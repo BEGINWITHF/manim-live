@@ -2,7 +2,7 @@ import sys
 import os
 import shutil
 from scenes.demo_scene import (
-    DemoCreate, DemoWriteUnwrite, DemoTransform, DemoReplacementTransform,
+    DemoCreate, DemoWriteUnwrite, WriteFormula, DemoTransform, DemoReplacementTransform,
     DemoFadeInFadeOut, DemoFadeTransform, DemoRotating,
     DemoTransformMatchingShapes, DemoVGroup, DemoAllShapes,
     DemoSuccession, DemoFadeInShift, DemoTextFeatures, DemoCombined,
@@ -180,11 +180,11 @@ def main():
         num = input("\nEnter number: ").strip()
 
     for n, desc, cls in SCENES:
-        if n == num:
+        if str(n) == num:
             safe = "".join(c if c.isalnum() or c in "._" else "_" for c in desc)
             out_dir = os.path.join(PROJECT_DIR, "downloaded_videos")
             os.makedirs(out_dir, exist_ok=True)
-            out_path = os.path.join(out_dir, f"{n.zfill(2)}_{safe}.mp4")
+            out_path = os.path.join(out_dir, f"{str(n).zfill(2)}_{safe}.mp4")
 
             # Monkey-patch VulkanRender to capture instance + auto-start record
             import core.vulkan_bind as vb
@@ -208,6 +208,18 @@ def main():
             _restore_tex_cache()
             scene = cls()
             scene.construct()
+            # Safety net: stop recording + close the renderer if the scene
+            # forgot to call render.close() (e.g. DemoTracedPath).
+            render = _render_ref[0]
+            if render is not None:
+                try:
+                    if getattr(render, '_recording', False):
+                        render.stop_record()
+                    if not getattr(render, '_closed', False):
+                        render.close()
+                        render._closed = True
+                except Exception:
+                    pass
             _save_tex_cache()
             _clean_media()
 
