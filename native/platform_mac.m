@@ -88,14 +88,33 @@ int Vulkan_Init(int w, int h) {
     [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
     [NSApp activateIgnoringOtherApps:YES];
 
+    // Calculate window size (macOS uses content rect, no AdjustWindowRect needed).
+    // Preserve the REQUESTED aspect ratio: macOS clamps oversized windows to
+    // fit the screen, which would distort the aspect (e.g. a 1920x1080 window
+    // on a 1366x1024-pt screen becomes ~1710x981) and squish the scene
+    // horizontally. Instead, size the window to the largest rect with the
+    // requested aspect that fits the visible screen frame.
+    NSRect screenFrame = [[NSScreen mainScreen] visibleFrame];
+    double req_aspect = (double)w / (double)h;
+    double screen_aspect = screenFrame.size.width / screenFrame.size.height;
+    int cw, ch;
+    if (screen_aspect > req_aspect) {
+        // Screen is wider: window height = min(requested, screen height)
+        ch = (h < (int)screenFrame.size.height) ? h : (int)screenFrame.size.height;
+        cw = (int)(ch * req_aspect + 0.5);
+    } else {
+        // Screen is narrower: window width = min(requested, screen width)
+        cw = (w < (int)screenFrame.size.width) ? w : (int)screenFrame.size.width;
+        ch = (int)(cw / req_aspect + 0.5);
+    }
+    w = cw;
+    h = ch;
     g_aspect_ratio = (double)w / (double)h;
     g_min_width = w / 4;
     if (g_min_width < 320) g_min_width = 320;
 
-    // Calculate window size (macOS uses content rect, no AdjustWindowRect needed)
     NSRect frame = NSMakeRect(0, 0, w, h);
     // Center the window
-    NSRect screenFrame = [[NSScreen mainScreen] visibleFrame];
     frame.origin.x = (screenFrame.size.width - w) / 2;
     frame.origin.y = (screenFrame.size.height - h) / 2;
 
@@ -343,9 +362,13 @@ int SaveScreenshot(const char *path) {
 
     // Write pixel rows: raw data is premultiplied; byte order flags decide
     // whether it is RGBA or BGRA. BMP wants BGR.
+    // The BMP header declares biHeight = -height (bottom-up), so the FIRST
+    // row written must be the BOTTOM row of the image. CGImage row 0 is the
+    // TOP row — iterate the raw rows in reverse or the recording comes out
+    // vertically flipped (upside-down videos).
     if (bytesPerPixel < 3) bytesPerPixel = 4;
-    for (size_t y = 0; y < height; y++) {
-        const uint8_t *row = raw + y * rawBytesPerRow;
+    for (size_t y = height; y > 0; y--) {
+        const uint8_t *row = raw + (y - 1) * rawBytesPerRow;
         for (size_t x = 0; x < width; x++) {
             const uint8_t *px = row + x * bytesPerPixel;
             uint8_t bgr[3];

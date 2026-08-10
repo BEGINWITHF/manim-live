@@ -437,6 +437,13 @@ class TextMixin:
             except Exception:
                 pass
         sw = self._stroke_width(mob)
+        progress = getattr(mob, '_vulkan_progress', 1.0)
+        if sw <= 0 and progress < 1.0 and not is_text:
+            # MathTex/Tex glyphs carry no stroke, so the border phase of
+            # Write/Unwrite would draw NOTHING (the glyph stays invisible
+            # until the fill fades in). Synthesize a thin ink stroke so the
+            # glyphs visibly write (progress) / retract (unwrite) like Text.
+            sw = 2.0
         fill_alpha = min(1.0, fa * a)
         # stroke_alpha uses so (max stroke-rgba alpha) — consistent
         # with how fill_alpha uses fa (fill-rgba alpha from first element)

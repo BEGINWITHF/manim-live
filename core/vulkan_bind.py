@@ -1676,7 +1676,10 @@ class VulkanRender(ShapeMixin, TextMixin):
         width, height = w.value, h.value
         if width <= 0 or height <= 0:
             return False
-        # RGBA buffer -> BMP (BGR, top-down, 4-byte row padding)
+        # RGBA buffer -> BMP (BGR, top-down, 4-byte row padding).
+        # The readback buffer's row 0 is the image TOP row and we write rows
+        # in order, so the BMP must declare a POSITIVE biHeight (top-down).
+        # A negative biHeight here would make the screenshot upside-down.
         row_bytes = ((width * 3 + 3) // 4) * 4
         img_size = row_bytes * height
         header = bytearray(54)
@@ -1685,7 +1688,7 @@ class VulkanRender(ShapeMixin, TextMixin):
         header[10:14] = (54).to_bytes(4, 'little')
         header[14:18] = (40).to_bytes(4, 'little')
         header[18:22] = width.to_bytes(4, 'little')
-        header[22:26] = (-height & 0xFFFFFFFF).to_bytes(4, 'little')  # top-down
+        header[22:26] = height.to_bytes(4, 'little')  # positive = top-down
         header[26:28] = (1).to_bytes(2, 'little')
         header[28:30] = (24).to_bytes(2, 'little')
         header[34:38] = img_size.to_bytes(4, 'little')
@@ -1872,6 +1875,11 @@ class VulkanRender(ShapeMixin, TextMixin):
         # readback), NOT the composited screen. This is immune to window
         # occlusion/scaling that would corrupt a screen-based capture.
         interval = 1.0 / self._record_fps
+        # Delay the first capture: capturing the window WHILE it is being
+        # created/initialized leaves the window server with stale surfaces —
+        # subsequent captures return old frames and the video shows a
+        # scrambled timeline. Wait for the window to settle first.
+        self._record_stop_event.wait(0.8)
         while not self._record_stop_event.is_set():
             t0 = time.time()
             try:
