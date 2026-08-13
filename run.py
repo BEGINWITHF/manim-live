@@ -2,7 +2,7 @@ import sys
 import os
 import shutil
 from scenes.demo_scene import (
-    DemoCreate, DemoWriteUnwrite, WriteFormula, DemoTransform, DemoReplacementTransform,
+    DemoCreate, DemoWriteUnwrite, DemoWriteFormula, DemoTransform, DemoReplacementTransform,
     DemoFadeInFadeOut, DemoFadeTransform, DemoRotating,
     DemoTransformMatchingShapes, DemoVGroup, DemoAllShapes,
     DemoSuccession, DemoFadeInShift, DemoTextFeatures, DemoCombined,
