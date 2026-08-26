@@ -25,7 +25,7 @@ from scenes.demo_scene import (
     DemoRestore, DemoScaleInPlace, DemoShrinkToCenter,
     DemoTransformPathArc, DemoAnagram, DemoMatchingEquationParts,
     DemoTangentAnimation, DemoLatexWithoutLatex, DemoFourierTransform,
-    DemoLorenzButterfly,
+    DemoLorenzButterfly, DemoWriteLatex,
 )
 
 SCENES = [
@@ -110,6 +110,7 @@ SCENES = [
     ("79", "All LaTeX features - without LaTeX",               DemoLatexWithoutLatex),
     ("80", "Fourier Transform - epicycles heart",             DemoFourierTransform),
     ("81", "Lorenz Attractor - butterfly effect",              DemoLorenzButterfly),
+    ("82", "Write on LaTeX - progressive reveal",              DemoWriteLatex),
 ]
 
 

@@ -1,0 +1,22 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# ---- Build artifacts (compiled) ----
+# NOTE: build/ and dist/ are intentionally kept and tracked in this repo.
+
+# ---- Renderer runtime output ----
+downloaded_videos/
+media/
+tex_cache/
+
+# ---- Editor / OS ----
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

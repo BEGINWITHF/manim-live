@@ -1997,6 +1997,32 @@ class DemoLorenzButterfly(Scene):
         render.close()
 
 
+class DemoWriteLatex(Scene):
+    """Write on LaTeX mobjects — exercises the progressive glyph reveal.
+
+    Previously Write on a MathTex popped the whole equation in fully filled
+    (the container fill was set, but the actual fill lives on the nested SVG
+    glyph leaves).  This scene verifies the outline-then-fill reveal works.
+    """
+
+    def construct(self):
+        render = VulkanRender(1920, 1080)
+        render.scene = self
+        render.play(Wait(2.0))
+        _title(render, "Write on LaTeX")
+
+        # Single-part equation (one MathTexPart, several glyph leaves)
+        eq1 = MathTex("x^2 + y^2", font_size=56).shift(UP * 1.5)
+        render.play(Write(eq1, run_time=0.8))
+        render.play(Wait(1.0))
+
+        # Multi-part equation — Write staggers across the parts
+        eq2 = MathTex(r"\frac{a}{b} + \sqrt{c}", font_size=56).shift(DOWN * 1.5)
+        render.play(Write(eq2, run_time=0.8))
+        render.play(Wait(1.5))
+        render.close()
+
+
 # ====================================================================
 # Download all demo scenes to MP4 (mss screen capture)
 # Run: python scenes/demo_scene.py

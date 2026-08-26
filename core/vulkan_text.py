@@ -430,6 +430,9 @@ class TextMixin:
         # with how fill_alpha uses fa (fill-rgba alpha from first element)
         stroke_alpha = min(1.0, so * a)
         stroke_w = max(1.0, sw) if sw > 0 else 0
+        # Default per-vertex stroke alpha; the latex write-stroke synthesis
+        # overrides this to fade the outline out as the fill comes in.
+        stroke_point_alpha = a
 
         progress = getattr(mob, '_vulkan_progress', 1.0)
         has_bounds = hasattr(mob, '_vulkan_progress_upper')
@@ -458,6 +461,23 @@ class TextMixin:
             sri = round(sr * 255 * stroke_alpha)
             sgi = round(sg * 255 * stroke_alpha)
             sbi = round(sb * 255 * stroke_alpha)
+            do_stroke = True
+
+        # LaTeX glyphs (VMobjectFromSVGPath) carry no stroke (sw == 0), and the
+        # native tessellate_fill pops the whole fill in at once.  During a
+        # Write/Create the DrawBorderThenFill tags the glyph with _write_active;
+        # while that is set we synthesize a stroke from the fill color so the
+        # hand-writing outline reveal is visible.  The stroke fades out via its
+        # per-vertex alpha as the fill fades in (color stays the glyph color),
+        # giving a smooth write-then-fill with no dip in between.
+        if (not do_stroke and not is_text and sw == 0
+                and getattr(mob, '_write_active', False)):
+            stroke_point_alpha = max(0.0, 1.0 - fill_alpha * 1.2) * a
+            sr, sg, sb = fr, fg, fb
+            sri = round(sr * 255)
+            sgi = round(sg * 255)
+            sbi = round(sb * 255)
+            stroke_w = 2.0
             do_stroke = True
 
         arr = (ctypes.c_float * len(flat))(*flat)
@@ -493,7 +513,7 @@ class TextMixin:
                 for i, (px, py) in enumerate(stroke_pts):
                     coords[i * 2] = px
                     coords[i * 2 + 1] = py
-                    alphas[i] = a
+                    alphas[i] = stroke_point_alpha
                 self.dll.AddLineStrip(coords, alphas, len(stroke_pts), int(stroke_w), sri, sgi, sbi, 1.0)
 
     def _send_text_stroke(self, mob, a, w, h, parent_offset=None):
