@@ -540,11 +540,18 @@ class VulkanRender(ShapeMixin, TextMixin):
         self._fast_record_segment = None  # (start_frame, end_frame) or None for all
 
         base_dir = os.path.dirname(os.path.abspath(__file__))
-        dll_path = os.path.normpath(os.path.join(base_dir, "..", "dist", "release", "vulkan_core.dll"))
-        if not os.path.exists(dll_path):
-            dll_path = os.path.normpath(os.path.join(base_dir, "..", "dist", "debug", "vulkan_core.dll"))
-        if not os.path.exists(dll_path):
-            raise FileNotFoundError("vulkan_core.dll not found")
+        # Search order: bundled DLL (pip-installed package) → dev repo release → dev repo debug
+        candidates = [
+            os.path.join(base_dir, "vulkan_core.dll"),
+            os.path.normpath(os.path.join(base_dir, "..", "dist", "release", "vulkan_core.dll")),
+            os.path.normpath(os.path.join(base_dir, "..", "dist", "debug", "vulkan_core.dll")),
+        ]
+        dll_path = next((p for p in candidates if os.path.exists(p)), None)
+        if dll_path is None:
+            raise FileNotFoundError(
+                "vulkan_core.dll not found. If running from source, build it with native/build.ps1 "
+                "(requires Vulkan SDK + MinGW-w64)."
+            )
 
         self.dll = ctypes.CDLL(dll_path)
 

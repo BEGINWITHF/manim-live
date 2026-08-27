@@ -2,7 +2,7 @@
 
 A **Vulkan-accelerated rendering backend** for [ManimCE](https://www.manim.community/) that replaces the default OpenGL/Cairo renderer with a custom GPU pipeline for real-time mathematical animation rendering on Windows.
 
-![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)
+![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
 ![Platform](https://img.shields.io/badge/Platform-Windows%2010%2B-lightgrey.svg)
 ![Python](https://img.shields.io/badge/Python-3.11%2B-brightgreen.svg)
 

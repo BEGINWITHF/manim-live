@@ -9,6 +9,12 @@ venv/
 # ---- Build artifacts (compiled) ----
 # NOTE: build/ and dist/ are intentionally kept and tracked in this repo.
 
+# ---- PyPI packaging outputs (regenerable via `python -m build`) ----
+dist/*.whl
+dist/*.tar.gz
+build/lib/
+build/bdist.*/
+
 # ---- Renderer runtime output ----
 downloaded_videos/
 media/

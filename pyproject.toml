@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "manim-booster"
+version = "0.1.0"
+description = "Vulkan-accelerated real-time rendering backend for ManimCE (Windows)"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Tagin T" }]
+keywords = ["manim", "vulkan", "renderer", "animation", "gpu", "3b1b"]
+requires-python = ">=3.11"
+dependencies = [
+    "manim>=0.20.0",
+    "numpy",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia :: Graphics",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Scientific/Engineering :: Visualization",
+]
+
+[project.scripts]
+manim-booster = "run:main"
+
+[project.urls]
+Homepage = "https://github.com/BEGINWITHF/manim-booster"
+Documentation = "https://github.com/BEGINWITHF/manim-booster#readme"
+Source = "https://github.com/BEGINWITHF/manim-booster"
+
+[tool.setuptools]
+packages = [
+    "core",
+    "core.animations",
+    "core.utils",
+    "scenes",
+]
+py-modules = ["run"]
+
+[tool.setuptools.package-data]
+core = ["vulkan_core.dll"]
+
+[tool.setuptools.exclude-package-data]
+"*" = ["__pycache__", "*.pyc"]
