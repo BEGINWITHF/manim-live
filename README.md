@@ -1,4 +1,8 @@
-# Manim-Booster (Manteraction)
+# Manim-Live (Manteraction)
+
+<p align="center">
+  <img src="logo.jpg" alt="Manim-Live logo" width="640"/>
+</p>
 
 A **Vulkan-accelerated rendering backend** for [ManimCE](https://www.manim.community/) that replaces the default OpenGL/Cairo renderer with a custom GPU pipeline for real-time mathematical animation rendering on Windows.
 
@@ -28,7 +32,7 @@ A **Vulkan-accelerated rendering backend** for [ManimCE](https://www.manim.commu
 
 ## Overview
 
-Manim-Booster bridges ManimCE's Python-based animation system with a native Vulkan rendering engine. Instead of relying on OpenGL or Cairo for drawing, it:
+Manim-Live bridges ManimCE's Python-based animation system with a native Vulkan rendering engine. Instead of relying on OpenGL or Cairo for drawing, it:
 
 1. **Translates** Manim mobjects into typed shape commands (rectangles, circles, lines, beziers, text, etc.)
 2. **Sends** those commands across a ctypes boundary to a native C/C++ DLL
@@ -82,12 +86,13 @@ The result is a fast, windowed renderer that can produce high-quality video outp
 ## Project Structure
 
 ```
-manim-booster/
+manim-live/
 ├── run.py                          # Entry point — demo menu + scene runner
 ├── requirements.txt                # Python dependencies (manim, numpy)
 ├── README.md                       # This file
 ├── DEMO_FEATURES.md                # Detailed parameter reference for all 81 demos
 ├── LICENSE                         # GPLv3
+├── logo.jpg                        # Project logo
 │
 ├── core/                           # Python rendering layer
 │   ├── __init__.py
@@ -229,7 +234,7 @@ All animations inherit from `Animation` which provides:
 
 ### Opacity & Rotation Tracking
 
-Manim-Booster maintains per-mobject state in module-level dictionaries:
+Manim-Live maintains per-mobject state in module-level dictionaries:
 
 ```python
 _anim_opacity[id(mob)]    = 0.0..1.0    # Current fade level
@@ -351,7 +356,7 @@ VulkanRender.close = patched_close      # Calls stop_record() before shutdown
 
 ## MathTex Rendering
 
-Manim-Booster supports two modes for mathematical typesetting:
+Manim-Live supports two modes for mathematical typesetting:
 
 ### LaTeX Mode (Default)
 
@@ -403,7 +408,7 @@ The system includes comprehensive mappings for:
 ```bash
 # Clone the repository
 git clone <repo-url>
-cd manim-booster
+cd manim-live
 
 # Install Python dependencies
 pip install -r requirements.txt
@@ -526,7 +531,7 @@ class MyScene(Scene):
         self.play(FadeOut(sq))
 ```
 
-### Using Manim-Booster's VulkanRender
+### Using Manim-Live's VulkanRender
 
 ```python
 from core.vulkan_bind import VulkanRender
@@ -544,7 +549,7 @@ renderer.play(Transform(source, target))
 
 ### Key Attributes on Mobjects
 
-Manim-Booster sets these attributes during animations:
+Manim-Live sets these attributes during animations:
 
 | Attribute | Type | Description |
 |-----------|------|-------------|

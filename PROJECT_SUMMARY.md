@@ -1,4 +1,4 @@
-# Manim-Booster (Manteraction) — Project Architecture Summary
+# Manim-Live (Manteraction) — Project Architecture Summary
 
 > A Vulkan-accelerated rendering backend for [ManimCE](https://www.manim.community/) that replaces Manim's default OpenGL/Cairo rendering pipeline with a custom native Vulkan renderer, providing real-time preview and fast offline video recording.
 
@@ -6,7 +6,7 @@
 
 ## 1. Project Purpose
 
-Manim-Booster intercepts standard Manim scene code and renders all mobjects through a **native Vulkan DLL** instead of Manim's built-in shaders. The goal is:
+Manim-Live intercepts standard Manim scene code and renders all mobjects through a **native Vulkan DLL** instead of Manim's built-in shaders. The goal is:
 
 - **Faster rendering** — hardware-accelerated Vulkan instead of OpenGL/Cairo
 - **Live preview** — a real-time window shows the animation as it plays
@@ -18,7 +18,7 @@ Manim-Booster intercepts standard Manim scene code and renders all mobjects thro
 ## 2. Directory Structure
 
 ```
-manim-booster/
+manim-live/
 ├── run.py                      # Entry point — monkey-patches manim, runs a Scene
 ├── requirements.txt            # manim>=0.20.0, numpy
 ├── README.md                   # Project overview (Manteraction roadmap)

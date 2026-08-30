@@ -1,4 +1,4 @@
-# Manim-Booster — Complete Feature Showcase
+# Manim-Live — Complete Feature Showcase
 
 > Every capability of the Vulkan rendering backend, organized by category.
 
