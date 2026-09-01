@@ -1678,12 +1678,15 @@ class VulkanRender(ShapeMixin, TextMixin):
         print(f"[Record] Recording to {self._record_path} at {fps} fps")
 
     def _record_worker(self):
+        # Captures the Vulkan framebuffer directly via SaveScreenshot (real
+        # readback), NOT the composited screen. This is immune to window
+        # occlusion/scaling that would corrupt a screen-based capture.
         interval = 1.0 / self._record_fps
         while not self._record_stop_event.is_set():
             t0 = time.time()
             try:
                 path = os.path.join(self._record_dir, f"frame_{self._record_frame_idx:06d}.bmp")
-                self.screenshot_printwindow(path)
+                self.screenshot(path)
                 self._record_frame_idx += 1
             except Exception:
                 pass
