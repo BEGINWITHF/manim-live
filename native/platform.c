@@ -282,7 +282,10 @@ __declspec(dllexport) int Vulkan_Tick(void) {
     return 0;
 }
 
+static void FreeScreenshotBuffer(void);
+
 __declspec(dllexport) void Vulkan_Shutdown(void) {
+    FreeScreenshotBuffer();
     Render_Cleanup();
     if (g_hwnd && IsWindow(g_hwnd)) {
         DestroyWindow(g_hwnd);
@@ -291,44 +294,231 @@ __declspec(dllexport) void Vulkan_Shutdown(void) {
     UnregisterClassW(L"ManimVulkanClass", g_hinst);
 }
 
+uint32_t g_last_img_idx = 0;
+
+// Persistent staging buffer for SaveScreenshot readback (allocated once,
+// reused across frames). Per-frame create/destroy of an 8MB buffer is slow.
+static VkBuffer g_ss_buf = VK_NULL_HANDLE;
+static VkDeviceMemory g_ss_mem = VK_NULL_HANDLE;
+static VkDeviceSize g_ss_size = 0;
+static void *g_ss_map = NULL;
+
+static int EnsureScreenshotBuffer(VkDeviceSize size) {
+    if (g_ss_buf != VK_NULL_HANDLE && g_ss_size >= size) return 1;
+    if (g_ss_buf != VK_NULL_HANDLE) {
+        vkDestroyBuffer(g_dev, g_ss_buf, NULL);
+        vkFreeMemory(g_dev, g_ss_mem, NULL);
+        g_ss_buf = VK_NULL_HANDLE;
+        g_ss_mem = VK_NULL_HANDLE;
+    }
+
+    // Allocate a pure host-readable staging buffer (HOST_VISIBLE, NOT
+    // DEVICE_LOCAL). FindMemoryType() picks the first matching type, which on
+    // many GPUs is device-local host-visible memory whose reads are ~20 MB/s.
+    VkBufferCreateInfo bi = {0};
+    bi.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bi.size = size;
+    bi.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    bi.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    if (vkCreateBuffer(g_dev, &bi, NULL, &g_ss_buf) != VK_SUCCESS) return 0;
+
+    VkMemoryRequirements mr;
+    vkGetBufferMemoryRequirements(g_dev, g_ss_buf, &mr);
+    VkPhysicalDeviceMemoryProperties mp;
+    vkGetPhysicalDeviceMemoryProperties(g_phys_dev, &mp);
+    uint32_t chosen = UINT32_MAX;
+    for (uint32_t i = 0; i < mp.memoryTypeCount; i++) {
+        VkMemoryPropertyFlags f = mp.memoryTypes[i].propertyFlags;
+        if ((mr.memoryTypeBits & (1u << i)) &&
+            (f & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) &&
+            (f & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) &&
+            !(f & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)) {
+            chosen = i; break;
+        }
+    }
+    if (chosen == UINT32_MAX) {
+        for (uint32_t i = 0; i < mp.memoryTypeCount; i++) {
+            VkMemoryPropertyFlags f = mp.memoryTypes[i].propertyFlags;
+            if ((mr.memoryTypeBits & (1u << i)) &&
+                (f & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) &&
+                (f & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) {
+                chosen = i; break;
+            }
+        }
+    }
+    if (chosen == UINT32_MAX) {
+        vkDestroyBuffer(g_dev, g_ss_buf, NULL);
+        g_ss_buf = VK_NULL_HANDLE;
+        return 0;
+    }
+
+    VkMemoryAllocateInfo ai = {0};
+    ai.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    ai.allocationSize = mr.size;
+    ai.memoryTypeIndex = chosen;
+    if (vkAllocateMemory(g_dev, &ai, NULL, &g_ss_mem) != VK_SUCCESS ||
+        vkBindBufferMemory(g_dev, g_ss_buf, g_ss_mem, 0) != VK_SUCCESS) {
+        vkDestroyBuffer(g_dev, g_ss_buf, NULL);
+        g_ss_buf = VK_NULL_HANDLE;
+        g_ss_mem = VK_NULL_HANDLE;
+        return 0;
+    }
+    g_ss_size = size;
+    vkMapMemory(g_dev, g_ss_mem, 0, size, 0, &g_ss_map);
+    return 1;
+}
+
+static void FreeScreenshotBuffer(void) {
+    if (g_ss_buf != VK_NULL_HANDLE) {
+        if (g_ss_map) vkUnmapMemory(g_dev, g_ss_mem);
+        g_ss_map = NULL;
+        vkDestroyBuffer(g_dev, g_ss_buf, NULL);
+        vkFreeMemory(g_dev, g_ss_mem, NULL);
+        g_ss_buf = VK_NULL_HANDLE;
+        g_ss_mem = VK_NULL_HANDLE;
+        g_ss_size = 0;
+    }
+}
+
+// Copy the last presented swapchain image into a host-visible staging buffer.
+static void CopySwapchainImageToBuffer(uint32_t img_idx, VkBuffer dst, int w, int h) {
+    VkCommandBufferAllocateInfo ai = {0};
+    ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    ai.commandPool = g_cmd_pool;
+    ai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    ai.commandBufferCount = 1;
+    VkCommandBuffer cmd;
+    vkAllocateCommandBuffers(g_dev, &ai, &cmd);
+
+    VkCommandBufferBeginInfo bi = {0};
+    bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vkBeginCommandBuffer(cmd, &bi);
+
+    VkImageMemoryBarrier b = {0};
+    b.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    b.oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    b.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    b.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    b.image = g_swapchain_imgs[img_idx];
+    b.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    b.subresourceRange.baseMipLevel = 0;
+    b.subresourceRange.levelCount = 1;
+    b.subresourceRange.baseArrayLayer = 0;
+    b.subresourceRange.layerCount = 1;
+    b.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+    b.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    vkCmdPipelineBarrier(cmd,
+        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+        0, NULL, 0, NULL, 1, &b);
+
+    VkBufferImageCopy region = {0};
+    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.layerCount = 1;
+    region.imageExtent = (VkExtent3D){(uint32_t)w, (uint32_t)h, 1};
+    vkCmdCopyImageToBuffer(cmd, g_swapchain_imgs[img_idx],
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst, 1, &region);
+
+    VkImageMemoryBarrier b2 = b;
+    b2.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    b2.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    b2.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    b2.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+    vkCmdPipelineBarrier(cmd,
+        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+        0, NULL, 0, NULL, 1, &b2);
+
+    vkEndCommandBuffer(cmd);
+    VkSubmitInfo si = {0};
+    si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    si.commandBufferCount = 1;
+    si.pCommandBuffers = &cmd;
+    vkQueueSubmit(g_gfx_queue, 1, &si, VK_NULL_HANDLE);
+    vkQueueWaitIdle(g_gfx_queue);
+    vkFreeCommandBuffers(g_dev, g_cmd_pool, 1, &cmd);
+}
+
+// SaveScreenshot reads the swapchain framebuffer directly (independent of the
+// window's on-screen size/visibility). The previous GDI BitBlt version returned
+// solid white because Vulkan swapchain content is not present in the window DC.
 __declspec(dllexport) int SaveScreenshot(const char *path) {
-    if (!g_hwnd || !IsWindow(g_hwnd)) return 0;
-    HDC hdcWindow = GetDC(g_hwnd);
-    if (!hdcWindow) return 0;
-    RECT rc;
-    GetClientRect(g_hwnd, &rc);
-    int w = rc.right - rc.left;
-    int h = rc.bottom - rc.top;
-    if (w <= 0 || h <= 0) { ReleaseDC(g_hwnd, hdcWindow); return 0; }
-    HDC hdcMem = CreateCompatibleDC(hdcWindow);
-    HBITMAP hBitmap = CreateCompatibleBitmap(hdcWindow, w, h);
-    SelectObject(hdcMem, hBitmap);
-    BitBlt(hdcMem, 0, 0, w, h, hdcWindow, 0, 0, SRCCOPY);
+    if (!g_is_ready || !g_swapchain) return 0;
+    vkQueueWaitIdle(g_gfx_queue);
+    int w = (int)g_swapchain_ext.width;
+    int h = (int)g_swapchain_ext.height;
+    if (w <= 0 || h <= 0) return 0;
+
+    VkDeviceSize img_size = (VkDeviceSize)w * (VkDeviceSize)h * 4;
+    if (!EnsureScreenshotBuffer(img_size)) return 0;
+
+    CopySwapchainImageToBuffer(g_last_img_idx, g_ss_buf, w, h);
+
+    int rowBytes = ((w * 3 + 3) & ~3);
+    unsigned char *bgr = (unsigned char *)malloc((size_t)rowBytes * (size_t)h);
+    const unsigned char *src = (const unsigned char *)g_ss_map;
+    for (int y = 0; y < h; y++) {
+        const unsigned char *row = src + (VkDeviceSize)y * (VkDeviceSize)w * 4;
+        unsigned char *dst = bgr + (VkDeviceSize)y * (VkDeviceSize)rowBytes;
+        for (int x = 0; x < w; x++) {
+            dst[x * 3 + 0] = row[x * 4 + 0];  // B
+            dst[x * 3 + 1] = row[x * 4 + 1];  // G
+            dst[x * 3 + 2] = row[x * 4 + 2];  // R
+        }
+    }
+
     BITMAPINFOHEADER bi = {0};
     bi.biSize = sizeof(BITMAPINFOHEADER);
     bi.biWidth = w;
-    bi.biHeight = -h;
+    bi.biHeight = -h;  // top-down
     bi.biPlanes = 1;
     bi.biBitCount = 24;
     bi.biCompression = BI_RGB;
-    int rowBytes = ((w * 3 + 3) & ~3);
     int imgSize = rowBytes * h;
-    char *buf = (char *)malloc(imgSize);
-    if (!buf) { DeleteObject(hBitmap); DeleteDC(hdcMem); ReleaseDC(g_hwnd, hdcWindow); return 0; }
-    GetDIBits(hdcMem, hBitmap, 0, h, buf, (BITMAPINFO *)&bi, DIB_RGB_COLORS);
     BITMAPFILEHEADER bfh = {0};
     bfh.bfType = 0x4D42;
     bfh.bfOffBits = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
     bfh.bfSize = bfh.bfOffBits + imgSize;
+
+    int ok = 0;
     FILE *fp = fopen(path, "wb");
-    if (!fp) { free(buf); DeleteObject(hBitmap); DeleteDC(hdcMem); ReleaseDC(g_hwnd, hdcWindow); return 0; }
-    fwrite(&bfh, sizeof(bfh), 1, fp);
-    fwrite(&bi, sizeof(bi), 1, fp);
-    fwrite(buf, imgSize, 1, fp);
-    fclose(fp);
-    free(buf);
-    DeleteObject(hBitmap);
-    DeleteDC(hdcMem);
-    ReleaseDC(g_hwnd, hdcWindow);
+    if (fp) {
+        fwrite(&bfh, sizeof(bfh), 1, fp);
+        fwrite(&bi, sizeof(bi), 1, fp);
+        fwrite(bgr, imgSize, 1, fp);
+        fclose(fp);
+        ok = 1;
+    }
+    free(bgr);
+    return ok;
+}
+
+// SaveScreenshotRaw fills a caller-provided buffer with raw BGR pixels
+// (no 54-byte BMP header, no disk I/O). rowBytes == w*3 (1280x720 has no
+// padding). Returns 1 on success and sets *out_size to w*h*3.
+__declspec(dllexport) int SaveScreenshotRaw(unsigned char *out, int *out_size) {
+    if (!g_is_ready || !g_swapchain || !out) return 0;
+    vkQueueWaitIdle(g_gfx_queue);
+    int w = (int)g_swapchain_ext.width;
+    int h = (int)g_swapchain_ext.height;
+    if (w <= 0 || h <= 0) return 0;
+
+    VkDeviceSize img_size = (VkDeviceSize)w * (VkDeviceSize)h * 4;
+    if (!EnsureScreenshotBuffer(img_size)) return 0;
+
+    CopySwapchainImageToBuffer(g_last_img_idx, g_ss_buf, w, h);
+
+    const unsigned char *src = (const unsigned char *)g_ss_map;
+    int rowBytes = ((w * 3 + 3) & ~3);
+    for (int y = 0; y < h; y++) {
+        const unsigned char *row = src + (VkDeviceSize)y * (VkDeviceSize)w * 4;
+        unsigned char *dst = out + (VkDeviceSize)y * (VkDeviceSize)rowBytes;
+        for (int x = 0; x < w; x++) {
+            dst[x * 3 + 0] = row[x * 4 + 0];  // B
+            dst[x * 3 + 1] = row[x * 4 + 1];  // G
+            dst[x * 3 + 2] = row[x * 4 + 2];  // R
+        }
+    }
+    if (out_size) *out_size = rowBytes * h;
     return 1;
 }

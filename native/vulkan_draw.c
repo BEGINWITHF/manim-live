@@ -121,6 +121,7 @@ int Render_DrawFrame(uint32_t vertex_count) {
     uint32_t img_idx;
     vkAcquireNextImageKHR(g_dev, g_swapchain, UINT64_MAX,
                           g_img_avail_sems[g_current_frame], VK_NULL_HANDLE, &img_idx);
+    g_last_img_idx = img_idx;
 
     vkResetCommandBuffer(g_cmd_bufs[g_current_frame], 0);
     RecordCommandBuffer(g_cmd_bufs[g_current_frame], img_idx, vertex_count);

@@ -280,7 +280,7 @@ void CreateSwapchain(void) {
 
     sci.minImageCount = 2;
 
-    sci.imageFormat = VK_FORMAT_B8G8R8A8_SRGB;
+    sci.imageFormat = VK_FORMAT_B8G8R8A8_UNORM;
 
     sci.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 
@@ -302,7 +302,7 @@ void CreateSwapchain(void) {
 
     VK_CHECK(vkCreateSwapchainKHR(g_dev, &sci, NULL, &g_swapchain));
 
-    g_swapchain_fmt = VK_FORMAT_B8G8R8A8_SRGB;
+    g_swapchain_fmt = VK_FORMAT_B8G8R8A8_UNORM;
 
     vkGetSwapchainImagesKHR(g_dev, g_swapchain, &g_swapchain_img_count, NULL);
 

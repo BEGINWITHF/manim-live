@@ -26,10 +26,18 @@ void BuildVerticesFromPolygons(const PolygonObj* polygons, int count) {
 
         float drawn = perimeter * sp;
 
-        /* Fill: triangle fan from first vertex, progressive along edges */
+        /* Fill: triangle fan from polygon CENTROID (not first vertex).
+           A fan from vertex 0 fills self-intersecting/concave shapes (e.g.
+           a 5-pointed Star, which has alternating outer/inner vertices)
+           incorrectly — it fills the concavities between points. Fanning
+           from the centroid tiles any star-shaped polygon correctly. */
         if (p->r != 0 || p->g != 0 || p->b != 0) {
-            float fan_x = p->verts[0];
-            float fan_y = p->verts[1];
+            float cx = 0.0f, cy = 0.0f;
+            for (int j = 0; j < n; j++) { cx += p->verts[j * 2]; cy += p->verts[j * 2 + 1]; }
+            cx /= (float)n;
+            cy /= (float)n;
+            float fan_x = cx;
+            float fan_y = cy;
             float cum = 0.0f;
             for (int j = 0; j < n; j++) {
                 int j2 = (j + 1) % n;

@@ -59,6 +59,17 @@ _sm.prepare_animation = _patched_prepare_animation
 import manim.animation.animation as _aa
 _aa.prepare_animation = _patched_prepare_animation
 
+# Broadcast should emanate from the broadcast mobject's own position by
+# default (focal_point = mobject.get_center()), so the glow follows the
+# object instead of staying at manim's default ORIGIN.
+import manim.animation.specialized as _spec
+_orig_broadcast_init = _spec.Broadcast.__init__
+def _patched_broadcast_init(self, mobject, focal_point=None, **kwargs):
+    if focal_point is None:
+        focal_point = mobject.get_center()
+    _orig_broadcast_init(self, mobject, focal_point=focal_point, **kwargs)
+_spec.Broadcast.__init__ = _patched_broadcast_init
+
 # ── Monkey-patch MathTex to avoid \special{dvisvgm:raw} tags in TeX files ──
 # Standard manim wraps each tex_string in \special{dvisvgm:raw <g id='uniqueNNN'>}
 # so that dvisvgm produces named SVG groups.  We remove this wrapping and instead
