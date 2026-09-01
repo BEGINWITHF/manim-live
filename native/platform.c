@@ -465,6 +465,26 @@ static void CopySwapchainImageToBuffer(uint32_t img_idx, VkBuffer dst, int w, in
     vkFreeCommandBuffers(g_dev, g_cmd_pool, 1, &cmd);
 }
 
+// Convert the BGRA swapchain readback (g_ss_map, w*h*4 bytes) into BGR.
+// The mapped GPU buffer reads slowly byte-by-byte on Intel iGPUs, so we first
+// bulk-copy the raw bytes into CPU cache (vectorized memcpy) and convert there.
+static void ConvertBGRAtoBGR(int w, int h, unsigned char *out) {
+    VkDeviceSize raw_size = (VkDeviceSize)w * (VkDeviceSize)h * 4;
+    unsigned char *raw = (unsigned char *)malloc((size_t)raw_size);
+    memcpy(raw, g_ss_map, (size_t)raw_size);
+    int rowBytes = ((w * 3 + 3) & ~3);
+    for (int y = 0; y < h; y++) {
+        const unsigned char *row = raw + (VkDeviceSize)y * (VkDeviceSize)w * 4;
+        unsigned char *dst = out + (VkDeviceSize)y * (VkDeviceSize)rowBytes;
+        for (int x = 0; x < w; x++) {
+            dst[x * 3 + 0] = row[x * 4 + 0];  // B
+            dst[x * 3 + 1] = row[x * 4 + 1];  // G
+            dst[x * 3 + 2] = row[x * 4 + 2];  // R
+        }
+    }
+    free(raw);
+}
+
 // SaveScreenshot reads the swapchain framebuffer directly (independent of the
 // window's on-screen size/visibility). The previous GDI BitBlt version returned
 // solid white because Vulkan swapchain content is not present in the window DC.
@@ -482,16 +502,7 @@ __declspec(dllexport) int SaveScreenshot(const char *path) {
 
     int rowBytes = ((w * 3 + 3) & ~3);
     unsigned char *bgr = (unsigned char *)malloc((size_t)rowBytes * (size_t)h);
-    const unsigned char *src = (const unsigned char *)g_ss_map;
-    for (int y = 0; y < h; y++) {
-        const unsigned char *row = src + (VkDeviceSize)y * (VkDeviceSize)w * 4;
-        unsigned char *dst = bgr + (VkDeviceSize)y * (VkDeviceSize)rowBytes;
-        for (int x = 0; x < w; x++) {
-            dst[x * 3 + 0] = row[x * 4 + 0];  // B
-            dst[x * 3 + 1] = row[x * 4 + 1];  // G
-            dst[x * 3 + 2] = row[x * 4 + 2];  // R
-        }
-    }
+    ConvertBGRAtoBGR(w, h, bgr);
 
     BITMAPINFOHEADER bi = {0};
     bi.biSize = sizeof(BITMAPINFOHEADER);
@@ -534,17 +545,8 @@ __declspec(dllexport) int SaveScreenshotRaw(unsigned char *out, int *out_size) {
 
     CopySwapchainImageToBuffer(g_last_img_idx, g_ss_buf, w, h);
 
-    const unsigned char *src = (const unsigned char *)g_ss_map;
     int rowBytes = ((w * 3 + 3) & ~3);
-    for (int y = 0; y < h; y++) {
-        const unsigned char *row = src + (VkDeviceSize)y * (VkDeviceSize)w * 4;
-        unsigned char *dst = out + (VkDeviceSize)y * (VkDeviceSize)rowBytes;
-        for (int x = 0; x < w; x++) {
-            dst[x * 3 + 0] = row[x * 4 + 0];  // B
-            dst[x * 3 + 1] = row[x * 4 + 1];  // G
-            dst[x * 3 + 2] = row[x * 4 + 2];  // R
-        }
-    }
+    ConvertBGRAtoBGR(w, h, out);
     if (out_size) *out_size = rowBytes * h;
     return 1;
 }
