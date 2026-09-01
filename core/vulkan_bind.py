@@ -1522,7 +1522,7 @@ class VulkanRender(ShapeMixin, TextMixin):
         import ctypes.wintypes as wt
         user32 = ctypes.windll.user32
         gdi32 = ctypes.windll.gdi32
-        hwnd = user32.FindWindowW(None, "Manim Vulkan")
+        hwnd = user32.FindWindowW(None, "Manim Live")
         if not hwnd:
             hwnd = self.hwnd
             if not hwnd:
@@ -1593,7 +1593,7 @@ class VulkanRender(ShapeMixin, TextMixin):
         if hidden:
             import ctypes.wintypes
             user32 = ctypes.windll.user32
-            hwnd = user32.FindWindowW(None, "Manim Vulkan")
+            hwnd = user32.FindWindowW(None, "Manim Live")
             if hwnd:
                 user32.ShowWindow(hwnd, 0)  # SW_HIDE
 
@@ -1745,7 +1745,7 @@ class VulkanRender(ShapeMixin, TextMixin):
     def _get_screen_bbox(self):
         import ctypes.wintypes as wt
         user32 = ctypes.windll.user32
-        hwnd = user32.FindWindowW(None, "Manim Vulkan")
+        hwnd = user32.FindWindowW(None, "Manim Live")
         if not hwnd:
             return None
         rc = wt.RECT()

@@ -116,7 +116,7 @@ SCENES = [
 
 def show_menu():
     print("\n" + "=" * 50)
-    print("  Manim Vulkan Renderer - Demo Menu")
+    print("  Manim Live Renderer - Demo Menu")
     print("=" * 50)
     for num, desc, _ in SCENES:
         print(f"  {num:>3}. {desc}")

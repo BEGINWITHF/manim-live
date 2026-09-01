@@ -98,26 +98,52 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
     }
 }
 
+// Load logo.ico from the DLL's directory (or its parent, the project root).
+// Returns the icon, or NULL if it cannot be loaded.
+static HICON LoadWindowIcon(void) {
+    HMODULE hm = GetModuleHandleW(L"vulkan_core.dll");
+    if (!hm) hm = g_hinst;
+    wchar_t dll_path[MAX_PATH];
+    DWORD len = GetModuleFileNameW(hm, dll_path, MAX_PATH);
+    if (len == 0) return NULL;
+    wchar_t *slash = wcsrchr(dll_path, L'\\');
+    if (slash) *(slash + 1) = L'\0';
+    for (int try_parent = 0; try_parent <= 1; try_parent++) {
+        wchar_t ico[MAX_PATH];
+        wcscpy_s(ico, MAX_PATH, dll_path);
+        if (try_parent) wcscat_s(ico, MAX_PATH, L"..\\");
+        wcscat_s(ico, MAX_PATH, L"logo.ico");
+        HICON icon = (HICON)LoadImageW(NULL, ico, IMAGE_ICON, 0, 0,
+                                       LR_LOADFROMFILE | LR_DEFAULTSIZE);
+        if (icon) return icon;
+    }
+    return NULL;
+}
+
 __declspec(dllexport) int Vulkan_Init(int w, int h) {
     SetProcessDPIAware();
     g_hinst = GetModuleHandleW(NULL);
     g_aspect_ratio = (double)w / (double)h;
     g_min_width = w / 4;
     if (g_min_width < 320) g_min_width = 320;
-    WNDCLASSW wc = {
+    HICON win_icon = LoadWindowIcon();
+    WNDCLASSEXW wc = {
+        .cbSize = sizeof(WNDCLASSEXW),
         .lpfnWndProc = WndProc,
         .hInstance = g_hinst,
+        .hIcon = win_icon,
+        .hIconSm = win_icon,
         .lpszClassName = L"ManimVulkanClass",
         .hCursor = LoadCursor(NULL, IDC_ARROW),
         .hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH)
     };
-    RegisterClassW(&wc);
+    RegisterClassExW(&wc);
 
     RECT rect = { 0, 0, w, h };
     AdjustWindowRect(&rect, WS_OVERLAPPEDWINDOW, FALSE);
 
     g_hwnd = CreateWindowExW(
-        0, L"ManimVulkanClass", L"Manim Vulkan",
+        0, L"ManimVulkanClass", L"Manim Live",
         WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT, CW_USEDEFAULT,
         rect.right - rect.left, rect.bottom - rect.top,

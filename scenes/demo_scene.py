@@ -2040,7 +2040,7 @@ if __name__ == "__main__":
     _rec_state = [None, None, None, 0, None, None, ""]  # stop, thread, dir, count, mon, sct, path
 
     def find_win():
-        h = user32.FindWindowW(None, "Manim Vulkan")
+        h = user32.FindWindowW(None, "Manim Live")
         if not h: return None
         r = wt.RECT(); user32.GetClientRect(h, ctypes.byref(r))
         pt = wt.POINT(0, 0); user32.ClientToScreen(h, ctypes.byref(pt))
@@ -2217,7 +2217,7 @@ if __name__ == "__main__":
     ]
 
     print("=" * 55)
-    print("  Manim Vulkan — Download All Demo Scenes")
+    print("  Manim Live — Download All Demo Scenes")
     print("=" * 55)
     ok, fail = [], []
     for num, name, cls in ALL_SCENES:
