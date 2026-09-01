@@ -1065,7 +1065,9 @@ class VulkanRender(ShapeMixin, TextMixin):
                 # (not the generic _send_vmobject) — renders as a proper circle
                 if type(anim).__name__ == 'FocusOn':
                     anim.mobject._focus_on_dot = True
-                    anim.mobject._dot_max_opacity = 0.03
+                    # Subtle-but-visible spotlight: 0.4 was too strong, 0.03
+                    # invisible under the accurate UNORM swapchain.
+                    anim.mobject._dot_max_opacity = 0.15
                 if anim.replace_mobject_with_target_in_scene:
                     if anim.target_mobject not in all_mobjects:
                         all_mobjects.append(anim.target_mobject)
