@@ -5,7 +5,7 @@ from manim.animation.transform import Transform as _ManimTransform
 from core.vulkan_bind import (
     VulkanRender, Write, Wait, Add,
     Create, Uncreate, Unwrite,
-    FadeIn, FadeOut, FadeTransform,
+    FadeIn, FadeOut, FadeTransform, FadeTransformPieces,
     Transform, ReplacementTransform,
     Rotating, Rotate,
     TransformMatchingShapes, TransformMatchingTex,

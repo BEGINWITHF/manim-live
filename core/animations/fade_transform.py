@@ -104,3 +104,20 @@ class FadeTransform(Animation):
         if self._ghost is not None:
             mobs.append(self._ghost)
         return mobs
+
+
+class FadeTransformPieces(FadeTransform):
+    """FadeTransformPieces — crossfade of a whole group (no ghost flash).
+
+    Reuses manim-live's FadeTransform so there is no ghost-opacity flash at the
+    start of the change (unlike manim's native FadeTransformPieces, whose
+    set_opacity ghost state isn't tracked by manim-live's own opacity map).
+    Submobjects are aligned so pieces morph together.
+    """
+
+    def begin(self, t):
+        try:
+            self.mobject.align_submobjects(self.target_mobject)
+        except Exception:
+            pass
+        super().begin(t)

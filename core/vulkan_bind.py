@@ -27,7 +27,7 @@ from core.animations import (
     ShowIncreasingSubsets, SpiralIn,
     Blink, TypeWithCursor, UntypeWithCursor,
     Succession, Wait, Add, AnimationGroup, MoveToTarget, Indicate,
-    FadeIn, FadeOut, FadeTransform,
+    FadeIn, FadeOut, FadeTransform, FadeTransformPieces,
     Rotating, Rotate,
     Transform, ReplacementTransform,
     TransformMatchingAbstractBase, TransformMatchingShapes, TransformMatchingTex,

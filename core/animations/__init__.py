@@ -20,7 +20,7 @@ from core.animations.add import Add
 from core.animations.succession import Succession
 from core.animations.fade_in import FadeIn
 from core.animations.fade_out import FadeOut
-from core.animations.fade_transform import FadeTransform
+from core.animations.fade_transform import FadeTransform, FadeTransformPieces
 from core.animations.grow_arrow import GrowArrow
 from core.animations.grow_from_center import GrowFromCenter
 from core.animations.grow_from_edge import GrowFromEdge
