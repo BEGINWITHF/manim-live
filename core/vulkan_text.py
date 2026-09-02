@@ -304,6 +304,10 @@ class TextMixin:
             flat = []
             grow_scale = getattr(mob, '_grow_scale', 1.0)
             grow_pt = getattr(mob, '_grow_point', None)
+            # Approach-A baseline shift, set on text characters at draw time so
+            # a descender-heavy word is lowered onto its shared baseline without
+            # ever mutating the mobject's points (no positional jitter).
+            b_dy = float(getattr(mob, '_baseline_dy', 0.0) or 0.0)
             for p in pts:
                 px, py = p[0], p[1]
                 if grow_scale != 1.0 and grow_pt is not None:
@@ -315,6 +319,7 @@ class TextMixin:
                 if parent_offset is not None:
                     px += parent_offset[0]
                     py += parent_offset[1]
+                py += b_dy
                 sx, sy = manim_to_screen(px, py, w, h)
                 flat.append(sx)
                 flat.append(sy)

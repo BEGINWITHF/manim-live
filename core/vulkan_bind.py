@@ -714,10 +714,99 @@ class VulkanRender(ShapeMixin, TextMixin):
             skip_ids = extra_skip
         else:
             skip_ids |= extra_skip
+        # Same-font Text roots on one visual line that need baseline alignment.
+        self._row_text_ids = self._text_row_ids(scene, skip_ids)
         for mob in scene.mobjects:
             if skip_ids and id(mob) in skip_ids:
                 continue
             self._send(mob, angle, parent_alpha=1.0)
+
+    def _glyph_baseline(self, mob):
+        """Approximate the x-height baseline of a Text from its glyph bottoms.
+
+        Descender glyphs (g/p/j/y/q...) are the minority of deepest bottoms;
+        the shallow half of letter bottoms cluster on the typographic baseline.
+        """
+        bottoms = []
+        stack = list(getattr(mob, 'submobjects', []))
+        while stack:
+            s = stack.pop()
+            pts = getattr(s, 'points', None)
+            if pts is not None and len(pts):
+                bottoms.append(float(pts[:, 1].min()))
+            if getattr(s, 'submobjects', None):
+                stack.extend(s.submobjects)
+        if not bottoms:
+            return None
+        bottoms.sort()
+        n = len(bottoms)
+        shallow = bottoms[max(0, int(n * 0.5)):]
+        return float(np.median(shallow))
+
+    def _text_baseline_dy(self, mob):
+        """Approach A: the vertical (manim-unit) offset that moves this Text's
+        typographic baseline to ``center_y - ascent/2``, independent of its
+        bounding box (which manim pads downward by descender depth).
+
+        Clean words (no descenders) return ~0 and stay put; descender-heavy
+        words are lowered, so same-font words sharing a center after arrange()
+        fall onto one baseline.  Applied as a draw-time offset — the mobject's
+        points are never mutated, so it cannot cause positional jitter.
+        """
+        base = self._glyph_baseline(mob)
+        if base is None:
+            return 0.0
+        try:
+            center = mob.get_center()[1]
+        except Exception:
+            return 0.0
+        try:
+            top = float(np.max([
+                s.points[:, 1].max()
+                for s in mob.family_members_with_points()
+                if s.points is not None and len(s.points)
+            ]))
+        except Exception:
+            return 0.0
+        if top - base <= 1e-6:
+            return 0.0
+        dy = (center - (top - base) / 2.0) - base
+        return dy if abs(dy) > 1e-9 else 0.0
+
+    def _text_row_ids(self, scene, skip_ids=None):
+        """Return ids of visible, same-font Text roots that sit on one visual
+        line (vertical spans overlap) with at least one other such word.
+
+        Only multi-word lines need baseline alignment — isolated words and
+        titles are deliberately excluded so the offset never moves them.
+        """
+        roots = []
+        for mob in scene.mobjects:
+            if skip_ids and id(mob) in skip_ids:
+                continue
+            if not isinstance(mob, Text) or not getattr(mob, 'submobjects', None):
+                continue
+            if get_anim_opacity(mob) < 0.5:
+                continue
+            try:
+                font_size = mob._font_size
+            except Exception:
+                continue
+            try:
+                bottom = mob.get_bottom()[1]
+                top = mob.get_top()[1]
+            except Exception:
+                continue
+            roots.append({'id': id(mob), 'font': font_size,
+                          'b': bottom, 't': top})
+        ids = set()
+        for i in range(len(roots)):
+            for j in range(i + 1, len(roots)):
+                a, b = roots[i], roots[j]
+                if a['font'] == b['font'] and a['b'] < b['t'] and b['b'] < a['t']:
+                    ids.add(a['id'])
+                    ids.add(b['id'])
+        return ids
 
     def _send(self, mob, angle=0.0, parent_alpha=1.0, parent_offset=None, parent_transforming=False, parent_is_text=False):
         w, h = self.win_w, self.win_h
@@ -737,8 +826,27 @@ class VulkanRender(ShapeMixin, TextMixin):
             # when rendered through an intermediate Group (e.g. LaggedStartMap).
             # This prevents the _transforming stroke logic in _send_vmobject
             # from adding unwanted borders to text characters during animation.
+            dy = getattr(mob, '_baseline_dy', None)
+            if dy is None:
+                # Bake the Approach-A baseline shift only once the word is at
+                # rest (fully opaque) AND is part of a same-font multi-word line
+                # (set by sync in self._row_text_ids).  Isolated text / titles
+                # are left untouched, so the offset never disturbs single lines.
+                # During a fade/scale pose the geometry is transient, so leave
+                # dy unset and retry on a later frame instead of caching a
+                # wrong zero.
+                in_row = id(mob) in getattr(self, '_row_text_ids', ())
+                if in_row and get_anim_opacity(mob) >= 0.95:
+                    dy = self._text_baseline_dy(mob)
+                    mob._baseline_dy = dy
+                else:
+                    dy = 0.0
             for sub in mob.submobjects:
                 sub._is_text = True
+                if dy != 0.0:
+                    sub._baseline_dy = dy
+                elif hasattr(sub, '_baseline_dy'):
+                    del sub._baseline_dy
             if getattr(mob, '_letter_alphas', None) is not None:
                 self._send_text_write(mob, mob._letter_alphas, w, h, a)
             else:
