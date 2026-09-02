@@ -80,20 +80,17 @@ class TextMixin:
             stroke_fade = max(0.0, 1.0 - max(0.0, (sub_alpha - 0.4) * 2.5))
             fill_alpha = max(0.0, (sub_alpha - 0.3) * 2.0)
 
-            # Keep the handwriting outline in the text's own color (base).
-            # base * stroke_fade would fade the outline toward BLACK as the fill
-            # comes in, reading as a black 包边 around the glyph. Instead the
-            # outline stays the text color and simply turns off once the letter
-            # is fully filled (see show_stroke below).
+            # Handwriting outline keeps the text's own colour; as the fill
+            # completes it recedes INWARD (width shrinks 2px -> 0) instead of
+            # popping off, so the letter ends with no sudden border
+            # disappearance and no residual ring.
             sr, sg, sb = base_r, base_g, base_b
-            # Only draw the handwriting outline while it is still fading in
-            # (stroke_fade > 0). Once a letter is fully written stroke_fade hits
-            # 0 and the outline is dropped.
-            show_stroke = 1 if stroke_fade > 0.01 else 0
+            stroke_width = 2.0 * stroke_fade
+            show_stroke = 1 if stroke_width > 0.001 else 0
 
             self.dll.AddBezierPath(
                 arr, n,
-                sr, sg, sb, 2.0,
+                sr, sg, sb, stroke_width,
                 base_r, base_g, base_b, fill_alpha,
                 stroke_progress, show_stroke, 1 if fill_alpha > 0 else 0, alpha,
             )

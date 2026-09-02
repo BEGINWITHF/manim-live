@@ -215,7 +215,12 @@ static void tessellate_fill(BezierPathObj *bp) {
     float fg = bp->fg / 255.0f;
     float fb = bp->fb / 255.0f;
     float fo = bp->fill_opacity;
-    float cr = fr * fo, cg = fg * fo, cb = fb * fo;
+    // Straight-alpha fill: colour stays full; opacity goes into alpha.
+    // Baking opacity into the colour (cr = fr * fo) made low-opacity fills
+    // (e.g. the start of a Write fill ramp) render as BLACK instead of
+    // transparent — the colour approached 0 while alpha stayed ~1.
+    float cr = fr, cg = fg, cb = fb;
+    float fill_alpha = fo * bp->alpha;
 
     int total_pts = 0;
 
@@ -307,17 +312,20 @@ done_sample_all:
                     float coverage = coverage_r - coverage_l;
                     if (coverage < 0.05f) continue;
 
-                    float a_r = cr * coverage;
-                    float a_g = cg * coverage;
-                    float a_b = cb * coverage;
+                    // Straight-alpha fill: keep the full fill colour and fold
+                    // the pixel coverage into the alpha.  Previously the colour
+                    // was scaled by coverage while alpha stayed opaque, which
+                    // turned low-coverage edge pixels into a dark 1px rim
+                    // around glyphs (visible on any non-black background).
                     if (g_vertex_count + 6 > MAX_VERTICES) return;
-                    PushVertex(seg_l, scan_y, a_r, a_g, a_b, bp->alpha);
-                    PushVertex(seg_r, scan_y, a_r, a_g, a_b, bp->alpha);
-                    PushVertex(seg_r, scan_y + 1.0f, a_r, a_g, a_b, bp->alpha);
+                    float aa = fill_alpha * coverage;
+                    PushVertex(seg_l, scan_y, cr, cg, cb, aa);
+                    PushVertex(seg_r, scan_y, cr, cg, cb, aa);
+                    PushVertex(seg_r, scan_y + 1.0f, cr, cg, cb, aa);
 
-                    PushVertex(seg_l, scan_y, a_r, a_g, a_b, bp->alpha);
-                    PushVertex(seg_r, scan_y + 1.0f, a_r, a_g, a_b, bp->alpha);
-                    PushVertex(seg_l, scan_y + 1.0f, a_r, a_g, a_b, bp->alpha);
+                    PushVertex(seg_l, scan_y, cr, cg, cb, aa);
+                    PushVertex(seg_r, scan_y + 1.0f, cr, cg, cb, aa);
+                    PushVertex(seg_l, scan_y + 1.0f, cr, cg, cb, aa);
                 }
             }
         }
