@@ -1144,6 +1144,17 @@ class VulkanRender(ShapeMixin, TextMixin):
                         if sub.target_mobject not in all_mobjects:
                             all_mobjects.append(sub.target_mobject)
                         sub.mobject._transforming = True
+                    elif isinstance(sub, FadeTransform):
+                        # FadeTransform subs (e.g. per-piece FadeTransformPieces)
+                        # need their target and ghost added too, otherwise the
+                        # target shape never renders during the crossfade.
+                        if sub.mobject not in all_mobjects:
+                            all_mobjects.append(sub.mobject)
+                        if sub.target_mobject not in all_mobjects:
+                            all_mobjects.append(sub.target_mobject)
+                        gh = getattr(sub, '_ghost', None)
+                        if gh is not None and gh not in all_mobjects:
+                            all_mobjects.append(gh)
                     else:
                         # Catch-all for ApplyMethod, etc. — track their mobjects
                         # so _is_descendant_of_scene can prevent double-rendering

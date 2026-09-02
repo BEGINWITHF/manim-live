@@ -1,5 +1,6 @@
 # This might not cause a bug or issue, check for other place first --TT Noted
 from core.animations.base import Animation, set_anim_opacity, get_anim_opacity
+from core.animations.animation_group import AnimationGroup
 import numpy as np
 
 
@@ -46,11 +47,17 @@ class FadeTransform(Animation):
         set_anim_opacity(self.target_mobject, 0.0)
 
     def interpolate(self, t):
-        alpha = (t - self.start_time) / self.run_time if self.run_time > 0 else 1.0
-        alpha = max(0.0, min(1.0, alpha))
-        if self.reverse_rate_function:
-            alpha = 1.0 - alpha
-        alpha = self.rate_func(alpha)
+        if getattr(self, '_use_alpha', False):
+            # Driven by an AnimationGroup which already applied its rate_func to
+            # the overall progress. Using linear alpha here avoids double-easing
+            # (group smooth + this FadeTransform's own smooth).
+            alpha = max(0.0, min(1.0, t))
+        else:
+            alpha = (t - self.start_time) / self.run_time if self.run_time > 0 else 1.0
+            alpha = max(0.0, min(1.0, alpha))
+            if self.reverse_rate_function:
+                alpha = 1.0 - alpha
+            alpha = self.rate_func(alpha)
         cur_pos = (
             self._source_start_pos * (1.0 - alpha)
             + self._target_start_pos * alpha
@@ -106,18 +113,30 @@ class FadeTransform(Animation):
         return mobs
 
 
-class FadeTransformPieces(FadeTransform):
-    """FadeTransformPieces — crossfade of a whole group (no ghost flash).
+class FadeTransformPieces(AnimationGroup):
+    """FadeTransformPieces — per-piece, index-wise crossfade.
 
-    Reuses manim-live's FadeTransform so there is no ghost-opacity flash at the
-    start of the change (unlike manim's native FadeTransformPieces, whose
-    set_opacity ghost state isn't tracked by manim-live's own opacity map).
-    Submobjects are aligned so pieces morph together.
+    Each source submobject cross-fades into its matching target submobject
+    (src[i]→tgt[i]) INDEPENDENTLY, which differs from the whole-group FadeTransform
+    (that pairs submobjects crosswise). Each piece gets its own FadeTransform.
     """
 
-    def begin(self, t):
+    def __init__(self, mobject, target_mobject, **kwargs):
+        self.mobject = mobject
+        self.target_mobject = target_mobject
+        self.to_add_on_completion = target_mobject
         try:
-            self.mobject.align_submobjects(self.target_mobject)
+            mobject.align_submobjects(target_mobject)
         except Exception:
             pass
-        super().begin(t)
+        pairs = list(zip(mobject.submobjects, target_mobject.submobjects))
+        anims = [FadeTransform(sm, tm) for sm, tm in pairs]
+        super().__init__(*anims, **kwargs)
+
+    def get_all_mobjects(self):
+        mobs = [self.mobject, self.target_mobject]
+        for sub in getattr(self, 'animations', []):
+            mobs.append(sub.mobject)
+            if getattr(sub, 'target_mobject', None) is not None:
+                mobs.append(sub.target_mobject)
+        return mobs
