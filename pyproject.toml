@@ -30,9 +30,6 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Visualization",
 ]
 
-[project.scripts]
-manim-live = "run:main"
-
 [project.urls]
 Homepage = "https://github.com/BEGINWITHF/manim-live"
 Documentation = "https://github.com/BEGINWITHF/manim-live#readme"
@@ -43,9 +40,7 @@ packages = [
     "core",
     "core.animations",
     "core.utils",
-    "scenes",
 ]
-py-modules = ["run"]
 
 [tool.setuptools.package-data]
 core = ["vulkan_core.dll"]
