@@ -158,7 +158,7 @@ static void CreateInstance(void) {
 
     app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
 
-    app_info.pApplicationName = "Manim Live";
+    app_info.pApplicationName = "Real Time Manim";
 
     app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
 

@@ -1,4 +1,4 @@
-# Manim-Live (Manteraction) — Project Architecture Summary
+# real-time-manim — Project Architecture Summary
 
 > A Vulkan-accelerated rendering backend for [ManimCE](https://www.manim.community/) that replaces Manim's default OpenGL/Cairo rendering pipeline with a custom native Vulkan renderer, providing real-time preview and fast offline video recording.
 
@@ -6,7 +6,7 @@
 
 ## 1. Project Purpose
 
-Manim-Live intercepts standard Manim scene code and renders all mobjects through a **native Vulkan DLL** instead of Manim's built-in shaders. The goal is:
+real-time-manim intercepts standard Manim scene code and renders all mobjects through a **native Vulkan DLL** instead of Manim's built-in shaders. The goal is:
 
 - **Faster rendering** — hardware-accelerated Vulkan instead of OpenGL/Cairo
 - **Live preview** — a real-time window shows the animation as it plays
@@ -18,10 +18,10 @@ Manim-Live intercepts standard Manim scene code and renders all mobjects through
 ## 2. Directory Structure
 
 ```
-manim-live/
+real-time-manim/
 ├── run.py                      # Entry point — monkey-patches manim, runs a Scene
 ├── requirements.txt            # manim>=0.20.0, numpy
-├── README.md                   # Project overview (Manteraction roadmap)
+├── README.md                   # Project overview (roadmap)
 │
 ├── core/
 │   ├── __init__.py             # (empty — package marker)
@@ -146,7 +146,7 @@ User Code (Scene)
 - Parses CLI args: `run.py <scene_index> [--record <output.mp4>] [--record-fps <fps>]`
 - Runs the selected `Scene` class, which internally creates a `MLWindow` instance
 
-### 4.2. `MLWindow` (core/vulkan_bind.py)
+### 4.2. `MLWindow` (real_time_manim/vulkan_bind.py)
 
 The central orchestrator. Key methods:
 
