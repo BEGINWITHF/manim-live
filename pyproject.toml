@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "manim-live"
+name = "real-time-manim"
 version = "0.1.0"
 description = "Vulkan-accelerated real-time rendering backend for ManimCE (Windows)"
 readme = "README.md"
@@ -31,19 +31,19 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/BEGINWITHF/manim-live"
-Documentation = "https://github.com/BEGINWITHF/manim-live#readme"
-Source = "https://github.com/BEGINWITHF/manim-live"
+Homepage = "https://github.com/BEGINWITHF/real-time-manim"
+Documentation = "https://github.com/BEGINWITHF/real-time-manim#readme"
+Source = "https://github.com/BEGINWITHF/real-time-manim"
 
 [tool.setuptools]
 packages = [
-    "core",
-    "core.animations",
-    "core.utils",
+    "real_time_manim",
+    "real_time_manim.animations",
+    "real_time_manim.utils",
 ]
 
 [tool.setuptools.package-data]
-core = ["vulkan_core.dll"]
+real_time_manim = ["vulkan_core.dll"]
 
 [tool.setuptools.exclude-package-data]
 "*" = ["__pycache__", "*.pyc"]

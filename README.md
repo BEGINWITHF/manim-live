@@ -1,7 +1,7 @@
-# Manim-Live (Manteraction)
+# real-time-manim
 
 <p align="center">
-  <img src="logo.jpg" alt="Manim-Live logo" width="640"/>
+  <img src="logo.jpg" alt="real-time-manim logo" width="640"/>
 </p>
 
 A **Vulkan-accelerated rendering backend** for [ManimCE](https://www.manim.community/) that replaces the default OpenGL/Cairo renderer with a custom GPU pipeline for real-time mathematical animation rendering on Windows.
@@ -32,7 +32,7 @@ A **Vulkan-accelerated rendering backend** for [ManimCE](https://www.manim.commu
 
 ## Overview
 
-Manim-Live bridges ManimCE's Python-based animation system with a native Vulkan rendering engine. Instead of relying on OpenGL or Cairo for drawing, it:
+real-time-manim bridges ManimCE's Python-based animation system with a native Vulkan rendering engine. Instead of relying on OpenGL or Cairo for drawing, it:
 
 1. **Translates** Manim mobjects into typed shape commands (rectangles, circles, lines, beziers, text, etc.)
 2. **Sends** those commands across a ctypes boundary to a native C/C++ DLL
@@ -86,7 +86,7 @@ The result is a fast, windowed renderer that can produce high-quality video outp
 ## Project Structure
 
 ```
-manim-live/
+real-time-manim/
 ├── run.py                          # Entry point — demo menu + scene runner
 ├── requirements.txt                # Python dependencies (manim, numpy)
 ├── README.md                       # This file
@@ -234,7 +234,7 @@ All animations inherit from `Animation` which provides:
 
 ### Opacity & Rotation Tracking
 
-Manim-Live maintains per-mobject state in module-level dictionaries:
+real-time-manim maintains per-mobject state in module-level dictionaries:
 
 ```python
 _anim_opacity[id(mob)]    = 0.0..1.0    # Current fade level
@@ -356,7 +356,7 @@ MLWindow.close = patched_close      # Calls stop_record() before shutdown
 
 ## MathTex Rendering
 
-Manim-Live supports two modes for mathematical typesetting:
+real-time-manim supports two modes for mathematical typesetting:
 
 ### LaTeX Mode (Default)
 
@@ -408,7 +408,7 @@ The system includes comprehensive mappings for:
 ```bash
 # Clone the repository
 git clone <repo-url>
-cd manim-live
+cd real-time-manim
 
 # Install Python dependencies
 pip install -r requirements.txt
@@ -531,10 +531,10 @@ class MyScene(Scene):
         self.play(FadeOut(sq))
 ```
 
-### Using Manim-Live's MLWindow
+### Using real-time-manim's MLWindow
 
 ```python
-from core.vulkan_bind import MLWindow
+from real_time_manim.vulkan_bind import MLWindow
 
 renderer = MLWindow(1920, 1080)
 
@@ -549,7 +549,7 @@ renderer.play(Transform(source, target))
 
 ### Key Attributes on Mobjects
 
-Manim-Live sets these attributes during animations:
+real-time-manim sets these attributes during animations:
 
 | Attribute | Type | Description |
 |-----------|------|-------------|

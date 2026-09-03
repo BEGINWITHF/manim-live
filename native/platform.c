@@ -143,7 +143,7 @@ __declspec(dllexport) int Vulkan_Init(int w, int h) {
     AdjustWindowRect(&rect, WS_OVERLAPPEDWINDOW, FALSE);
 
     g_hwnd = CreateWindowExW(
-        0, L"ManimVulkanClass", L"Manim Live",
+        0, L"ManimVulkanClass", L"Real Time Manim",
         WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT, CW_USEDEFAULT,
         rect.right - rect.left, rect.bottom - rect.top,
