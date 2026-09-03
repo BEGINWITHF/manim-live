@@ -91,7 +91,7 @@ manim-live/
 ├── requirements.txt                # Python dependencies (manim, numpy)
 ├── README.md                       # This file
 ├── DEMO_FEATURES.md                # Detailed parameter reference for all 81 demos
-├── LICENSE                         # GPLv3
+├── LICENSE                         # MIT
 ├── logo.jpg                        # Project logo
 │
 ├── core/                           # Python rendering layer
@@ -602,7 +602,7 @@ This keeps the Python layer focused on animation logic and mobject state managem
 
 ## License
 
-This project is licensed under the GNU General Public License v3.0 — see [LICENSE](LICENSE) for details.
+This project is licensed under the MIT License — see [LICENSE](LICENSE) for details.
 
 ---
 
