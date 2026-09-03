@@ -25,7 +25,7 @@ manim-live/
 │
 ├── core/
 │   ├── __init__.py             # (empty — package marker)
-│   ├── vulkan_bind.py          # VulkanRender class — the bridge between Python and the DLL
+│   ├── vulkan_bind.py          # MLWindow class — the bridge between Python and the DLL
 │   ├── vulkan_shapes.py        # ShapeMixin — converts mobjects to DLL draw calls (rect, circle, ellipse, polygon, arrow, line, etc.)
 │   ├── vulkan_text.py          # TextMixin — renders Text/MathTex via bezier paths and DLL text API
 │   ├── vulkan_util.py          # Coordinate conversion (manim → screen), color helpers
@@ -92,7 +92,7 @@ User Code (Scene)
    Scene.construct()
        │
        ▼
-   VulkanRender.play(Animation, ...)
+   MLWindow.play(Animation, ...)
        │
        ├─ begin(): set up animation state (opacity, transforms, ghost copies)
        │
@@ -144,9 +144,9 @@ User Code (Scene)
 - **Monkey-patches** Manim's built-in classes (`Scene`, `Square`, `Circle`, `Text`, all animation classes, etc.) so they are replaced by custom versions from `core/`
 - Sets up MiKTeX PATH for LaTeX rendering
 - Parses CLI args: `run.py <scene_index> [--record <output.mp4>] [--record-fps <fps>]`
-- Runs the selected `Scene` class, which internally creates a `VulkanRender` instance
+- Runs the selected `Scene` class, which internally creates a `MLWindow` instance
 
-### 4.2. `VulkanRender` (core/vulkan_bind.py)
+### 4.2. `MLWindow` (core/vulkan_bind.py)
 
 The central orchestrator. Key methods:
 
@@ -268,7 +268,7 @@ Manim Scene (Python)
 Custom Animation subclasses (core/animations/)
     │
     ▼  interpolate() modifies mobject points/opacity
-VulkanRender.sync() — type detection + coordinate conversion
+MLWindow.sync() — type detection + coordinate conversion
     │
     ▼  ctypes calls
 Native DLL (platform.c) — shape storage + command list

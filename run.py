@@ -186,11 +186,11 @@ def main():
             os.makedirs(out_dir, exist_ok=True)
             out_path = os.path.join(out_dir, f"{n.zfill(2)}_{safe}.mp4")
 
-            # Monkey-patch VulkanRender to capture instance + auto-start record
+            # Monkey-patch MLWindow to capture instance + auto-start record
             import core.vulkan_bind as vb
             _render_ref = [None]
-            _orig_init = vb.VulkanRender.__init__
-            _orig_close = vb.VulkanRender.close
+            _orig_init = vb.MLWindow.__init__
+            _orig_close = vb.MLWindow.close
 
             def _patched_init(self, *args, **kwargs):
                 _orig_init(self, *args, **kwargs)
@@ -201,8 +201,8 @@ def main():
                 self.stop_record()
                 _orig_close(self)
 
-            vb.VulkanRender.__init__ = _patched_init
-            vb.VulkanRender.close = _patched_close
+            vb.MLWindow.__init__ = _patched_init
+            vb.MLWindow.close = _patched_close
 
             print(f"Running: {desc}")
             _restore_tex_cache()
@@ -211,8 +211,8 @@ def main():
             _save_tex_cache()
             _clean_media()
 
-            vb.VulkanRender.__init__ = _orig_init
-            vb.VulkanRender.close = _orig_close
+            vb.MLWindow.__init__ = _orig_init
+            vb.MLWindow.close = _orig_close
             return
 
     print(f"Invalid option: {num}")

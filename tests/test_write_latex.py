@@ -126,7 +126,7 @@ def _render_dll_call_counts(mathtex, alpha):
     """
     import core.vulkan_bind as vb
 
-    renderer = vb.VulkanRender(400, 200)
+    renderer = vb.MLWindow(400, 200)
     counters = {"bezier": 0, "linestrip": 0, "max_vertex_alpha": 0.0}
 
     def _bez(*_a):

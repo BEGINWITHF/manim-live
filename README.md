@@ -50,7 +50,7 @@ The result is a fast, windowed renderer that can produce high-quality video outp
 │                    Python Layer                          │
 │                                                         │
 │  ┌──────────┐   ┌──────────────┐   ┌────────────────┐  │
-│  │  Scene    │──▶│ VulkanRender │──▶│  ShapeMixin /  │  │
+│  │  Scene    │──▶│ MLWindow │──▶│  ShapeMixin /  │  │
 │  │ (ManimCE) │   │   .play()    │   │  TextMixin     │  │
 │  └──────────┘   └──────┬───────┘   └───────┬────────┘  │
 │                        │                    │           │
@@ -96,7 +96,7 @@ manim-live/
 │
 ├── core/                           # Python rendering layer
 │   ├── __init__.py
-│   ├── vulkan_bind.py              # VulkanRender class — main bridge (1740 lines)
+│   ├── vulkan_bind.py              # MLWindow class — main bridge (1740 lines)
 │   ├── vulkan_shapes.py            # ShapeMixin — shape-specific senders (626 lines)
 │   ├── vulkan_text.py              # TextMixin — text/bezier rendering
 │   ├── vulkan_util.py              # Coordinate conversion, color helpers
@@ -263,7 +263,7 @@ These are propagated through VGroup hierarchies during `sync()`.
 
 ## Shape Dispatch
 
-The `_send()` method in `VulkanRender` recursively traverses the mobject tree and dispatches each leaf to a type-specific sender:
+The `_send()` method in `MLWindow` recursively traverses the mobject tree and dispatches each leaf to a type-specific sender:
 
 ```python
 def _send(self, mob, angle, parent_alpha, ...):
@@ -345,11 +345,11 @@ renderer._finish_fast_record()             # Pipe BMP → ffmpeg
 
 ### 3. Run.py Integration
 
-`run.py` monkey-patches `VulkanRender` to auto-record:
+`run.py` monkey-patches `MLWindow` to auto-record:
 
 ```python
-VulkanRender.__init__ = patched_init    # Calls start_record() after init
-VulkanRender.close = patched_close      # Calls stop_record() before shutdown
+MLWindow.__init__ = patched_init    # Calls start_record() after init
+MLWindow.close = patched_close      # Calls stop_record() before shutdown
 ```
 
 ---
@@ -531,12 +531,12 @@ class MyScene(Scene):
         self.play(FadeOut(sq))
 ```
 
-### Using Manim-Live's VulkanRender
+### Using Manim-Live's MLWindow
 
 ```python
-from core.vulkan_bind import VulkanRender
+from core.vulkan_bind import MLWindow
 
-renderer = VulkanRender(1920, 1080)
+renderer = MLWindow(1920, 1080)
 
 # Create a Manim scene
 scene = MyScene()
