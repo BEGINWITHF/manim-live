@@ -529,7 +529,7 @@ class BITMAPFILEHEADER(ctypes.Structure):
     ]
 
 
-class VulkanRender(ShapeMixin, TextMixin):
+class MLWindow(ShapeMixin, TextMixin):
     def __init__(self, w=1920, h=1080):
         self.win_w = w
         self.win_h = h

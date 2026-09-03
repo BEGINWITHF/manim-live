@@ -3,7 +3,7 @@ import numpy as np
 from manim import *
 from manim.animation.transform import Transform as _ManimTransform
 from core.vulkan_bind import (
-    VulkanRender, Write, Wait, Add,
+    MLWindow, Write, Wait, Add,
     Create, Uncreate, Unwrite,
     FadeIn, FadeOut, FadeTransform, FadeTransformPieces,
     Transform, ReplacementTransform,
@@ -24,7 +24,7 @@ def _title(render, text):
 
 class DemoCreate(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "Create - draw shapes")
@@ -51,7 +51,7 @@ class DemoCreate(Scene):
 
 class DemoWriteUnwrite(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "Write / Unwrite - text")
@@ -91,7 +91,7 @@ class DemoWriteFormula(Scene):
 
 class DemoTransform(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "Transform - morph shapes")
@@ -116,7 +116,7 @@ class DemoTransform(Scene):
 
 class DemoReplacementTransform(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "ReplacementTransform - replace in scene")
@@ -140,7 +140,7 @@ class DemoReplacementTransform(Scene):
 
 class DemoFadeInFadeOut(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "FadeIn / FadeOut")
@@ -169,7 +169,7 @@ class DemoFadeInFadeOut(Scene):
 
 class DemoFadeTransform(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "FadeTransform - crossfade shapes")
@@ -194,7 +194,7 @@ class DemoFadeTransform(Scene):
 
 class DemoRotating(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "Rotating / Rotate")
@@ -226,7 +226,7 @@ class DemoRotating(Scene):
 
 class DemoTransformMatchingShapes(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "TransformMatchingShapes")
@@ -248,7 +248,7 @@ class DemoTransformMatchingShapes(Scene):
 
 class DemoVGroup(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "VGroup - grouped animations")
@@ -270,7 +270,7 @@ class DemoVGroup(Scene):
 
 class DemoAllShapes(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "All supported shapes")
@@ -318,7 +318,7 @@ class DemoAllShapes(Scene):
 
 class DemoSuccession(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "Succession - chained animations")
@@ -351,7 +351,7 @@ class DemoSuccession(Scene):
 
 class DemoFadeInShift(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "FadeIn with shift/scale")
@@ -390,7 +390,7 @@ class DemoFadeInShift(Scene):
 
 class DemoTextFeatures(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "Text rendering")
@@ -406,7 +406,7 @@ class DemoTextFeatures(Scene):
 
 class DemoCombined(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "Combined demo")
@@ -436,7 +436,7 @@ class DemoCombined(Scene):
 
 class DemoDefaultAdd(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
 
@@ -461,7 +461,7 @@ class DemoDefaultAdd(Scene):
 
 class DemoAddWithRunTime(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
 
@@ -481,7 +481,7 @@ class DemoAddWithRunTime(Scene):
 
 class DemoLagRatios(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
 
@@ -507,7 +507,7 @@ class DemoLagRatios(Scene):
 
 class DemoChangeDefaultAnimation(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
 
@@ -527,7 +527,7 @@ class DemoChangeDefaultAnimation(Scene):
 
 class DemoAnimatedBoundary(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
 
@@ -542,7 +542,7 @@ class DemoAnimatedBoundary(Scene):
 # you are not allowed to change any code here --TT Noted
 class DemoTracedPath(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         circ = Circle(color=RED).shift(4 * LEFT)
@@ -556,7 +556,7 @@ class DemoTracedPath(Scene):
 
 class DemoDissipatingPath(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
 
@@ -571,7 +571,7 @@ class DemoDissipatingPath(Scene):
 
 class DemoLaggedStartMap(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
 
@@ -595,7 +595,7 @@ class DemoLaggedStartMap(Scene):
 
 class DemoLaggedStart(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
 
@@ -625,7 +625,7 @@ class DemoLaggedStart(Scene):
 
 class DemoSuccessionDots(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
 
@@ -647,7 +647,7 @@ class DemoSuccessionDots(Scene):
 
 class DemoCreateSquare(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
 
@@ -660,7 +660,7 @@ class DemoCreateSquare(Scene):
 # you are not allowed to change any code here --TT Noted
 class DemoDrawBorderThenFill(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "DrawBorderThenFill")
@@ -675,7 +675,7 @@ class DemoDrawBorderThenFill(Scene):
 
 class DemoShowIncreasingSubsets(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "ShowIncreasingSubsets")
@@ -689,7 +689,7 @@ class DemoShowIncreasingSubsets(Scene):
 
 class DemoSpiralIn(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "SpiralIn")
@@ -705,7 +705,7 @@ class DemoSpiralIn(Scene):
 
 class DemoTypeWithCursor(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "TypeWithCursor + Blink")
@@ -727,7 +727,7 @@ class DemoTypeWithCursor(Scene):
 
 class DemoUntypeWithCursor(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "UntypeWithCursor + Blink")
@@ -747,7 +747,7 @@ class DemoUntypeWithCursor(Scene):
 
 class DemoUnwriteReverseTrue(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "Unwrite reverse=True")
@@ -762,7 +762,7 @@ class DemoUnwriteReverseTrue(Scene):
 
 class DemoUnwriteReverseFalse(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "Unwrite reverse=False")
@@ -777,7 +777,7 @@ class DemoUnwriteReverseFalse(Scene):
 
 class DemoUncreate(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "Uncreate - reverse of Create")
@@ -795,7 +795,7 @@ class DemoUncreate(Scene):
 
 class DemoShowWrite(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "Write - font_size=144")
@@ -808,7 +808,7 @@ class DemoShowWrite(Scene):
 
 class DemoShowWriteReversed(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "Write reversed - font_size=144")
@@ -821,7 +821,7 @@ class DemoShowWriteReversed(Scene):
 
 class DemoFadeInExample(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "FadeIn with shift/target_position/scale")
@@ -848,7 +848,7 @@ class DemoFadeInExample(Scene):
 
 class DemoFadeOutExample(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "FadeOut with shift/target_position/scale")
@@ -876,7 +876,7 @@ class DemoFadeOutExample(Scene):
 
 class DemoGrowFromCenter(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "GrowFromCenter")
@@ -892,7 +892,7 @@ class DemoGrowFromCenter(Scene):
 
 class DemoGrowArrow(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "GrowArrow")
@@ -908,7 +908,7 @@ class DemoGrowArrow(Scene):
 
 class DemoGrowFromEdge(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "GrowFromEdge")
@@ -926,7 +926,7 @@ class DemoGrowFromEdge(Scene):
 
 class DemoGrowFromPoint(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "GrowFromPoint")
@@ -946,7 +946,7 @@ class DemoGrowFromPoint(Scene):
 
 class DemoSpinInFromNothing(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "SpinInFromNothing")
@@ -963,7 +963,7 @@ class DemoSpinInFromNothing(Scene):
 
 class DemoApplyingWaves(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "ApplyWave")
@@ -980,7 +980,7 @@ class DemoApplyingWaves(Scene):
 
 class DemoBlinking(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "Blink")
@@ -995,7 +995,7 @@ class DemoBlinking(Scene):
 
 class DemoCircumscribe(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "Circumscribe")
@@ -1014,7 +1014,7 @@ class DemoCircumscribe(Scene):
 
 class DemoUsingIndicate(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "Indicate")
@@ -1029,7 +1029,7 @@ class DemoUsingIndicate(Scene):
 
 class DemoUsingFlash(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "Flash")
@@ -1043,7 +1043,7 @@ class DemoUsingFlash(Scene):
 
 class DemoFlashOnCircle(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "Flash on Circle")
@@ -1063,7 +1063,7 @@ class DemoFlashOnCircle(Scene):
 
 class DemoFocusOn(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "FocusOn")
@@ -1078,7 +1078,7 @@ class DemoFocusOn(Scene):
 
 class DemoTimeWidthValues(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
 
@@ -1099,7 +1099,7 @@ class DemoTimeWidthValues(Scene):
 
 class DemoHomotopy(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
 
@@ -1120,7 +1120,7 @@ class DemoHomotopy(Scene):
 
 class DemoMoveAlongPath(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
 
@@ -1137,7 +1137,7 @@ class DemoMoveAlongPath(Scene):
 
 class DemoWiggle(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "Wiggle")
@@ -1150,7 +1150,7 @@ class DemoWiggle(Scene):
 
 class DemoChangeDecimalToValue(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "ChangeDecimalToValue")
@@ -1163,7 +1163,7 @@ class DemoChangeDecimalToValue(Scene):
 
 class DemoUsingRotate(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "Rotate")
@@ -1184,7 +1184,7 @@ class DemoUsingRotate(Scene):
 
 class DemoRotatingAbout(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         circle = Circle(radius=1, color=BLUE)
         line = Line(start=ORIGIN, end=RIGHT)
@@ -1203,7 +1203,7 @@ class DemoRotatingAbout(Scene):
 
 class DemoChangingDecimal(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "ChangingDecimal")
@@ -1216,7 +1216,7 @@ class DemoChangingDecimal(Scene):
 
 class BroadcastExample(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(1))
         mob = Circle(radius=4, color=TEAL_A)
@@ -1227,7 +1227,7 @@ class BroadcastExample(Scene):
 
 class SpeedModifierExample(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         a = Dot().shift(LEFT * 4)
         b = Dot().shift(RIGHT * 4)
@@ -1249,7 +1249,7 @@ class SpeedModifierExample(Scene):
 
 class SpeedModifierUpdaterExample(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         a = Dot().shift(LEFT * 4)
         self.add(a)
@@ -1267,7 +1267,7 @@ class SpeedModifierUpdaterExample(Scene):
 
 class SpeedModifierUpdaterExample2(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         a = Dot().shift(LEFT * 4)
         self.add(a)
@@ -1286,7 +1286,7 @@ class SpeedModifierUpdaterExample2(Scene):
 
 class ApplyMatrixExample(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         matrix = [[1, 1], [0, 2/3]]
         render.play(ApplyMatrix(matrix, Text("Hello World!")), ApplyMatrix(matrix, NumberPlane()))
@@ -1296,7 +1296,7 @@ class ApplyMatrixExample(Scene):
 
 class WarpSquare(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         square = Square()
         render.play(
@@ -1310,7 +1310,7 @@ class WarpSquare(Scene):
 
 class ClockwiseExample(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         dl, dr = Dot(), Dot()
         sl, sr = Square(), Square()
@@ -1330,7 +1330,7 @@ class ClockwiseExample(Scene):
 # do not change the code here
 class CounterclockwiseTransform_vs_Transform(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         c_transform = VGroup(
             TextDecimalNumber(number=3.141, num_decimal_places=3),
@@ -1362,7 +1362,7 @@ class CounterclockwiseTransform_vs_Transform(Scene):
 
 class DemoCyclicReplace(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "CyclicReplace")
@@ -1378,7 +1378,7 @@ class DemoCyclicReplace(Scene):
 
 class DemoFadeToColor(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "FadeToColor")
@@ -1389,7 +1389,7 @@ class DemoFadeToColor(Scene):
 
 class DemoDifferentFadeTransforms(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "FadeTransform")
@@ -1410,7 +1410,7 @@ class DemoDifferentFadeTransforms(Scene):
 
 class DemoFadeTransformPieces(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "FadeTransformPieces")
@@ -1432,7 +1432,7 @@ class DemoFadeTransformPieces(Scene):
 
 class DemoMoveToTarget(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "MoveToTarget")
@@ -1451,7 +1451,7 @@ class DemoMoveToTarget(Scene):
 
 class DemoReplacementTransformOrTransform(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
 
         r_transform = VGroup(*[TextDecimalNumber(number=i, num_decimal_places=0) for i in range(1,4)])
@@ -1481,7 +1481,7 @@ class DemoReplacementTransformOrTransform(Scene):
 
 class DemoRestore(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "Restore")
@@ -1500,7 +1500,7 @@ class DemoRestore(Scene):
 
 class DemoScaleInPlace(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "ScaleInPlace")
@@ -1514,7 +1514,7 @@ class DemoScaleInPlace(Scene):
 
 class DemoShrinkToCenter(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "ShrinkToCenter")
@@ -1528,7 +1528,7 @@ class DemoShrinkToCenter(Scene):
 
 class DemoTransformPathArc(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "TransformPathArc")
@@ -1567,7 +1567,7 @@ class DemoTransformPathArc(Scene):
 
 class DemoAnagram(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "TransformMatchingShapes Anagram")
@@ -1584,7 +1584,7 @@ class DemoAnagram(Scene):
 
 class DemoMatchingEquationParts(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "TransformMatchingTex")
@@ -1605,7 +1605,7 @@ class DemoMatchingEquationParts(Scene):
 
 class DemoTangentAnimation(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "TangentLine - sliding tangent")
@@ -1641,7 +1641,7 @@ class DemoTangentAnimation(Scene):
 
 class DemoLatexWithoutLatex(Scene):
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "All LaTeX commands")
@@ -1872,7 +1872,7 @@ class DemoFourierTransform(Scene):
     """Epicycles tracing a heart via Fourier series — 20 harmonics."""
 
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "Fourier Transform — Epicycles")
@@ -1938,7 +1938,7 @@ class DemoLorenzButterfly(Scene):
     """Lorenz attractor — 5 particles, rotating view, dissipating trails."""
 
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "Lorenz Attractor")
@@ -2027,7 +2027,7 @@ class DemoWriteLatex(Scene):
     """
 
     def construct(self):
-        render = VulkanRender(1920, 1080)
+        render = MLWindow(1920, 1080)
         render.scene = self
         render.play(Wait(2.0))
         _title(render, "Write on LaTeX")
@@ -2067,8 +2067,8 @@ if __name__ == "__main__":
         pt = wt.POINT(0, 0); user32.ClientToScreen(h, ctypes.byref(pt))
         return {"left": pt.x, "top": pt.y, "width": r.right, "height": r.bottom}
 
-    _orig_init = VulkanRender.__init__
-    _orig_close = VulkanRender.close
+    _orig_init = MLWindow.__init__
+    _orig_close = MLWindow.close
     _scene_name, _scene_num = "", 0
 
     def _rec_init(self, w=1920, h=1080):
@@ -2125,8 +2125,8 @@ if __name__ == "__main__":
             _rec_state[2], _rec_state[3], _rec_state[4], _rec_state[6] = None, 0, None, ""
         _orig_close(self)
 
-    VulkanRender.__init__ = _rec_init
-    VulkanRender.close = _rec_close
+    MLWindow.__init__ = _rec_init
+    MLWindow.close = _rec_close
 
     # -- cache helpers --
     TEX_CACHE = os.path.join(os.path.dirname(PROJECT_DIR), "tex_cache")

@@ -1248,7 +1248,7 @@ All 81 demo scenes with quick reference:
 
 ```python
 from manim import *
-from core.vulkan_bind import VulkanRender
+from core.vulkan_bind import MLWindow
 ```
 
 ### Running
@@ -1261,7 +1261,7 @@ python run.py <scene_number>
 
 | Class | Purpose |
 |-------|---------|
-| `VulkanRender` | Main renderer (ShapeMixin + TextMixin) |
+| `MLWindow` | Main renderer (ShapeMixin + TextMixin) |
 | `ShapeMixin` | Shape-specific DLL senders |
 | `TextMixin` | Text/bezier DLL senders |
 | `Animation` | Base animation class |
