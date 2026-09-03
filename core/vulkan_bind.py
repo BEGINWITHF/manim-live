@@ -817,6 +817,39 @@ class VulkanRender(ShapeMixin, TextMixin):
                     ids.add(b['id'])
         return ids
 
+    @staticmethod
+    def _edges_are_straight(pts):
+        """True when every closed cubic-bezier edge keeps its two control
+        points collinear with the chord between its anchors (i.e. the edges
+        are straight segments, as for an axis-aligned or merely rotated quad).
+        Any non-affine warp (e.g. Homotopy y += A*sin(x)) bends a control point
+        off the chord, giving a non-zero perpendicular deviation, so the edge
+        is a curve and must be rendered as a bezier path."""
+        n = len(pts)
+        if n < 4:
+            return True
+        # Straight segments have control points exactly collinear (dev ~ 0.0);
+        # even a faint Homotopy warp yields dev >= ~1e-3.  1e-4 cleanly splits.
+        TOL = 1e-4
+        for i in range(0, n, 4):
+            if i + 3 >= n:
+                break
+            p0 = pts[i][:2]
+            p3 = pts[i + 3][:2]
+            cx = p3[0] - p0[0]
+            cy = p3[1] - p0[1]
+            L2 = cx * cx + cy * cy
+            if L2 <= 0.0:
+                continue
+            for c in (pts[i + 1][:2], pts[i + 2][:2]):
+                vx = c[0] - p0[0]
+                vy = c[1] - p0[1]
+                cross = vx * cy - vy * cx
+                dist = abs(cross) / (L2 ** 0.5)
+                if dist > TOL:
+                    return False
+        return True
+
     def _send(self, mob, angle=0.0, parent_alpha=1.0, parent_offset=None, parent_transforming=False, parent_is_text=False):
         w, h = self.win_w, self.win_h
         own_alpha = get_anim_opacity(mob)
@@ -967,8 +1000,25 @@ class VulkanRender(ShapeMixin, TextMixin):
                 vert_count = len(mob.get_vertices()) if hasattr(mob, 'get_vertices') else 0
             except AttributeError:
                 vert_count = 0
+            # A transforming Square/Rectangle with <=4 anchors is only a true
+            # quad — safe to render through the straight-edged _send_polygon —
+            # when its edges are genuinely straight (an affine/rotational warp
+            # keeps each edge's two bezier control points collinear with the
+            # chord between its anchors).  A non-affine point warp such as
+            # Homotopy (y += A*sin(x)) bends the control points off the chord,
+            # so the top/bottom edges become curves and must be rendered as a
+            # bezier path (_send_vmobject).  Collapsing them to the 4 straight
+            # corner-to-corner chords makes the square a rigid parallelogram —
+            # the "moving top/bottom edges should be flexible" complaint.
+            quad_edges_straight = True
+            if isinstance(mob, (Square, Rectangle)):
+                try:
+                    quad_edges_straight = self._edges_are_straight(mob.get_points())
+                except Exception:
+                    quad_edges_straight = True
             is_quad_morph = (isinstance(mob, (Square, Rectangle)) and vert_count <= 4
-                             and not getattr(mob, '_apply_method', False))
+                             and not getattr(mob, '_apply_method', False)
+                             and quad_edges_straight)
             if not is_quad_morph:
                 # FocusOn: route through _send_dot so the dot renders
                 # as a proper circle instead of bezier path
