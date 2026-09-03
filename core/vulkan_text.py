@@ -500,7 +500,6 @@ class TextMixin:
 
         if do_stroke:
             seg_count = n // 4
-            samples_per_seg = 8
             vis_start = int(seg_count * progress_lower)
             vis_end = int(seg_count * progress_upper)
             stroke_pts = []
@@ -510,8 +509,20 @@ class TextMixin:
                 p1x, p1y = flat[(idx+1)*3], flat[(idx+1)*3+1]
                 p2x, p2y = flat[(idx+2)*3], flat[(idx+2)*3+1]
                 p3x, p3y = flat[(idx+3)*3], flat[(idx+3)*3+1]
-                for s in range(samples_per_seg + 1):
-                    t = s / samples_per_seg
+                # flat holds screen-space control points.  Subdivide each cubic
+                # to roughly STEP_PX screen pixels per straight run so strongly
+                # curved outlines (e.g. a Square warped by exp -> a wide arc,
+                # test 63) don't come out faceted.  8 fixed samples/seg was too
+                # coarse there; native tessellation uses 64.  Length-aware
+                # sampling keeps gentle/low-curvature segments cheap too.
+                STEP_PX = 3.0
+                cpoly = (math.hypot(p1x-p0x, p1y-p0y) + math.hypot(p2x-p1x, p2y-p1y)
+                         + math.hypot(p3x-p2x, p3y-p2y))
+                chord = math.hypot(p3x-p0x, p3y-p0y)
+                est = (cpoly + chord) * 0.5
+                seg_samples = int(max(8.0, min(256.0, math.ceil(est / STEP_PX))))
+                for s in range(seg_samples + 1):
+                    t = s / seg_samples
                     u = 1.0 - t
                     bx = u*u*u*p0x + 3*u*u*t*p1x + 3*u*t*t*p2x + t*t*t*p3x
                     by = u*u*u*p0y + 3*u*u*t*p1y + 3*u*t*t*p2y + t*t*t*p3y
