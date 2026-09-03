@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "real-time-manim"
-version = "0.1.0"
+version = "0.1.1"
 description = "Vulkan-accelerated real-time rendering backend for ManimCE (Windows)"
 readme = "README.md"
 license = { text = "MIT" }
@@ -43,7 +43,7 @@ packages = [
 ]
 
 [tool.setuptools.package-data]
-real_time_manim = ["vulkan_core.dll"]
+real_time_manim = ["vulkan_core.dll", "logo.ico"]
 
 [tool.setuptools.exclude-package-data]
 "*" = ["__pycache__", "*.pyc"]
