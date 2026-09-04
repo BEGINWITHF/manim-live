@@ -39,13 +39,11 @@ all driven by ordinary Manim scenes.
 
 ## Install
 
-The library is currently published to **TestPyPI**. With any Python 3.11+ on
-Windows 10/11:
+real-time-manim is published to **PyPI**. With any Python 3.11+ on Windows
+10/11:
 
 ```bash
-pip install --index-url https://test.pypi.org/simple/ \
-            --extra-index-url https://pypi.org/simple/ \
-            real-time-manim
+pip install real-time-manim
 ```
 
 The wheel bundles everything you need to render (`vulkan_core.dll` and the

@@ -32,6 +32,20 @@ import os
 from typing import Any, Callable, Dict, List, Optional, Union
 
 
+def _default_out_path() -> str:
+    """Where output lands when the caller passes no ``out_path``.
+
+    Prefers the user's ``~/Downloads`` folder (created if missing), falling back
+    to the current directory if that cannot be determined.
+    """
+    d = os.path.join(os.path.expanduser("~"), "Downloads")
+    try:
+        os.makedirs(d, exist_ok=True)
+        return os.path.join(d, "output.mp4")
+    except OSError:
+        return os.path.join(os.getcwd(), "output.mp4")
+
+
 # --------------------------------------------------------------------------
 # scene normalisation
 # --------------------------------------------------------------------------
@@ -146,7 +160,8 @@ class _AutoRecord:
 
 
 def _run(scene, out_path: str, on_init, on_close,
-         verbose: bool, overwrite: bool, count_only: bool) -> Dict[str, Any]:
+         verbose: bool, overwrite: bool, count_only: bool,
+         cleanup: bool = True) -> Dict[str, Any]:
     runner = _as_runner(scene)
     out_path = os.path.abspath(out_path)
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
@@ -154,6 +169,11 @@ def _run(scene, out_path: str, on_init, on_close,
     rec = _AutoRecord(out_path, on_init, on_close, verbose=verbose)
     with rec:
         runner()
+    # Rendering leaves transient manim media/Tex output behind; clear it for the
+    # caller so they never have to remember to.  Opt out via cleanup=False.
+    if cleanup:
+        from real_time_manim.util import clear_media
+        clear_media(verbose=verbose)
     files = rec.windows if rec.windows else _produced_files(out_path)
     return {
         "out_path": out_path,
@@ -167,10 +187,11 @@ def _run(scene, out_path: str, on_init, on_close,
 # --------------------------------------------------------------------------
 
 def record_scene(scene: Union[type, Any, Callable[[], None]],
-                 out_path: str = "output.mp4",
+                 out_path: Optional[str] = None,
                  *,
                  fps: int = 60,
                  overwrite: bool = True,
+                 cleanup: bool = True,
                  verbose: bool = True) -> Dict[str, Any]:
     """Record a scene to video in **real time** against a visible window.
 
@@ -184,11 +205,15 @@ def record_scene(scene: Union[type, Any, Callable[[], None]],
     scene:
         Scene subclass, Scene instance, or no-arg callable to run.
     out_path:
-        Destination ``.mp4`` (a scene opening several windows appends ``_partN``).
+        Destination ``.mp4``.  Defaults to ``~/Downloads/output.mp4`` when
+        omitted (a scene opening several windows appends ``_partN``).
     fps:
         Capture frame rate passed to ``start_record``.
     overwrite:
         When False, refuse to overwrite an existing ``out_path``.
+    cleanup:
+        Remove the transient manim ``media`` folder after recording so the
+        caller does not have to (default True).  Set False to keep it.
     verbose:
         Print per-window progress lines.
 
@@ -203,18 +228,20 @@ def record_scene(scene: Union[type, Any, Callable[[], None]],
     def on_close(win: Any) -> None:
         win.stop_record()
 
-    return _run(scene, out_path, on_init, on_close, verbose, overwrite,
-                count_only=False)
+    return _run(scene, out_path if out_path is not None else _default_out_path(),
+                on_init, on_close, verbose, overwrite, count_only=False,
+                cleanup=cleanup)
 
 
 def fast_record_scene(scene: Union[type, Any, Callable[[], None]],
-                      out_path: str = "output.mp4",
+                      out_path: Optional[str] = None,
                       *,
                       fps: int = 60,
                       hidden: bool = True,
                       count_only: bool = False,
                       segment: Optional[tuple] = None,
                       overwrite: bool = True,
+                      cleanup: bool = True,
                       verbose: bool = True) -> Dict[str, Any]:
     """Record a scene **offline** via fast framebuffer readback.
 
@@ -229,6 +256,7 @@ def fast_record_scene(scene: Union[type, Any, Callable[[], None]],
         Scene subclass, Scene instance, or no-arg callable to run.
     out_path:
         Destination ``.mp4`` (pipe mode) or directory (``segment`` BMP mode).
+        Defaults to ``~/Downloads/output.mp4`` when omitted (pipe mode).
     fps:
         Output frame rate passed to ``enable_fast_record``.
     hidden:
@@ -241,6 +269,9 @@ def fast_record_scene(scene: Union[type, Any, Callable[[], None]],
     overwrite:
         When False, refuse to overwrite an existing target (ignored when
         ``count_only`` since that writes nothing).
+    cleanup:
+        Remove the transient manim ``media`` folder after recording so the
+        caller does not have to (default True).  Set False to keep it.
     verbose:
         Print per-window progress lines.
 
@@ -255,5 +286,6 @@ def fast_record_scene(scene: Union[type, Any, Callable[[], None]],
     def on_close(win: Any) -> None:
         win._finish_fast_record()
 
-    return _run(scene, out_path, on_init, on_close, verbose, overwrite,
-                count_only=count_only)
+    return _run(scene, out_path if out_path is not None else _default_out_path(),
+                on_init, on_close, verbose, overwrite, count_only=count_only,
+                cleanup=cleanup)
