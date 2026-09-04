@@ -56,13 +56,19 @@ VkBuffer g_vert_buf = VK_NULL_HANDLE;
 
 VkDeviceMemory g_vert_buf_mem = VK_NULL_HANDLE;
 
+#ifdef _WIN32
 HWND g_hwnd = NULL;
 
 HINSTANCE g_hinst = NULL;
+#else
+void *g_metalLayer = NULL;
+#endif
 
 bool g_is_ready = false;
 
 uint32_t g_current_frame = 0;
+
+uint32_t g_last_img_idx = 0;
 
 bool g_framebuffer_resized = false;
 
@@ -168,6 +174,7 @@ static void CreateInstance(void) {
 
     app_info.apiVersion = VK_API_VERSION_1_0;
 
+#ifdef _WIN32
     const char *extensions[] = {
 
         VK_KHR_SURFACE_EXTENSION_NAME,
@@ -175,6 +182,15 @@ static void CreateInstance(void) {
         VK_KHR_WIN32_SURFACE_EXTENSION_NAME
 
     };
+#else
+    const char *extensions[] = {
+
+        VK_KHR_SURFACE_EXTENSION_NAME,
+
+        VK_EXT_METAL_SURFACE_EXTENSION_NAME
+
+    };
+#endif
 
     VkInstanceCreateInfo ci = {0};
 
@@ -182,6 +198,9 @@ static void CreateInstance(void) {
 
     ci.pApplicationInfo = &app_info;
 
+#ifdef __APPLE__
+    ci.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+#endif
     ci.enabledExtensionCount = 2;
 
     ci.ppEnabledExtensionNames = extensions;
@@ -198,6 +217,7 @@ static void CreateInstance(void) {
 
 static void CreateSurface(void) {
 
+#ifdef _WIN32
     VkWin32SurfaceCreateInfoKHR ci = {0};
 
     ci.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
@@ -213,6 +233,21 @@ static void CreateSurface(void) {
         exit(-1);
 
     }
+#else
+    VkMetalSurfaceCreateInfoEXT ci = {0};
+
+    ci.sType = VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT;
+
+    ci.pLayer = (CAMetalLayer *)g_metalLayer;
+
+    if (vkCreateMetalSurfaceEXT(g_inst, &ci, NULL, &g_surface) != VK_SUCCESS) {
+
+        fprintf(stderr, "Failed to create Metal surface!\n");
+
+        exit(-1);
+
+    }
+#endif
 
 }
 
@@ -248,7 +283,17 @@ static void CreateLogicalDevice(void) {
 
     qci.pQueuePriorities = &prio;
 
+#ifdef __APPLE__
+    const char *exts[] = { VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+
+                           "VK_KHR_portability_subset" };
+
+    uint32_t extCount = 2;
+#else
     const char *exts[] = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+
+    uint32_t extCount = 1;
+#endif
 
     VkDeviceCreateInfo dci = {0};
 
@@ -258,7 +303,7 @@ static void CreateLogicalDevice(void) {
 
     dci.pQueueCreateInfos = &qci;
 
-    dci.enabledExtensionCount = 1;
+    dci.enabledExtensionCount = extCount;
 
     dci.ppEnabledExtensionNames = exts;
 
@@ -289,6 +334,9 @@ void CreateSwapchain(void) {
     sci.imageArrayLayers = 1;
 
     sci.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+#ifdef __APPLE__
+    sci.imageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+#endif
 
     sci.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
@@ -689,11 +737,19 @@ static void CreateVertexBuffer(void) {
 
 }
 
+static void CreateReadbackResources(void);
+
+#ifdef _WIN32
 void Render_Init(HWND hwnd, int width, int height, HINSTANCE hinst) {
 
     g_hwnd = hwnd;
 
     g_hinst = hinst;
+#else
+void Render_Init(void *metalLayer, int width, int height) {
+
+    g_metalLayer = metalLayer;
+#endif
 
     g_swapchain_ext = (VkExtent2D){(uint32_t)width, (uint32_t)height};
 
@@ -722,6 +778,8 @@ void Render_Init(HWND hwnd, int width, int height, HINSTANCE hinst) {
     CreateSyncObjects();
 
     CreateVertexBuffer();
+
+    CreateReadbackResources();
 
     g_is_ready = true;
 
@@ -762,11 +820,16 @@ void CleanupSwapchain(void) {
 
 void RecreateSwapchain(void) {
     int width = 0, height = 0;
+#ifdef _WIN32
     RECT rect;
     if (GetClientRect(g_hwnd, &rect)) {
         width = rect.right - rect.left;
         height = rect.bottom - rect.top;
     }
+#else
+    width = (int)g_swapchain_ext.width;
+    height = (int)g_swapchain_ext.height;
+#endif
     if (width == 0 || height == 0) return;
 
     vkDeviceWaitIdle(g_dev);
@@ -807,9 +870,140 @@ void Render_Cleanup(void) {
     vkDestroyBuffer(g_dev, g_vert_buf, NULL);
     vkFreeMemory(g_dev, g_vert_buf_mem, NULL);
 
+    if (g_staging_buf) {
+        vkDestroyBuffer(g_dev, g_staging_buf, NULL);
+        vkFreeMemory(g_dev, g_staging_mem, NULL);
+        g_staging_buf = VK_NULL_HANDLE;
+        g_staging_mem = VK_NULL_HANDLE;
+        g_staging_size = 0;
+    }
+
     vkDestroySurfaceKHR(g_inst, g_surface, NULL);
     vkDestroyDevice(g_dev, NULL);
     vkDestroyInstance(g_inst, NULL);
 
     g_is_ready = false;
+}
+
+
+/* ── Framebuffer readback (exact screenshots, no compositor) ──────────
+ * Two-phase API: Render_ReadPixels call 1 requests the NEXT drawn frame
+ * be copied into the staging buffer (returns 0); after the next
+ * Vulkan_Tick draws a frame, call 2 maps the buffer and returns the
+ * RGBA pixels (returns 1). The copy happens inside the draw command
+ * buffer, BEFORE vkQueuePresentKHR — reading a drawable after present
+ * crashes on MoltenVK. */
+VkBuffer g_staging_buf = VK_NULL_HANDLE;
+
+VkDeviceMemory g_staging_mem = VK_NULL_HANDLE;
+
+VkDeviceSize g_staging_size = 0;
+
+uint32_t g_readback_requested = 0;
+
+uint32_t g_readback_available = 0;
+
+uint32_t g_readback_fence_idx = UINT32_MAX;
+
+static void CreateReadbackResources(void) {
+
+    g_staging_size = (VkDeviceSize)g_swapchain_ext.width * g_swapchain_ext.height * 4;
+
+    CreateBuffer(g_staging_size,
+
+                 VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+
+                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+
+                 &g_staging_buf, &g_staging_mem);
+
+}
+
+int Render_ReadPixels(unsigned char *out, int *w, int *h) {
+
+    if (!g_is_ready || !g_staging_buf || !out) return 0;
+
+    if (w) *w = (int)g_swapchain_ext.width;
+
+    if (h) *h = (int)g_swapchain_ext.height;
+
+    if (g_readback_available) {
+
+        vkDeviceWaitIdle(g_dev);
+
+        void *mapped = NULL;
+
+        if (vkMapMemory(g_dev, g_staging_mem, 0, g_staging_size, 0, &mapped) != VK_SUCCESS) return 0;
+
+        size_t px_count = (size_t)g_swapchain_ext.width * g_swapchain_ext.height;
+
+        const unsigned char *src = (const unsigned char *)mapped;
+
+        for (size_t i = 0; i < px_count; i++) {
+
+            out[i * 4 + 0] = src[i * 4 + 2];  /* R */
+
+            out[i * 4 + 1] = src[i * 4 + 1];  /* G */
+
+            out[i * 4 + 2] = src[i * 4 + 0];  /* B */
+
+            out[i * 4 + 3] = src[i * 4 + 3];  /* A */
+
+        }
+
+        vkUnmapMemory(g_dev, g_staging_mem);
+
+        g_readback_available = 0;
+
+        return 1;
+
+    }
+
+    g_readback_requested = 1;
+
+    return 0;
+
+}
+
+/* Resize the swapchain to an explicit size (macOS: the window must follow
+ * the actual view in physical pixels). Also recreates the staging buffer —
+ * a buffer sized for the old resolution overflows on the new copy. */
+void ResizeSwapchain(int width, int height) {
+
+    if (!g_is_ready || width <= 0 || height <= 0) return;
+
+    if ((uint32_t)width == g_swapchain_ext.width &&
+
+        (uint32_t)height == g_swapchain_ext.height) return;
+
+    vkDeviceWaitIdle(g_dev);
+
+    CleanupSwapchain();
+
+    if (g_staging_buf) {
+
+        vkDestroyBuffer(g_dev, g_staging_buf, NULL);
+
+        vkFreeMemory(g_dev, g_staging_mem, NULL);
+
+        g_staging_buf = VK_NULL_HANDLE;
+
+        g_staging_mem = VK_NULL_HANDLE;
+
+        g_readback_requested = 0;
+
+        g_readback_available = 0;
+
+    }
+
+    g_swapchain_ext = (VkExtent2D){(uint32_t)width, (uint32_t)height};
+
+    CreateSwapchain();
+
+    CreateImageViews();
+
+    CreateFramebuffers();
+
+    CreateReadbackResources();
+
 }

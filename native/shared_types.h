@@ -1,6 +1,17 @@
 #ifndef SHARED_TYPES_H
 #define SHARED_TYPES_H
 
+/* Cross-platform export attribute.
+ * Windows (MinGW): __declspec(dllexport).
+ * macOS/Linux:    visibility("default") so symbols survive -fvisibility=hidden.
+ * CRITICAL: the attribute must be present on the DEFINITION as well as the
+ * declaration, or the symbol is hidden and ctypes dlsym fails. */
+#ifdef _WIN32
+#define PLATFORM_EXPORT __declspec(dllexport)
+#else
+#define PLATFORM_EXPORT __attribute__((visibility("default")))
+#endif
+
 #ifndef MAX_SHAPES
 #define MAX_SHAPES 4096
 #endif
@@ -9,6 +20,10 @@
 #define MAX_POLYGON_VERTS 64
 #endif
 
+/* NOTE: type names carry an "Obj" suffix because the macOS SDK (MacTypes.h,
+ * pulled in by Cocoa/QuartzCore) defines structs named Rect, Circle and
+ * Point. typedef struct tags cannot be #undef'd, so we avoid the collision
+ * at the source. */
 typedef struct {
     float x, y, hw, hh, rot;
     int r, g, b;
@@ -16,7 +31,7 @@ typedef struct {
     float border_width;
     float stroke_progress;
     float alpha;
-} Rect;
+} RectObj;
 
 typedef struct {
     float x, y, radius;
@@ -25,7 +40,7 @@ typedef struct {
     float border_width;
     float stroke_progress;
     float alpha;
-} Circle;
+} CircleObj;
 
 typedef struct {
     float x1, y1, x2, y2;

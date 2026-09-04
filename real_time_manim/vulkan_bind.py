@@ -551,17 +551,23 @@ class MLWindow(ShapeMixin, TextMixin):
         self._fast_record_segment = None  # (start_frame, end_frame) or None for all
 
         base_dir = os.path.dirname(os.path.abspath(__file__))
-        # Search order: bundled DLL (pip-installed package) → dev repo release → dev repo debug
+        # Search order: bundled DLL/dylib (pip-installed package) → dev repo release → dev repo debug
+        import sys as _sys
+        if _sys.platform == 'darwin':
+            lib_name = "vulkan_core.dylib"
+            build_hint = "native/build_mac.sh (requires MoltenVK: brew install molten-vk vulkan-headers)"
+        else:
+            lib_name = "vulkan_core.dll"
+            build_hint = "native/build.ps1 (requires Vulkan SDK + MinGW-w64)"
         candidates = [
-            os.path.join(base_dir, "vulkan_core.dll"),
-            os.path.normpath(os.path.join(base_dir, "..", "dist", "release", "vulkan_core.dll")),
-            os.path.normpath(os.path.join(base_dir, "..", "dist", "debug", "vulkan_core.dll")),
+            os.path.join(base_dir, lib_name),
+            os.path.normpath(os.path.join(base_dir, "..", "dist", "release", lib_name)),
+            os.path.normpath(os.path.join(base_dir, "..", "dist", "debug", lib_name)),
         ]
         dll_path = next((p for p in candidates if os.path.exists(p)), None)
         if dll_path is None:
             raise FileNotFoundError(
-                "vulkan_core.dll not found. If running from source, build it with native/build.ps1 "
-                "(requires Vulkan SDK + MinGW-w64)."
+                f"{lib_name} not found. If running from source, build it with {build_hint}."
             )
 
         self.dll = ctypes.CDLL(dll_path)
@@ -675,7 +681,17 @@ class MLWindow(ShapeMixin, TextMixin):
         if self.dll.Vulkan_Init(w, h) != 1:
             raise RuntimeError("Vulkan_Init failed")
 
-        font_paths = [r"C:\Windows\Fonts\times.ttf", r"C:\Windows\Fonts\arial.ttf"]
+        import sys as _sys
+        if _sys.platform == 'darwin':
+            font_paths = [
+                "/System/Library/Fonts/Supplemental/Times New Roman.ttf",
+                "/System/Library/Fonts/Supplemental/Arial.ttf",
+                "/System/Library/Fonts/Times.ttc",
+                "/System/Library/Fonts/Helvetica.ttc",
+                "/Library/Fonts/Arial.ttf",
+            ]
+        else:
+            font_paths = [r"C:\Windows\Fonts\times.ttf", r"C:\Windows\Fonts\arial.ttf"]
         font_loaded = False
         for fp in font_paths:
             try:
@@ -1690,6 +1706,13 @@ class MLWindow(ShapeMixin, TextMixin):
         return self.dll.SaveScreenshot(path_bytes)
 
     def screenshot_printwindow(self, path):
+        import sys as _sys
+        if _sys.platform == 'darwin':
+            # No GDI PrintWindow on macOS — the window server capture lives
+            # in the native SaveScreenshot (CGWindowListCreateImage).
+            path_bytes = path.encode('utf-8') if isinstance(path, str) else path
+            return self.dll.SaveScreenshot(path_bytes) == 1
+
         import ctypes.wintypes as wt
         user32 = ctypes.windll.user32
         gdi32 = ctypes.windll.gdi32
@@ -1760,13 +1783,15 @@ class MLWindow(ShapeMixin, TextMixin):
         self._fast_record_count_only = count_only
         w, h = self.win_w, self.win_h
 
-        # Hide window for faster rendering (no compositing)
+        # Hide window for faster rendering (no compositing) — Windows only
         if hidden:
-            import ctypes.wintypes
-            user32 = ctypes.windll.user32
-            hwnd = user32.FindWindowW(None, "Real Time Manim")
-            if hwnd:
-                user32.ShowWindow(hwnd, 0)  # SW_HIDE
+            import sys as _sys
+            if _sys.platform != 'darwin':
+                import ctypes.wintypes
+                user32 = ctypes.windll.user32
+                hwnd = user32.FindWindowW(None, "Real Time Manim")
+                if hwnd:
+                    user32.ShowWindow(hwnd, 0)  # SW_HIDE
 
         if count_only:
             self._fast_record_pipe_mode = False
@@ -1788,6 +1813,8 @@ class MLWindow(ShapeMixin, TextMixin):
                 "-video_size", f"{w}x{h}",
                 "-framerate", str(fps),
                 "-i", "-",
+                # libx264 requires even dimensions.
+                "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
                 "-c:v", "libx264", "-pix_fmt", "yuv420p",
                 "-crf", "18", "-preset", "fast",
                 self._fast_record_path,
@@ -1853,18 +1880,26 @@ class MLWindow(ShapeMixin, TextMixin):
         # readback), NOT the composited screen. This is immune to window
         # occlusion/scaling that would corrupt a screen-based capture.
         interval = 1.0 / self._record_fps
+        # Delay the first capture: capturing the window WHILE it is being
+        # created/initialized leaves the window server with stale surfaces —
+        # subsequent captures return old frames and the video shows a
+        # scrambled timeline. Wait for the window to settle first.
+        self._record_stop_event.wait(0.8)
         while not self._record_stop_event.is_set():
-            t0 = time.time()
             try:
                 path = os.path.join(self._record_dir, f"frame_{self._record_frame_idx:06d}.bmp")
-                self.screenshot(path)
-                self._record_frame_idx += 1
+                if self.screenshot(path):
+                    # Only advance on success: failed captures must not leave
+                    # holes in the frame sequence, or ffmpeg reads the
+                    # existing files as if consecutive and the video's
+                    # timeline collapses.
+                    self._record_frame_idx += 1
+                # Tight re-arm: a pending call is cheap (arms the native
+                # readback request); waiting a full frame interval per poll
+                # throttles capture to half the render rate.
+                self._record_stop_event.wait(0.004)
             except Exception:
-                pass
-            elapsed = time.time() - t0
-            remaining = interval - elapsed
-            if remaining > 0:
-                self._record_stop_event.wait(remaining)
+                self._record_stop_event.wait(0.01)
         self._record_thread = None
 
     def stop_record(self):
@@ -1895,6 +1930,9 @@ class MLWindow(ShapeMixin, TextMixin):
             "ffmpeg", "-y",
             "-framerate", str(fps),
             "-i", pattern,
+            # libx264 requires even dimensions — window sizes can be odd
+            # (e.g. 1009px) and crash the encoder otherwise.
+            "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
             "-r", "60",
             "-c:v", "libx264",
             "-pix_fmt", "yuv420p",
@@ -1917,6 +1955,11 @@ class MLWindow(ShapeMixin, TextMixin):
             shutil.rmtree(frame_dir, ignore_errors=True)
 
     def _get_screen_bbox(self):
+        import sys as _sys
+        if _sys.platform == 'darwin':
+            # No GDI window enumeration on macOS; screen capture of the
+            # window is handled natively (CGWindowListCreateImage).
+            return None
         import ctypes.wintypes as wt
         user32 = ctypes.windll.user32
         hwnd = user32.FindWindowW(None, "Real Time Manim")

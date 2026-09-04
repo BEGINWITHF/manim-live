@@ -431,6 +431,48 @@ python run.py
 
 ---
 
+## macOS (MoltenVK) Build & Run
+
+The native layer builds on macOS against **MoltenVK** (Vulkan over Metal) with
+the same C sources — only the window/surface layer differs (`platform_mac.m`,
+Cocoa + CAMetalLayer, instead of Win32 `platform.c`).
+
+### Prerequisites
+
+```bash
+brew install molten-vk vulkan-headers ffmpeg
+```
+
+Python 3.12 with `manim==0.20.1` and `numpy` (see `requirements.txt`).
+
+### Build
+
+```bash
+cd native
+./build_mac.sh            # → dist/release/vulkan_core.dylib + real_time_manim/vulkan_core.dylib
+```
+
+### Run the demo scene (live window + MP4 download)
+
+```bash
+.venv/bin/python3.12 scenes/demo_scene.py                # window + downloaded_videos/demo_scene.mp4
+.venv/bin/python3.12 scenes/demo_scene.py --no-record    # live window only
+.venv/bin/python3.12 scenes/demo_scene.py --duration 10
+```
+
+Notes:
+
+- The window is created at the largest 16:9 size that fits the screen, and the
+  swapchain follows the view's **physical** pixels (Retina 2x), so shapes land
+  exactly where manim coordinates say they should.
+- Video recording reads the framebuffer directly inside the draw command
+  buffer (before present — MoltenVK crashes on reads of presented drawables)
+  and writes BMPs → ffmpeg. No screen-recording permission is required.
+- Verifier scripts: `tests/smoke_mac.py` (window + pixel-exact readback probe)
+  and `tests/probe_orientation.py` (BMP row-order/biHeight ground truth).
+
+---
+
 ## Running Demo Scenes
 
 `run.py` provides 81 demo scenes covering all supported animations:

@@ -1,12 +1,20 @@
 #ifndef VULKAN_RENDER_H
 #define VULKAN_RENDER_H
 
+#ifdef _WIN32
 #include <windows.h>
 #define VK_USE_PLATFORM_WIN32_KHR
+#else
+#define VK_USE_PLATFORM_METAL_EXT
+#endif
 #include <vulkan/vulkan.h>
 #include "shared_types.h"
 
+#ifdef _WIN32
 void Render_Init(HWND hwnd, int width, int height, HINSTANCE hinst);
+#else
+void Render_Init(void *metalLayer, int width, int height);
+#endif
 
 int Render_IsReady(void);
 
@@ -25,8 +33,8 @@ typedef struct {
     int index;
 } DrawCmd;
 
-void Render_DrawScene(const Rect* rects, int rect_count,
-                      const Circle* circles, int circle_count,
+void Render_DrawScene(const RectObj* rects, int rect_count,
+                      const CircleObj* circles, int circle_count,
                       const LineObj* lines, int line_count,
                       const EllipseObj* ellipses, int ellipse_count,
                       const PolygonObj* polygons, int polygon_count,

@@ -9,6 +9,7 @@
 
 static unsigned char font_data[MAX_FONTS][1 << 25];
 static stbtt_fontinfo fonts[MAX_FONTS];
+static int font_sizes[MAX_FONTS];
 static int font_count = 0;
 
 static int utf8_decode(const char *text, int *ci, int *codepoint) {
@@ -41,16 +42,29 @@ static int utf8_decode(const char *text, int *ci, int *codepoint) {
     return 1;
 }
 
-__declspec(dllexport) int Text_LoadFont(const unsigned char *data, int data_len) {
-    if (font_count >= MAX_FONTS) return 0;
-    if (data_len <= 0 || data_len > (int)sizeof(font_data[font_count])) return 0;
+PLATFORM_EXPORT int Text_LoadFont(const unsigned char *data, int data_len) {
+    if (data_len <= 0 || data_len > (int)sizeof(font_data[0])) return 0;
 
-    memcpy(font_data[font_count], data, data_len);
-    memset(&fonts[font_count], 0, sizeof(stbtt_fontinfo));
-    int offset = stbtt_GetFontOffsetForIndex(font_data[font_count], 0);
+    // Dedupe: each window loads the same font bytes again. Without this the
+    // 12-slot pool exhausts after 12 windows in one process (e.g. a batch
+    // run of many scenes) and every later Text_LoadFont returns 0.
+    for (int i = 0; i < font_count; i++) {
+        if (font_sizes[i] == data_len &&
+            memcmp(font_data[i], data, (size_t)data_len) == 0) {
+            return 1;
+        }
+    }
+
+    int slot = font_count;
+    if (slot >= MAX_FONTS) slot = 0;  // pool full of other fonts: overwrite oldest
+
+    memcpy(font_data[slot], data, data_len);
+    memset(&fonts[slot], 0, sizeof(stbtt_fontinfo));
+    int offset = stbtt_GetFontOffsetForIndex(font_data[slot], 0);
     if (offset < 0) return 0;
-    if (stbtt_InitFont(&fonts[font_count], font_data[font_count], offset)) {
-        font_count++;
+    if (stbtt_InitFont(&fonts[slot], font_data[slot], offset)) {
+        font_sizes[slot] = data_len;
+        if (slot == font_count) font_count++;  // only grow when appending
         return 1;
     }
     return 0;

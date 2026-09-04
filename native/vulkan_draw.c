@@ -5,8 +5,8 @@
 float g_vertices[MAX_VERTICES * 6];
 uint32_t g_vertex_count = 0;
 
-void BuildVerticesFromRects(const Rect *rects, int count);
-void BuildVerticesFromCircles(const Circle *circles, int count);
+void BuildVerticesFromRects(const RectObj *rects, int count);
+void BuildVerticesFromCircles(const CircleObj *circles, int count);
 void BuildVerticesFromLines(const LineObj *lines, int count);
 void BuildVerticesFromEllipses(const EllipseObj *ellipses, int count);
 void BuildVerticesFromPolygons(const PolygonObj *polygons, int count);
@@ -17,8 +17,8 @@ void BuildVerticesFromTexts(const TextObj *texts, int count);
 void BuildVerticesFromBezierPaths(void);
 void BuildVerticesFromLineStrips(void);
 
-void Render_DrawScene(const Rect* rects, int rect_count,
-                      const Circle* circles, int circle_count,
+void Render_DrawScene(const RectObj* rects, int rect_count,
+                      const CircleObj* circles, int circle_count,
                       const LineObj* lines, int line_count,
                       const EllipseObj* ellipses, int ellipse_count,
                       const PolygonObj* polygons, int polygon_count,
@@ -109,6 +109,47 @@ void RecordCommandBuffer(VkCommandBuffer cmd_buf, uint32_t img_idx,
 
     vkCmdEndRenderPass(cmd_buf);
 
+    /* Framebuffer readback: copy the just-rendered image into the
+     * host-visible staging buffer INSIDE the draw command buffer, before
+     * present (MoltenVK crashes on reads of presented drawables). */
+    if (g_readback_requested && g_staging_buf != VK_NULL_HANDLE) {
+        VkImageMemoryBarrier rb = {0};
+        rb.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        rb.oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        rb.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        rb.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        rb.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        rb.image = g_swapchain_imgs[img_idx];
+        rb.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        rb.subresourceRange.baseMipLevel = 0;
+        rb.subresourceRange.levelCount = 1;
+        rb.subresourceRange.baseArrayLayer = 0;
+        rb.subresourceRange.layerCount = 1;
+        rb.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+        rb.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        vkCmdPipelineBarrier(cmd_buf,
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+            0, NULL, 0, NULL, 1, &rb);
+
+        VkBufferImageCopy region = {0};
+        region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        region.imageSubresource.layerCount = 1;
+        region.imageExtent = (VkExtent3D){g_swapchain_ext.width, g_swapchain_ext.height, 1};
+        vkCmdCopyImageToBuffer(cmd_buf, g_swapchain_imgs[img_idx],
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, g_staging_buf, 1, &region);
+
+        VkImageMemoryBarrier rb2 = rb;
+        rb2.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        rb2.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        rb2.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        rb2.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+        vkCmdPipelineBarrier(cmd_buf,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0,
+            0, NULL, 0, NULL, 1, &rb2);
+    }
+
     vkEndCommandBuffer(cmd_buf);
 }
 
@@ -142,6 +183,12 @@ int Render_DrawFrame(uint32_t vertex_count) {
     submit_info.pSignalSemaphores = signal_sems;
 
     vkQueueSubmit(g_gfx_queue, 1, &submit_info, g_in_flight_fences[g_current_frame]);
+
+    if (g_readback_requested) {
+        g_readback_requested = 0;
+        g_readback_available = 1;
+        g_readback_fence_idx = g_current_frame;
+    }
 
     VkPresentInfoKHR present_info = {0};
     present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;

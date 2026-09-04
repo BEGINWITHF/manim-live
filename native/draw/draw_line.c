@@ -52,7 +52,7 @@ typedef struct {
 static LineStripObj g_strips[MAX_LINE_STRIPS];
 static int g_strip_count = 0;
 
-__declspec(dllexport) void AddLineStrip(
+PLATFORM_EXPORT void AddLineStrip(
     const float *points, const float *alphas, int num_points,
     int width, int r, int g, int b, float alpha)
 {

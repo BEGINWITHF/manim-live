@@ -6,9 +6,9 @@
 #include <string.h>
 #include <windows.h>
 
-static Rect g_rects[MAX_SHAPES];
+static RectObj g_rects[MAX_SHAPES];
 static int g_rect_count = 0;
-static Circle g_circles[MAX_SHAPES];
+static CircleObj g_circles[MAX_SHAPES];
 static int g_circle_count = 0;
 static LineObj g_lines[MAX_SHAPES];
 static int g_line_count = 0;
@@ -169,7 +169,7 @@ __declspec(dllexport) int Vulkan_Init(int w, int h) {
 
 __declspec(dllexport) void AddRect(float x, float y, float hw, float hh, float rot, int r, int g, int b, int border_r, int border_g, int border_b, float border_width, float stroke_progress, float alpha) {
     if (g_rect_count < MAX_SHAPES && g_draw_cmd_count < MAX_DRAW_CMDS) {
-        g_rects[g_rect_count] = (Rect){ x, y, hw, hh, rot, r, g, b, border_r, border_g, border_b, border_width, stroke_progress, alpha };
+        g_rects[g_rect_count] = (RectObj){ x, y, hw, hh, rot, r, g, b, border_r, border_g, border_b, border_width, stroke_progress, alpha };
         g_draw_cmds[g_draw_cmd_count++] = (DrawCmd){ CMD_RECT, g_rect_count };
         g_rect_count++;
     }
@@ -177,7 +177,7 @@ __declspec(dllexport) void AddRect(float x, float y, float hw, float hh, float r
 
 __declspec(dllexport) void AddCircle(float x, float y, float radius, int r, int g, int b, int border_r, int border_g, int border_b, float border_width, float stroke_progress, float alpha) {
     if (g_circle_count < MAX_SHAPES && g_draw_cmd_count < MAX_DRAW_CMDS) {
-        g_circles[g_circle_count] = (Circle){ x, y, radius, r, g, b, border_r, border_g, border_b, border_width, stroke_progress, alpha };
+        g_circles[g_circle_count] = (CircleObj){ x, y, radius, r, g, b, border_r, border_g, border_b, border_width, stroke_progress, alpha };
         g_draw_cmds[g_draw_cmd_count++] = (DrawCmd){ CMD_CIRCLE, g_circle_count };
         g_circle_count++;
     }
@@ -320,7 +320,6 @@ __declspec(dllexport) void Vulkan_Shutdown(void) {
     UnregisterClassW(L"ManimVulkanClass", g_hinst);
 }
 
-uint32_t g_last_img_idx = 0;
 
 // Persistent staging buffer for SaveScreenshot readback (allocated once,
 // reused across frames). Per-frame create/destroy of an 8MB buffer is slow.

@@ -31,12 +31,24 @@ extern VkSemaphore *g_render_done_sems;
 extern VkFence *g_in_flight_fences;
 extern VkBuffer g_vert_buf;
 extern VkDeviceMemory g_vert_buf_mem;
+#ifdef _WIN32
 extern HWND g_hwnd;
 extern HINSTANCE g_hinst;
+#else
+extern void *g_metalLayer;
+#endif
 extern bool g_is_ready;
 extern uint32_t g_current_frame;
 extern uint32_t g_last_img_idx;
 extern bool g_framebuffer_resized;
+
+/* Framebuffer readback (two-phase) — used for exact screenshots. */
+extern VkBuffer g_staging_buf;
+extern VkDeviceMemory g_staging_mem;
+extern VkDeviceSize g_staging_size;
+extern uint32_t g_readback_requested;
+extern uint32_t g_readback_available;
+extern uint32_t g_readback_fence_idx;
 
 VkShaderModule CreateShaderModule(const uint32_t *code, size_t size);
 
@@ -49,6 +61,7 @@ void RecordCommandBuffer(VkCommandBuffer cmd_buf, uint32_t img_idx,
                          uint32_t vertex_count);
 
 void RecreateSwapchain(void);
+void ResizeSwapchain(int width, int height);
 void CleanupSwapchain(void);
 void CreateSwapchain(void);
 void CreateImageViews(void);
@@ -56,5 +69,10 @@ void CreateFramebuffers(void);
 void update_vertex_buffer(const void *data, VkDeviceSize size);
 
 int Render_DrawFrame(uint32_t vertex_count);
+
+/* Returns 1 when a fresh frame was copied into `out` (RGBA, w*h*4 bytes);
+ * returns 0 when the copy is still pending (call again after the next
+ * Vulkan_Tick has drawn a frame). */
+int Render_ReadPixels(unsigned char *out, int *w, int *h);
 
 #endif

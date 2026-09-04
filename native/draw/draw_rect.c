@@ -1,8 +1,8 @@
 #include "../draw_common.h"
 
-void BuildVerticesFromRects(const Rect *rects, int count) {
+void BuildVerticesFromRects(const RectObj *rects, int count) {
     for (int i = 0; i < count; i++) {
-        const Rect *r = &rects[i];
+        const RectObj *r = &rects[i];
 
         float nr = r->r / 255.0f, ng = r->g / 255.0f, nb = r->b / 255.0f;
         float bn = r->border_r / 255.0f, bg = r->border_g / 255.0f, bb = r->border_b / 255.0f;

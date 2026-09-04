@@ -31,7 +31,7 @@ static BezierPathObj bezier_paths[MAX_BEZIER_PATHS];
 static int bezier_path_count = 0;
 static float g_fill_pts[MAX_BEZIER_SEGMENTS * BEZIER_SAMPLES + 1][2];
 
-__declspec(dllexport) void AddBezierPath(
+PLATFORM_EXPORT void AddBezierPath(
     const float *points, int num_points,
     int sr, int sg, int sb, float stroke_width,
     int fr, int fg, int fb, float fill_opacity,
