@@ -26,13 +26,24 @@ void BuildVerticesFromPolygons(const PolygonObj* polygons, int count) {
 
         float drawn = perimeter * sp;
 
-        /* Fill: triangle fan from the polygon's START vertex. During a Create
-           animation the fill is the region wrapped by the already-drawn border
-           plus the line from the border's current endpoint back to its start
-           point — i.e. a fan from the first vertex, NOT from the centroid. */
+        /* Fill: triangle fan. The fan origin depends on whether the border is
+           fully drawn. A partial draw (Create animation) fans from the stroke's
+           start vertex so the fill follows the border as it sweeps out. A full
+           polygon (static shape, e.g. a concave Star) fans from the centroid —
+           fanning a concave polygon from a boundary vertex overfills its
+           notches. For convex shapes both origins cover the same area, so there
+           is no visual discontinuity at the end of a Create. */
         if (p->r != 0 || p->g != 0 || p->b != 0) {
-            float fan_x = p->verts[0];
-            float fan_y = p->verts[1];
+            float fan_x, fan_y;
+            if (drawn >= perimeter - 0.001f) {
+                float cx = 0.0f, cy = 0.0f;
+                for (int j = 0; j < n; j++) { cx += p->verts[j * 2]; cy += p->verts[j * 2 + 1]; }
+                fan_x = cx / (float)n;
+                fan_y = cy / (float)n;
+            } else {
+                fan_x = p->verts[0];
+                fan_y = p->verts[1];
+            }
             float cum = 0.0f;
             for (int j = 0; j < n; j++) {
                 int j2 = (j + 1) % n;
