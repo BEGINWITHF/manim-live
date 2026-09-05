@@ -56,9 +56,22 @@ VkBuffer g_vert_buf = VK_NULL_HANDLE;
 
 VkDeviceMemory g_vert_buf_mem = VK_NULL_HANDLE;
 
+#ifdef _WIN32
 HWND g_hwnd = NULL;
 
 HINSTANCE g_hinst = NULL;
+#else
+void *g_metal_layer = NULL;
+
+uint32_t g_last_img_idx = 0;
+
+int g_readback_requested = 0;
+int g_readback_available = 0;
+uint32_t g_readback_fence_idx = 0;
+VkBuffer g_readback_buf = VK_NULL_HANDLE;
+VkDeviceMemory g_readback_mem = VK_NULL_HANDLE;
+void *g_readback_map = NULL;
+#endif
 
 bool g_is_ready = false;
 
@@ -168,6 +181,7 @@ static void CreateInstance(void) {
 
     app_info.apiVersion = VK_API_VERSION_1_0;
 
+#ifdef _WIN32
     const char *extensions[] = {
 
         VK_KHR_SURFACE_EXTENSION_NAME,
@@ -185,6 +199,29 @@ static void CreateInstance(void) {
     ci.enabledExtensionCount = 2;
 
     ci.ppEnabledExtensionNames = extensions;
+#else
+    const char *extensions[] = {
+
+        VK_KHR_SURFACE_EXTENSION_NAME,
+
+        VK_EXT_METAL_SURFACE_EXTENSION_NAME
+
+    };
+
+    VkInstanceCreateInfo ci = {0};
+
+    ci.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+
+    ci.pApplicationInfo = &app_info;
+
+    ci.enabledExtensionCount = 2;
+
+    ci.ppEnabledExtensionNames = extensions;
+
+    // MoltenVK is a portability implementation: without this flag the
+    // loader hides it and vkEnumeratePhysicalDevices returns nothing.
+    ci.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+#endif
 
     if (vkCreateInstance(&ci, NULL, &g_inst) != VK_SUCCESS) {
 
@@ -198,6 +235,7 @@ static void CreateInstance(void) {
 
 static void CreateSurface(void) {
 
+#ifdef _WIN32
     VkWin32SurfaceCreateInfoKHR ci = {0};
 
     ci.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
@@ -213,7 +251,21 @@ static void CreateSurface(void) {
         exit(-1);
 
     }
+#else
+    VkMetalSurfaceCreateInfoEXT ci = {0};
 
+    ci.sType = VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT;
+
+    ci.pLayer = (const CAMetalLayer *)g_metal_layer;
+
+    if (vkCreateMetalSurfaceEXT(g_inst, &ci, NULL, &g_surface) != VK_SUCCESS) {
+
+        fprintf(stderr, "Failed to create Metal surface!\n");
+
+        exit(-1);
+
+    }
+#endif
 }
 
 static void PickPhysicalDevice(void) {
@@ -248,6 +300,7 @@ static void CreateLogicalDevice(void) {
 
     qci.pQueuePriorities = &prio;
 
+#ifdef _WIN32
     const char *exts[] = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 
     VkDeviceCreateInfo dci = {0};
@@ -261,6 +314,21 @@ static void CreateLogicalDevice(void) {
     dci.enabledExtensionCount = 1;
 
     dci.ppEnabledExtensionNames = exts;
+#else
+    const char *exts[] = { VK_KHR_SWAPCHAIN_EXTENSION_NAME, "VK_KHR_portability_subset" };
+
+    VkDeviceCreateInfo dci = {0};
+
+    dci.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+
+    dci.queueCreateInfoCount = 1;
+
+    dci.pQueueCreateInfos = &qci;
+
+    dci.enabledExtensionCount = 2;
+
+    dci.ppEnabledExtensionNames = exts;
+#endif
 
     vkCreateDevice(g_phys_dev, &dci, NULL, &g_dev);
 
@@ -288,7 +356,13 @@ void CreateSwapchain(void) {
 
     sci.imageArrayLayers = 1;
 
+#ifdef _WIN32
     sci.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+#else
+    // The readback path copies the swapchain image inside the draw command
+    // buffer (MoltenVK forbids reads after present), so TRANSFER_SRC is needed.
+    sci.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+#endif
 
     sci.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
@@ -689,6 +763,7 @@ static void CreateVertexBuffer(void) {
 
 }
 
+#ifdef _WIN32
 void Render_Init(HWND hwnd, int width, int height, HINSTANCE hinst) {
 
     g_hwnd = hwnd;
@@ -696,6 +771,17 @@ void Render_Init(HWND hwnd, int width, int height, HINSTANCE hinst) {
     g_hinst = hinst;
 
     g_swapchain_ext = (VkExtent2D){(uint32_t)width, (uint32_t)height};
+#else
+void Render_Init(void *metal_layer, int width, int height) {
+
+    g_metal_layer = metal_layer;
+
+    // The swapchain must track the CAMetalLayer's PHYSICAL pixel size
+    // (drawableSize), not the requested point size.
+    Mac_GetDrawableSize(&width, &height);
+
+    g_swapchain_ext = (VkExtent2D){(uint32_t)width, (uint32_t)height};
+#endif
 
     CreateInstance();
 
@@ -762,14 +848,33 @@ void CleanupSwapchain(void) {
 
 void RecreateSwapchain(void) {
     int width = 0, height = 0;
+#ifdef _WIN32
     RECT rect;
     if (GetClientRect(g_hwnd, &rect)) {
         width = rect.right - rect.left;
         height = rect.bottom - rect.top;
     }
+#else
+    Mac_GetDrawableSize(&width, &height);
+#endif
     if (width == 0 || height == 0) return;
 
+#ifdef __APPLE__
+    // Cancel pending reads FIRST.  A reader that already passed its
+    // available check is holding the busy flag and will read the OLD
+    // extent+buffer pair — still intact at this point, so it is safe;
+    // Mac_CreateReadbackBuffer below waits it out.
+    __atomic_store_n(&g_readback_requested, 0, __ATOMIC_SEQ_CST);
+    __atomic_store_n(&g_readback_available, 0, __ATOMIC_SEQ_CST);
+#endif
+
     vkDeviceWaitIdle(g_dev);
+
+#ifdef __APPLE__
+    // Wait out any in-flight CPU read (it finishes on the old pair because
+    // the extent has not been touched yet), then replace the staging buffer.
+    Mac_CreateReadbackBuffer((uint32_t)width, (uint32_t)height);
+#endif
 
     CleanupSwapchain();
 

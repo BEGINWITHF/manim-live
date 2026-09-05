@@ -2,6 +2,12 @@
 #include "vulkan_render.h"
 #include "draw_common.h"
 
+#ifdef __APPLE__
+// Set by RecordCommandBuffer when it records a readback copy this frame;
+// consumed by Render_DrawFrame at submit time (mac-only, two-phase readback).
+static int g_readback_copied = 0;
+#endif
+
 float g_vertices[MAX_VERTICES * 6];
 uint32_t g_vertex_count = 0;
 
@@ -109,6 +115,52 @@ void RecordCommandBuffer(VkCommandBuffer cmd_buf, uint32_t img_idx,
 
     vkCmdEndRenderPass(cmd_buf);
 
+#ifdef __APPLE__
+    // MoltenVK cannot read a swapchain image after it has been presented
+    // (the CAMetalLayer drawable is recycled).  When a readback is requested,
+    // copy the frame into the staging buffer INSIDE this command buffer,
+    // before present.  The Python side drives this with a two-phase API:
+    // SaveScreenshot arms the request, the next frame performs the copy.
+    if (__atomic_load_n(&g_readback_requested, __ATOMIC_SEQ_CST) && g_readback_buf != VK_NULL_HANDLE) {
+        VkImageMemoryBarrier b = {0};
+        b.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        b.oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        b.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        b.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        b.image = g_swapchain_imgs[img_idx];
+        b.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        b.subresourceRange.baseMipLevel = 0;
+        b.subresourceRange.levelCount = 1;
+        b.subresourceRange.baseArrayLayer = 0;
+        b.subresourceRange.layerCount = 1;
+        b.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        b.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        vkCmdPipelineBarrier(cmd_buf,
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+            0, NULL, 0, NULL, 1, &b);
+
+        VkBufferImageCopy region = {0};
+        region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        region.imageSubresource.layerCount = 1;
+        region.imageExtent = (VkExtent3D){ g_swapchain_ext.width, g_swapchain_ext.height, 1 };
+        vkCmdCopyImageToBuffer(cmd_buf, g_swapchain_imgs[img_idx],
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, g_readback_buf, 1, &region);
+
+        VkImageMemoryBarrier b2 = b;
+        b2.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        b2.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        b2.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        b2.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+        vkCmdPipelineBarrier(cmd_buf,
+            VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0,
+            0, NULL, 0, NULL, 1, &b2);
+
+        __atomic_store_n(&g_readback_requested, 0, __ATOMIC_SEQ_CST);
+        g_readback_copied = 1;
+    }
+#endif
+
     vkEndCommandBuffer(cmd_buf);
 }
 
@@ -119,12 +171,33 @@ int Render_DrawFrame(uint32_t vertex_count) {
     vkResetFences(g_dev, 1, &g_in_flight_fences[g_current_frame]);
 
     uint32_t img_idx;
+#ifdef _WIN32
     vkAcquireNextImageKHR(g_dev, g_swapchain, UINT64_MAX,
                           g_img_avail_sems[g_current_frame], VK_NULL_HANDLE, &img_idx);
+#else
+    VkResult ar = vkAcquireNextImageKHR(g_dev, g_swapchain, UINT64_MAX,
+                          g_img_avail_sems[g_current_frame], VK_NULL_HANDLE, &img_idx);
+    if (ar != VK_SUCCESS && ar != VK_SUBOPTIMAL_KHR) {
+        // Window is mid-resize: the next Vulkan_Tick size check rebuilds the
+        // swapchain.  Skip this frame instead of submitting stale geometry.
+        if (ar == VK_ERROR_OUT_OF_DATE_KHR) g_framebuffer_resized = true;
+        return 0;
+    }
+#endif
     g_last_img_idx = img_idx;
 
     vkResetCommandBuffer(g_cmd_bufs[g_current_frame], 0);
     RecordCommandBuffer(g_cmd_bufs[g_current_frame], img_idx, vertex_count);
+
+#ifdef __APPLE__
+    if (g_readback_copied) {
+        g_readback_copied = 0;
+        g_readback_fence_idx = g_current_frame;
+        // seq-cst store: acts as a release barrier, so the fence_idx write
+        // above is visible to the worker that acquires this flag.
+        __atomic_store_n(&g_readback_available, 1, __ATOMIC_SEQ_CST);
+    }
+#endif
 
     VkSubmitInfo submit_info = {0};
     submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;

@@ -208,6 +208,11 @@ def main():
             _restore_tex_cache()
             scene = cls()
             scene.construct()
+            # Safety net: scenes that never call render.close() would leave
+            # the recorder running and produce no video at all.
+            if _render_ref[0] is not None and getattr(_render_ref[0], '_recording', False):
+                _render_ref[0].stop_record()
+                _render_ref[0].close()
             _save_tex_cache()
             _clean_media()
 
