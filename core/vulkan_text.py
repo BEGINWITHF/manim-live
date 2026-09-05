@@ -491,24 +491,23 @@ class TextMixin:
 
         arr = (ctypes.c_float * len(flat))(*flat)
         n = (n // 4) * 4
-        self.dll.AddBezierPath(
-            arr, n,
-            sri, sgi, sbi, stroke_w,
-            fri, fgi, fbi, fill_alpha,
-            progress, 0, show_fill, a,
-        )
 
-        if do_stroke:
-            seg_count = n // 4
-            vis_start = int(seg_count * progress_lower)
-            vis_end = int(seg_count * progress_upper)
+        # Sample the outline once in screen space — the stroke strip always
+        # needs it, and the polygon fan fill below reuses it.
+        seg_count = n // 4
+        vis_start = int(seg_count * progress_lower)
+        vis_end = int(seg_count * progress_upper)
+        transforming = getattr(mob, '_transforming', False) and not is_text
+        need_samples = do_stroke or (transforming and show_fill)
+        stroke_pts = None
+        if need_samples:
             stroke_pts = []
             for si in range(vis_start, min(seg_count, vis_end + 1)):
                 idx = si * 4
-                p0x, p0y = flat[idx*3], flat[idx*3+1]
-                p1x, p1y = flat[(idx+1)*3], flat[(idx+1)*3+1]
-                p2x, p2y = flat[(idx+2)*3], flat[(idx+2)*3+1]
-                p3x, p3y = flat[(idx+3)*3], flat[(idx+3)*3+1]
+                p0x, p0y = flat[idx * 3], flat[idx * 3 + 1]
+                p1x, p1y = flat[(idx + 1) * 3], flat[(idx + 1) * 3 + 1]
+                p2x, p2y = flat[(idx + 2) * 3], flat[(idx + 2) * 3 + 1]
+                p3x, p3y = flat[(idx + 3) * 3], flat[(idx + 3) * 3 + 1]
                 # flat holds screen-space control points.  Subdivide each cubic
                 # to roughly STEP_PX screen pixels per straight run so strongly
                 # curved outlines (e.g. a Square warped by exp -> a wide arc,
@@ -516,25 +515,92 @@ class TextMixin:
                 # coarse there; native tessellation uses 64.  Length-aware
                 # sampling keeps gentle/low-curvature segments cheap too.
                 STEP_PX = 3.0
-                cpoly = (math.hypot(p1x-p0x, p1y-p0y) + math.hypot(p2x-p1x, p2y-p1y)
-                         + math.hypot(p3x-p2x, p3y-p2y))
-                chord = math.hypot(p3x-p0x, p3y-p0y)
+                cpoly = (math.hypot(p1x - p0x, p1y - p0y) + math.hypot(p2x - p1x, p2y - p1y)
+                         + math.hypot(p3x - p2x, p3y - p2y))
+                chord = math.hypot(p3x - p0x, p3y - p0y)
                 est = (cpoly + chord) * 0.5
                 seg_samples = int(max(8.0, min(256.0, math.ceil(est / STEP_PX))))
                 for s in range(seg_samples + 1):
                     t = s / seg_samples
                     u = 1.0 - t
-                    bx = u*u*u*p0x + 3*u*u*t*p1x + 3*u*t*t*p2x + t*t*t*p3x
-                    by = u*u*u*p0y + 3*u*u*t*p1y + 3*u*t*t*p2y + t*t*t*p3y
+                    bx = u * u * u * p0x + 3 * u * u * t * p1x + 3 * u * t * t * p2x + t * t * t * p3x
+                    by = u * u * u * p0y + 3 * u * u * t * p1y + 3 * u * t * t * p2y + t * t * t * p3y
                     stroke_pts.append((bx, by))
-            if len(stroke_pts) >= 2:
-                coords = (ctypes.c_float * (len(stroke_pts) * 2))()
-                alphas = (ctypes.c_float * len(stroke_pts))()
-                for i, (px, py) in enumerate(stroke_pts):
-                    coords[i * 2] = px
-                    coords[i * 2 + 1] = py
-                    alphas[i] = stroke_point_alpha
-                self.dll.AddLineStrip(coords, alphas, len(stroke_pts), int(stroke_w), sri, sgi, sbi, 1.0)
+
+        # The native bezier scanline fill costs ~6 vertices per covered
+        # pixel; two mid-morph shapes (e.g. Dot -> Square at 2732x1536)
+        # exceed the native MAX_VERTICES budget, which truncates the fill
+        # AND starves the outline strips drawn after it — the shape visibly
+        # blows out, vanishes, then pops back as the fill fades (scene 64).
+        # For LARGE CONVEX transforming shapes, the native triangle-fan
+        # polygon fill costs ~3(n-1) vertices instead, so route the fill
+        # through AddPolygon.  Small shapes keep the antialiased scanline
+        # (identical to the Windows pipeline).
+        use_fan_fill = False
+        if transforming and show_fill and stroke_pts is not None and len(stroke_pts) >= 6:
+            xs = [p[0] for p in stroke_pts]
+            ys = [p[1] for p in stroke_pts]
+            bbox_area = (max(xs) - min(xs)) * (max(ys) - min(ys))
+            if bbox_area > 40000.0:
+                sign = 0
+                is_convex = True
+                m = len(stroke_pts)
+                for i in range(m):
+                    x0, y0 = stroke_pts[i]
+                    x1, y1 = stroke_pts[(i + 1) % m]
+                    x2, y2 = stroke_pts[(i + 2) % m]
+                    cross = (x1 - x0) * (y2 - y1) - (y1 - y0) * (x2 - x1)
+                    if abs(cross) < 0.01:
+                        continue
+                    sgn = 1 if cross > 0 else -1
+                    if sign == 0:
+                        sign = sgn
+                    elif sgn != sign:
+                        is_convex = False
+                        break
+                use_fan_fill = is_convex
+
+        if use_fan_fill:
+            # The native polygon path caps at MAX_POLYGON_VERTS (64) and
+            # SILENTLY drops the call above that limit — decimate the
+            # sampled outline to 64 evenly spaced vertices first.  At the
+            # outline's sample density (~3 px spacing) a 64-gon deviates
+            # from the curve by well under a pixel.
+            nv = len(stroke_pts)
+            if nv > 64:
+                step = (nv - 1) / 63.0
+                fan_pts = [stroke_pts[0]]
+                for k in range(1, 63):
+                    fan_pts.append(stroke_pts[int(round(k * step))])
+                fan_pts.append(stroke_pts[-1])
+            else:
+                fan_pts = stroke_pts
+            nv = len(fan_pts)
+            fverts = (ctypes.c_float * (nv * 2))()
+            for i, (px, py) in enumerate(fan_pts):
+                fverts[i * 2] = px
+                fverts[i * 2 + 1] = py
+            self.dll.AddPolygon(
+                fan_pts[0][0], fan_pts[0][1],
+                fri, fgi, fbi, fri, fgi, fbi, 0,
+                nv, fverts, 1.0, fill_alpha, 1,
+            )
+        else:
+            self.dll.AddBezierPath(
+                arr, n,
+                sri, sgi, sbi, stroke_w,
+                fri, fgi, fbi, fill_alpha,
+                progress, 0, show_fill, a,
+            )
+
+        if do_stroke and stroke_pts is not None and len(stroke_pts) >= 2:
+            coords = (ctypes.c_float * (len(stroke_pts) * 2))()
+            alphas = (ctypes.c_float * len(stroke_pts))()
+            for i, (px, py) in enumerate(stroke_pts):
+                coords[i * 2] = px
+                coords[i * 2 + 1] = py
+                alphas[i] = stroke_point_alpha
+            self.dll.AddLineStrip(coords, alphas, len(stroke_pts), int(stroke_w), sri, sgi, sbi, 1.0)
 
     def _send_text_stroke(self, mob, a, w, h, parent_offset=None):
         if not hasattr(mob, 'family_members_with_points'):
