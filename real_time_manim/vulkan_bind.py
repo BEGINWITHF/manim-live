@@ -2,6 +2,7 @@ import ctypes
 import inspect
 import os
 import re
+import sys
 import math
 import time
 import shutil
@@ -551,17 +552,27 @@ class MLWindow(ShapeMixin, TextMixin):
         self._fast_record_segment = None  # (start_frame, end_frame) or None for all
 
         base_dir = os.path.dirname(os.path.abspath(__file__))
-        # Search order: bundled DLL (pip-installed package) → dev repo release → dev repo debug
-        candidates = [
-            os.path.join(base_dir, "vulkan_core.dll"),
-            os.path.normpath(os.path.join(base_dir, "..", "dist", "release", "vulkan_core.dll")),
-            os.path.normpath(os.path.join(base_dir, "..", "dist", "debug", "vulkan_core.dll")),
-        ]
+        # Search order: bundled lib (pip-installed package) → dev repo release → dev repo debug
+        if sys.platform == "darwin":
+            candidates = [
+                os.path.join(base_dir, "vulkan_core.dylib"),
+                os.path.normpath(os.path.join(base_dir, "..", "dist", "release", "vulkan_core.dylib")),
+                os.path.normpath(os.path.join(base_dir, "..", "dist", "debug", "vulkan_core.dylib")),
+            ]
+            lib_kind = "vulkan_core.dylib"
+            build_hint = "native/build_mac.sh (requires Vulkan SDK + MoltenVK)"
+        else:
+            candidates = [
+                os.path.join(base_dir, "vulkan_core.dll"),
+                os.path.normpath(os.path.join(base_dir, "..", "dist", "release", "vulkan_core.dll")),
+                os.path.normpath(os.path.join(base_dir, "..", "dist", "debug", "vulkan_core.dll")),
+            ]
+            lib_kind = "vulkan_core.dll"
+            build_hint = "native/build.ps1 (requires Vulkan SDK + MinGW-w64)"
         dll_path = next((p for p in candidates if os.path.exists(p)), None)
         if dll_path is None:
             raise FileNotFoundError(
-                "vulkan_core.dll not found. If running from source, build it with native/build.ps1 "
-                "(requires Vulkan SDK + MinGW-w64)."
+                f"{lib_kind} not found. If running from source, build it with {build_hint}."
             )
 
         self.dll = ctypes.CDLL(dll_path)
@@ -675,7 +686,14 @@ class MLWindow(ShapeMixin, TextMixin):
         if self.dll.Vulkan_Init(w, h) != 1:
             raise RuntimeError("Vulkan_Init failed")
 
-        font_paths = [r"C:\Windows\Fonts\times.ttf", r"C:\Windows\Fonts\arial.ttf"]
+        if sys.platform == "darwin":
+            font_paths = [
+                "/System/Library/Fonts/Supplemental/Times New Roman.ttf",
+                "/System/Library/Fonts/Supplemental/Arial.ttf",
+                "/System/Library/Fonts/Supplemental/Helvetica.ttc",
+            ]
+        else:
+            font_paths = [r"C:\Windows\Fonts\times.ttf", r"C:\Windows\Fonts\arial.ttf"]
         font_loaded = False
         for fp in font_paths:
             try:
@@ -1690,6 +1708,10 @@ class MLWindow(ShapeMixin, TextMixin):
         return self.dll.SaveScreenshot(path_bytes)
 
     def screenshot_printwindow(self, path):
+        if sys.platform != "win32":
+            # macOS: no GDI — the swapchain framebuffer readback is the
+            # reliable capture path (TCC-free, immune to occlusion).
+            return bool(self.screenshot(path))
         import ctypes.wintypes as wt
         user32 = ctypes.windll.user32
         gdi32 = ctypes.windll.gdi32
@@ -1761,7 +1783,7 @@ class MLWindow(ShapeMixin, TextMixin):
         w, h = self.win_w, self.win_h
 
         # Hide window for faster rendering (no compositing)
-        if hidden:
+        if hidden and sys.platform == "win32":
             import ctypes.wintypes
             user32 = ctypes.windll.user32
             hwnd = user32.FindWindowW(None, "Real Time Manim")
@@ -1852,19 +1874,27 @@ class MLWindow(ShapeMixin, TextMixin):
         # Captures the Vulkan framebuffer directly via SaveScreenshot (real
         # readback), NOT the composited screen. This is immune to window
         # occlusion/scaling that would corrupt a screen-based capture.
+        # On macOS SaveScreenshot is two-phase (arm → next frame copies),
+        # so only advance the frame index when a BMP was actually written —
+        # gaps in the file sequence would otherwise truncate ffmpeg's input.
         interval = 1.0 / self._record_fps
+        next_slot = time.time()
         while not self._record_stop_event.is_set():
-            t0 = time.time()
             try:
                 path = os.path.join(self._record_dir, f"frame_{self._record_frame_idx:06d}.bmp")
-                self.screenshot(path)
-                self._record_frame_idx += 1
+                if self.screenshot(path):
+                    self._record_frame_idx += 1
+                    # pace writes at the nominal fps; poll aggressively
+                    # between the arm and read phases (two-phase readback)
+                    next_slot += interval
+                    wait = next_slot - time.time()
+                    if wait > 0:
+                        self._record_stop_event.wait(wait)
+                    continue
             except Exception:
                 pass
-            elapsed = time.time() - t0
-            remaining = interval - elapsed
-            if remaining > 0:
-                self._record_stop_event.wait(remaining)
+            # arm cycle: retry shortly — each capture needs one arm + one read
+            self._record_stop_event.wait(0.004)
         self._record_thread = None
 
     def stop_record(self):
@@ -1898,6 +1928,7 @@ class MLWindow(ShapeMixin, TextMixin):
             "-r", "60",
             "-c:v", "libx264",
             "-pix_fmt", "yuv420p",
+            "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
             "-crf", "18",
             "-preset", "fast",
             output,
@@ -1917,6 +1948,8 @@ class MLWindow(ShapeMixin, TextMixin):
             shutil.rmtree(frame_dir, ignore_errors=True)
 
     def _get_screen_bbox(self):
+        if sys.platform != "win32":
+            return None
         import ctypes.wintypes as wt
         user32 = ctypes.windll.user32
         hwnd = user32.FindWindowW(None, "Real Time Manim")

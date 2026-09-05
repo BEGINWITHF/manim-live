@@ -31,8 +31,18 @@ extern VkSemaphore *g_render_done_sems;
 extern VkFence *g_in_flight_fences;
 extern VkBuffer g_vert_buf;
 extern VkDeviceMemory g_vert_buf_mem;
+#ifdef _WIN32
 extern HWND g_hwnd;
 extern HINSTANCE g_hinst;
+#else
+extern void *g_metal_layer;
+extern int g_readback_requested;
+extern int g_readback_available;
+extern uint32_t g_readback_fence_idx;
+extern VkBuffer g_readback_buf;
+extern VkDeviceMemory g_readback_mem;
+extern void *g_readback_map;
+#endif
 extern bool g_is_ready;
 extern uint32_t g_current_frame;
 extern uint32_t g_last_img_idx;

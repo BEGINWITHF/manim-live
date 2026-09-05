@@ -1,12 +1,22 @@
 #ifndef VULKAN_RENDER_H
 #define VULKAN_RENDER_H
 
+#ifdef _WIN32
 #include <windows.h>
 #define VK_USE_PLATFORM_WIN32_KHR
+#else
+#define VK_USE_PLATFORM_METAL_EXT
+#endif
 #include <vulkan/vulkan.h>
 #include "shared_types.h"
 
+#ifdef _WIN32
 void Render_Init(HWND hwnd, int width, int height, HINSTANCE hinst);
+#else
+void Render_Init(void *metal_layer, int width, int height);
+void Mac_GetDrawableSize(int *w, int *h);
+void Mac_CreateReadbackBuffer(uint32_t w, uint32_t h);
+#endif
 
 int Render_IsReady(void);
 

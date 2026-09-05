@@ -9,6 +9,7 @@
 
 static unsigned char font_data[MAX_FONTS][1 << 25];
 static stbtt_fontinfo fonts[MAX_FONTS];
+static int font_lens[MAX_FONTS];
 static int font_count = 0;
 
 static int utf8_decode(const char *text, int *ci, int *codepoint) {
@@ -42,14 +43,24 @@ static int utf8_decode(const char *text, int *ci, int *codepoint) {
 }
 
 __declspec(dllexport) int Text_LoadFont(const unsigned char *data, int data_len) {
+    if (data_len <= 0) return 0;
+    // Dedupe: a multi-window batch loads the same font blob once per window,
+    // but the pool holds only MAX_FONTS slots.  If this exact blob is already
+    // loaded, report success WITHOUT consuming a slot.
+    for (int i = 0; i < font_count; i++) {
+        if (font_lens[i] == data_len && memcmp(font_data[i], data, (size_t)data_len) == 0) {
+            return 1;
+        }
+    }
     if (font_count >= MAX_FONTS) return 0;
-    if (data_len <= 0 || data_len > (int)sizeof(font_data[font_count])) return 0;
+    if (data_len > (int)sizeof(font_data[font_count])) return 0;
 
     memcpy(font_data[font_count], data, data_len);
     memset(&fonts[font_count], 0, sizeof(stbtt_fontinfo));
     int offset = stbtt_GetFontOffsetForIndex(font_data[font_count], 0);
     if (offset < 0) return 0;
     if (stbtt_InitFont(&fonts[font_count], font_data[font_count], offset)) {
+        font_lens[font_count] = data_len;
         font_count++;
         return 1;
     }
